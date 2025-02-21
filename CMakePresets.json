@@ -1,0 +1,51 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "description": "Base for all presets",
+            "binaryDir": "Build/${presetName}"
+        },
+        {
+            "name": "base-debug",
+            "hidden": true,
+            "description": "Base for all Debug presets",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "base-release",
+            "hidden": true,
+            "description": "Base for all Release presets",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "base-win",
+            "hidden": true,
+            "description": "Base for all Windows presets"
+        },
+
+        {
+            "name": "base-win-msvc-debug",
+            "description": "Base preset of Debug build for Windows using MSVC. Inherit it to specify custom cache vars and env",
+            "inherits": [
+                "base",
+                "base-debug",
+                "base-win"
+            ]
+        },
+        {
+            "name": "base-win-msvc-release",
+            "description": "Base preset of Release build for Windows using MSVC. Inherit it to specify custom cache vars and env",
+            "inherits": [
+                "base",
+                "base-release",
+                "base-win"
+            ]
+        }
+    ]
+}
