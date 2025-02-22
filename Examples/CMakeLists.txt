@@ -6,3 +6,4 @@ else()
 endif()
 
 add_subdirectory(SumExample)
+add_subdirectory(DxTutor)
