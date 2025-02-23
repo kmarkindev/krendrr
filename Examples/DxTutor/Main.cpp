@@ -203,6 +203,8 @@ void InitRender()
 
 Microsoft::WRL::ComPtr<ID3D12RootSignature> RootSignature {};
 Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineState {};
+Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> CommandList {};
+Microsoft::WRL::ComPtr<ID3D12Resource> VertexBuffer {};
 
 void LoadAssets()
 {
@@ -354,6 +356,86 @@ void LoadAssets()
         {
             throw std::runtime_error("Failed to create PSO");
         }
+
+        // 5. Создаем Command List
+
+        if(FAILED(Device->CreateCommandList(0,
+            D3D12_COMMAND_LIST_TYPE_DIRECT,
+            CommandAllocator.Get(),
+            PipelineState.Get(),
+            IID_PPV_ARGS(&CommandList))))
+        {
+            throw std::runtime_error("Failed to create command list");
+        }
+
+        if(FAILED(CommandList->Close()))
+        {
+            throw std::runtime_error("Failed to close command list");
+        }
+
+        // 6. Создаем и заполняем Vertex Buffer
+
+        {
+            struct Vertex
+            {
+                struct Position
+                {
+                    float x, y, z;
+                } Position;
+
+                struct Color
+                {
+                    float r, g, b, a;
+                } Color;
+            };
+
+            std::tuple triangleVertices[] =
+            {
+                { { 0.0f, 0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
+                { { 0.5f, 0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
+                { { -0.5f, -0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } }
+            };
+
+            const UINT vertexBufferSize = sizeof(triangleVertices);
+
+            D3D12_RESOURCE_DESC ResourceDesc {};
+            ResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+            ResourceDesc.Alignment = 0;
+            ResourceDesc.Width = vertexBufferSize;
+            ResourceDesc.Height = 1;
+            ResourceDesc.DepthOrArraySize = 1;
+            ResourceDesc.MipLevels = 1;
+            ResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
+            ResourceDesc.SampleDesc.Count = 1;
+            ResourceDesc.SampleDesc.Quality = 0;
+            ResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+            ResourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+            // Note: using upload heaps to transfer static data like vert buffers is not
+            // recommended. Every time the GPU needs it, the upload heap will be marshalled
+            // over. Please read up on Default Heap usage. An upload heap is used here for
+            // code simplicity and because there are very few verts to actually transfer.
+            Device->CreateCommittedResource(
+                &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+                D3D12_HEAP_FLAG_NONE,
+                &ResourceDesc,
+                D3D12_RESOURCE_STATE_GENERIC_READ,
+                nullptr,
+                IID_PPV_ARGS(&VertexBuffer));
+
+            // Copy the triangle data to the vertex buffer.
+            UINT8* pVertexDataBegin;
+            CD3DX12_RANGE readRange(0, 0);        // We do not intend to read from this resource on the CPU.
+            ThrowIfFailed(m_vertexBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pVertexDataBegin)));
+            memcpy(pVertexDataBegin, triangleVertices, sizeof(triangleVertices));
+            m_vertexBuffer->Unmap(0, nullptr);
+
+            // Initialize the vertex buffer view.
+            m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
+            m_vertexBufferView.StrideInBytes = sizeof(Vertex);
+            m_vertexBufferView.SizeInBytes = vertexBufferSize;
+        }
+
     }
 }
 
