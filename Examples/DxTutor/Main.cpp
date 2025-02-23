@@ -101,15 +101,6 @@ void InitRender()
             IID_PPV_ARGS(&Adapter))
         ); ++AdapterIndex)
     {
-        DXGI_ADAPTER_DESC Desc {};
-        Adapter->GetDesc(&Desc);
-
-        std::wcout << "Adapter Index = " << AdapterIndex << std::endl;
-        std::wcout << Desc.Description << std::endl;
-        std::wcout << Desc.DedicatedVideoMemory << std::endl;
-        std::wcout << Desc.DedicatedSystemMemory << std::endl;
-        std::wcout << Desc.SharedSystemMemory << std::endl;
-
         if(SUCCEEDED(D3D12CreateDevice(
             Adapter.Get(),
             D3D_FEATURE_LEVEL_12_2,
@@ -124,6 +115,13 @@ void InitRender()
     {
         throw std::runtime_error("Failed to create device");
     }
+
+    {
+        DXGI_ADAPTER_DESC Desc {};
+        Adapter->GetDesc(&Desc);
+        std::wcout << "Selected adapter: " << Desc.Description << std::endl;
+    }
+
 
     // 3. Создаем Command Queue через который в последствии и будем отдавать команды на GPU
 
@@ -183,7 +181,10 @@ void InitRender()
     for (UINT n = 0; n < FrameCount; n++)
     {
         // Получаем Render Target из Swap Chain
-        SwapChain->GetBuffer(n, IID_PPV_ARGS(&RenderTargets[n]));
+        if(FAILED(SwapChain->GetBuffer(n, IID_PPV_ARGS(&RenderTargets[n]))))
+        {
+            throw std::runtime_error("Failed to get buffer from swap chain");
+        }
 
         // Создаем Render Target View в Descriptor Heap
         Device->CreateRenderTargetView(RenderTargets[n].Get(), nullptr, CpuHandle);
@@ -193,7 +194,10 @@ void InitRender()
     }
 
     // 7. Создаем аллокатор для команд
-    Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&CommandAllocator));
+    if(FAILED(Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&CommandAllocator))))
+    {
+        throw std::runtime_error("Failed to create command allocator");
+    }
 }
 
 void LoadAssets()
@@ -216,7 +220,7 @@ void Render()
 
 }
 
-int main()
+int main() try
 {
     CreateRenderWindow();
     InitRender();
@@ -236,4 +240,9 @@ int main()
     }
 
     DestroyRender();
+}
+catch(std::exception& ex)
+{
+    std::cout << "Exception: " << ex.what() << "\n";
+    std::cout << "Stacktrace:\n" << std::stacktrace::current();
 }
