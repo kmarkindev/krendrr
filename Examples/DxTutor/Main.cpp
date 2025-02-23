@@ -4,6 +4,7 @@ import <windows.h>;
 import <wrl.h>;
 import <D3d12.h>;
 import <dxgi1_6.h>;
+import <d3dcompiler.h>;
 
 HWND Window {};
 
@@ -200,9 +201,160 @@ void InitRender()
     }
 }
 
+Microsoft::WRL::ComPtr<ID3D12RootSignature> RootSignature {};
+Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineState {};
+
 void LoadAssets()
 {
+    // 1. Создаем Root Signature
 
+    {
+        D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {
+            0,
+            nullptr,
+            0,
+            nullptr,
+            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
+        };
+
+        Microsoft::WRL::ComPtr<ID3DBlob> blob;
+        Microsoft::WRL::ComPtr<ID3DBlob> error;
+        if(FAILED(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error)))
+        {
+            throw std::runtime_error("Failed to serialize root signature");
+        }
+
+        if(FAILED(Device->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&RootSignature))))
+        {
+            throw std::runtime_error("Failed to create root signature");
+        }
+    }
+
+    // 2. Компиляция шейдеров, с включением отладки для Debug сборки
+
+    Microsoft::WRL::ComPtr<ID3DBlob> VertexShader;
+    Microsoft::WRL::ComPtr<ID3DBlob> PixelShader;
+
+    {
+        UINT compileFlags {};
+
+        #if defined(_DEBUG)
+        compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+        #endif
+
+        if(FAILED(D3DCompileFromFile(L"S:/Dev/my/krendrr/Examples/DxTutor/shaders.hlsl",
+            nullptr,
+            nullptr,
+            "VSMain",
+            "vs_5_0",
+            compileFlags,
+            0,
+            &VertexShader,
+            nullptr
+            )))
+        {
+            throw std::runtime_error("Failed to compile vertex shader");
+        }
+
+        if(FAILED(D3DCompileFromFile(L"S:/Dev/my/krendrr/Examples/DxTutor/shaders.hlsl",
+            nullptr,
+            nullptr,
+            "PSMain",
+            "ps_5_0",
+            compileFlags,
+            0,
+            &PixelShader,
+            nullptr
+            )))
+        {
+            throw std::runtime_error("Failed to compile pixel shader");
+        }
+    }
+
+    // 3. Определение разметки vertex buffer
+
+    D3D12_INPUT_ELEMENT_DESC InputElementDescs[] =
+        {
+            {
+            "POSITION",
+            0,
+            DXGI_FORMAT_R32G32B32_FLOAT,
+            0,
+            0,
+            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+            0
+            },
+        {
+            "COLOR",
+            0,
+            DXGI_FORMAT_R32G32B32A32_FLOAT,
+            0,
+            12,
+            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+            0
+        }
+        };
+
+    // 4. Создание PSO
+
+    {
+        D3D12_RASTERIZER_DESC RasterizerState {};
+        RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+        RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
+        RasterizerState.FrontCounterClockwise = FALSE;
+        RasterizerState.DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
+        RasterizerState.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
+        RasterizerState.SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
+        RasterizerState.DepthClipEnable = TRUE;
+        RasterizerState.MultisampleEnable = FALSE;
+        RasterizerState.AntialiasedLineEnable = FALSE;
+        RasterizerState.ForcedSampleCount = 0;
+        RasterizerState.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+
+        D3D12_BLEND_DESC BlendState {};
+        {
+            BlendState.AlphaToCoverageEnable = FALSE;
+            BlendState.IndependentBlendEnable = FALSE;
+            const D3D12_RENDER_TARGET_BLEND_DESC DefaultRenderTargetBlendDesc =
+            {
+                FALSE,FALSE,
+                D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
+                D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
+                D3D12_LOGIC_OP_NOOP,
+                D3D12_COLOR_WRITE_ENABLE_ALL,
+            };
+            for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+                BlendState.RenderTarget[i] = DefaultRenderTargetBlendDesc;
+        }
+
+        D3D12_SHADER_BYTECODE VertexShaderByteCode = {};
+        VertexShaderByteCode.pShaderBytecode = VertexShader->GetBufferPointer();
+        VertexShaderByteCode.BytecodeLength = VertexShader->GetBufferSize();
+
+        D3D12_SHADER_BYTECODE PixelShaderByteCode = {};
+        PixelShaderByteCode.pShaderBytecode = PixelShader->GetBufferPointer();
+        PixelShaderByteCode.BytecodeLength = PixelShader->GetBufferSize();
+
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+        psoDesc.InputLayout = { InputElementDescs, _countof(InputElementDescs) };
+        psoDesc.pRootSignature = RootSignature.Get();
+        psoDesc.VS = VertexShaderByteCode;
+        psoDesc.PS = PixelShaderByteCode;
+        psoDesc.RasterizerState = RasterizerState;
+        psoDesc.BlendState = BlendState;
+        psoDesc.DepthStencilState.DepthEnable = FALSE;
+        psoDesc.DepthStencilState.StencilEnable = FALSE;
+        psoDesc.SampleMask = UINT_MAX;
+        psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        psoDesc.NumRenderTargets = 1;
+        psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+        psoDesc.SampleDesc.Count = 1;
+
+        if(FAILED(Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&PipelineState))))
+        {
+            throw std::runtime_error("Failed to create PSO");
+        }
+    }
 }
 
 void DestroyRender()
@@ -243,6 +395,6 @@ int main() try
 }
 catch(std::exception& ex)
 {
-    std::cout << "Exception: " << ex.what() << "\n";
-    std::cout << "Stacktrace:\n" << std::stacktrace::current();
+    std::cerr << "Exception: " << ex.what() << "\n";
+    return -1;
 }
