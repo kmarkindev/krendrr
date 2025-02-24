@@ -60,6 +60,10 @@ Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> DescriptorHeap {};
 UINT DescriptorHeapIncrementSize {};
 std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, FrameCount> RenderTargets {};
 Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CommandAllocator {};
+Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> CommandList {};
+int FenceValue {};
+Microsoft::WRL::ComPtr<ID3D12Fence> Fence {};
+HANDLE FenceEvent {};
 
 void InitRender()
 {
@@ -199,243 +203,35 @@ void InitRender()
     {
         throw std::runtime_error("Failed to create command allocator");
     }
-}
 
-Microsoft::WRL::ComPtr<ID3D12RootSignature> RootSignature {};
-Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineState {};
-Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> CommandList {};
-Microsoft::WRL::ComPtr<ID3D12Resource> VertexBuffer {};
-
-void LoadAssets()
-{
-    // 1. Создаем Root Signature
-
+    // 8. Создаем Command List
+    if(FAILED(Device->CreateCommandList(0,
+        D3D12_COMMAND_LIST_TYPE_DIRECT,
+        CommandAllocator.Get(),
+        nullptr,
+        IID_PPV_ARGS(&CommandList))))
     {
-        D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {
-            0,
-            nullptr,
-            0,
-            nullptr,
-            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
-        };
-
-        Microsoft::WRL::ComPtr<ID3DBlob> blob;
-        Microsoft::WRL::ComPtr<ID3DBlob> error;
-        if(FAILED(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error)))
-        {
-            throw std::runtime_error("Failed to serialize root signature");
-        }
-
-        if(FAILED(Device->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&RootSignature))))
-        {
-            throw std::runtime_error("Failed to create root signature");
-        }
+        throw std::runtime_error("Failed to create command list");
     }
 
-    // 2. Компиляция шейдеров, с включением отладки для Debug сборки
-
-    Microsoft::WRL::ComPtr<ID3DBlob> VertexShader;
-    Microsoft::WRL::ComPtr<ID3DBlob> PixelShader;
-
+    if(FAILED(CommandList->Close()))
     {
-        UINT compileFlags {};
-
-        #if defined(_DEBUG)
-        compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-        #endif
-
-        if(FAILED(D3DCompileFromFile(L"S:/Dev/my/krendrr/Examples/DxTutor/shaders.hlsl",
-            nullptr,
-            nullptr,
-            "VSMain",
-            "vs_5_0",
-            compileFlags,
-            0,
-            &VertexShader,
-            nullptr
-            )))
-        {
-            throw std::runtime_error("Failed to compile vertex shader");
-        }
-
-        if(FAILED(D3DCompileFromFile(L"S:/Dev/my/krendrr/Examples/DxTutor/shaders.hlsl",
-            nullptr,
-            nullptr,
-            "PSMain",
-            "ps_5_0",
-            compileFlags,
-            0,
-            &PixelShader,
-            nullptr
-            )))
-        {
-            throw std::runtime_error("Failed to compile pixel shader");
-        }
+        throw std::runtime_error("Failed to close command list");
     }
 
-    // 3. Определение разметки vertex buffer
+    // 9. Создаем Fence
 
-    D3D12_INPUT_ELEMENT_DESC InputElementDescs[] =
-        {
-            {
-            "POSITION",
-            0,
-            DXGI_FORMAT_R32G32B32_FLOAT,
-            0,
-            0,
-            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-            0
-            },
-        {
-            "COLOR",
-            0,
-            DXGI_FORMAT_R32G32B32A32_FLOAT,
-            0,
-            12,
-            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-            0
-        }
-        };
-
-    // 4. Создание PSO
-
+    if(FAILED(Device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&Fence))))
     {
-        D3D12_RASTERIZER_DESC RasterizerState {};
-        RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
-        RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
-        RasterizerState.FrontCounterClockwise = FALSE;
-        RasterizerState.DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
-        RasterizerState.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
-        RasterizerState.SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
-        RasterizerState.DepthClipEnable = TRUE;
-        RasterizerState.MultisampleEnable = FALSE;
-        RasterizerState.AntialiasedLineEnable = FALSE;
-        RasterizerState.ForcedSampleCount = 0;
-        RasterizerState.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+        throw std::runtime_error("Failed to create fence");
+    }
+    FenceValue = 1;
 
-        D3D12_BLEND_DESC BlendState {};
-        {
-            BlendState.AlphaToCoverageEnable = FALSE;
-            BlendState.IndependentBlendEnable = FALSE;
-            const D3D12_RENDER_TARGET_BLEND_DESC DefaultRenderTargetBlendDesc =
-            {
-                FALSE,FALSE,
-                D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
-                D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
-                D3D12_LOGIC_OP_NOOP,
-                D3D12_COLOR_WRITE_ENABLE_ALL,
-            };
-            for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
-                BlendState.RenderTarget[i] = DefaultRenderTargetBlendDesc;
-        }
-
-        D3D12_SHADER_BYTECODE VertexShaderByteCode = {};
-        VertexShaderByteCode.pShaderBytecode = VertexShader->GetBufferPointer();
-        VertexShaderByteCode.BytecodeLength = VertexShader->GetBufferSize();
-
-        D3D12_SHADER_BYTECODE PixelShaderByteCode = {};
-        PixelShaderByteCode.pShaderBytecode = PixelShader->GetBufferPointer();
-        PixelShaderByteCode.BytecodeLength = PixelShader->GetBufferSize();
-
-        D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-        psoDesc.InputLayout = { InputElementDescs, _countof(InputElementDescs) };
-        psoDesc.pRootSignature = RootSignature.Get();
-        psoDesc.VS = VertexShaderByteCode;
-        psoDesc.PS = PixelShaderByteCode;
-        psoDesc.RasterizerState = RasterizerState;
-        psoDesc.BlendState = BlendState;
-        psoDesc.DepthStencilState.DepthEnable = FALSE;
-        psoDesc.DepthStencilState.StencilEnable = FALSE;
-        psoDesc.SampleMask = UINT_MAX;
-        psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        psoDesc.NumRenderTargets = 1;
-        psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-        psoDesc.SampleDesc.Count = 1;
-
-        if(FAILED(Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&PipelineState))))
-        {
-            throw std::runtime_error("Failed to create PSO");
-        }
-
-        // 5. Создаем Command List
-
-        if(FAILED(Device->CreateCommandList(0,
-            D3D12_COMMAND_LIST_TYPE_DIRECT,
-            CommandAllocator.Get(),
-            PipelineState.Get(),
-            IID_PPV_ARGS(&CommandList))))
-        {
-            throw std::runtime_error("Failed to create command list");
-        }
-
-        if(FAILED(CommandList->Close()))
-        {
-            throw std::runtime_error("Failed to close command list");
-        }
-
-        // 6. Создаем и заполняем Vertex Buffer
-
-        {
-            struct Vertex
-            {
-                struct Position
-                {
-                    float x, y, z;
-                } Position;
-
-                struct Color
-                {
-                    float r, g, b, a;
-                } Color;
-            };
-
-            std::tuple triangleVertices[] =
-            {
-                { { 0.0f, 0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
-                { { 0.5f, 0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
-                { { -0.5f, -0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } }
-            };
-
-            const UINT vertexBufferSize = sizeof(triangleVertices);
-
-            D3D12_RESOURCE_DESC ResourceDesc {};
-            ResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-            ResourceDesc.Alignment = 0;
-            ResourceDesc.Width = vertexBufferSize;
-            ResourceDesc.Height = 1;
-            ResourceDesc.DepthOrArraySize = 1;
-            ResourceDesc.MipLevels = 1;
-            ResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
-            ResourceDesc.SampleDesc.Count = 1;
-            ResourceDesc.SampleDesc.Quality = 0;
-            ResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-            ResourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-
-            // Note: using upload heaps to transfer static data like vert buffers is not
-            // recommended. Every time the GPU needs it, the upload heap will be marshalled
-            // over. Please read up on Default Heap usage. An upload heap is used here for
-            // code simplicity and because there are very few verts to actually transfer.
-            Device->CreateCommittedResource(
-                &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-                D3D12_HEAP_FLAG_NONE,
-                &ResourceDesc,
-                D3D12_RESOURCE_STATE_GENERIC_READ,
-                nullptr,
-                IID_PPV_ARGS(&VertexBuffer));
-
-            // Copy the triangle data to the vertex buffer.
-            UINT8* pVertexDataBegin;
-            CD3DX12_RANGE readRange(0, 0);        // We do not intend to read from this resource on the CPU.
-            ThrowIfFailed(m_vertexBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pVertexDataBegin)));
-            memcpy(pVertexDataBegin, triangleVertices, sizeof(triangleVertices));
-            m_vertexBuffer->Unmap(0, nullptr);
-
-            // Initialize the vertex buffer view.
-            m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
-            m_vertexBufferView.StrideInBytes = sizeof(Vertex);
-            m_vertexBufferView.SizeInBytes = vertexBufferSize;
-        }
-
+    // Create an event handle to use for frame synchronization.
+    FenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+    if (Fence == nullptr)
+    {
+        throw std::runtime_error("Can't create fence event");
     }
 }
 
@@ -458,7 +254,6 @@ int main() try
 {
     CreateRenderWindow();
     InitRender();
-    LoadAssets();
 
     MSG Msg = {};
     while (Msg.message != WM_QUIT)
