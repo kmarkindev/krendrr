@@ -236,9 +236,18 @@ void InitRender()
     }
 }
 
+void WaitFence()
+{
+    CommandQueue->Signal(Fence.Get(), FenceValue);
+    Fence->SetEventOnCompletion(FenceValue, FenceEvent);
+    ::WaitForSingleObject(FenceEvent, INFINITE);
+    FenceValue++;
+}
+
 void DestroyRender()
 {
-
+    WaitFence();
+    CloseHandle(FenceEvent);
 }
 
 void Update()
@@ -248,7 +257,32 @@ void Update()
 
 void Render()
 {
+    int CurrentSwapIndex = SwapChain->GetCurrentBackBufferIndex();
+    auto& Rtv = RenderTargets[CurrentSwapIndex];
 
+    CommandAllocator->Reset();
+    CommandList->Reset(CommandAllocator.Get(), nullptr);
+
+    auto BarrierToRender = CD3DX12_RESOURCE_BARRIER::Transition(Rtv.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    CommandList->ResourceBarrier(1, &BarrierToRender);
+
+    float color = std::sin(FenceValue * 0.01) + 0.5f;
+
+    FLOAT ClearColor[4] = { color, color, color, 1.0f };
+    CD3DX12_CPU_DESCRIPTOR_HANDLE RtvHandle { DescriptorHeap->GetCPUDescriptorHandleForHeapStart(), CurrentSwapIndex, DescriptorHeapIncrementSize };
+    CommandList->ClearRenderTargetView(RtvHandle, ClearColor, 0, nullptr);
+
+    auto BarrierToPresent = CD3DX12_RESOURCE_BARRIER::Transition(Rtv.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+    CommandList->ResourceBarrier(1, &BarrierToPresent);
+
+    CommandList->Close();
+
+    ID3D12CommandList* CommandLists[] = { CommandList.Get() };
+    CommandQueue->ExecuteCommandLists(std::size(CommandLists), CommandLists);
+
+    SwapChain->Present(0, 0);
+
+    WaitFence();
 }
 
 int main() try
@@ -257,13 +291,18 @@ int main() try
     InitRender();
 
     MSG Msg = {};
-    while (Msg.message != WM_QUIT)
+    bool Exit = false;
+    while (!Exit)
     {
         if (PeekMessage(&Msg, nullptr, 0, 0, PM_REMOVE))
         {
+            Exit = Msg.message == WM_QUIT;
+
             TranslateMessage(&Msg);
             DispatchMessage(&Msg);
-
+        }
+        else
+        {
             Update();
             Render();
         }
