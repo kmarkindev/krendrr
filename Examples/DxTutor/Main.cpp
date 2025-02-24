@@ -1,10 +1,11 @@
-import std;
+import <array>;
+import <stdexcept>;
+import <vector>;
+import <iostream>;
 
-import <windows.h>;
-import <wrl.h>;
-import <D3d12.h>;
+import "directx/d3dx12.h";
 import <dxgi1_6.h>;
-import <d3dcompiler.h>;
+import <windows.h>;
 
 HWND Window {};
 
@@ -22,7 +23,7 @@ LRESULT CALLBACK WindowProc(HWND Hwnd, UINT Message, WPARAM WParam, LPARAM LPara
 
 void CreateRenderWindow()
 {
-    WNDCLASSEX WindowClass = { 0 };
+    WNDCLASSEX WindowClass = {};
     WindowClass.cbSize = sizeof(WNDCLASSEX);
     WindowClass.style = CS_HREDRAW | CS_VREDRAW;
     WindowClass.lpfnWndProc = WindowProc;
@@ -180,7 +181,7 @@ void InitRender()
 
     // 6. Внутри descriptor heap создаем Render Target View
 
-    D3D12_CPU_DESCRIPTOR_HANDLE CpuHandle = DescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    CD3DX12_CPU_DESCRIPTOR_HANDLE CpuHandle { DescriptorHeap->GetCPUDescriptorHandleForHeapStart() };
 
     // Create a RTV for each frame.
     for (UINT n = 0; n < FrameCount; n++)
@@ -195,7 +196,7 @@ void InitRender()
         Device->CreateRenderTargetView(RenderTargets[n].Get(), nullptr, CpuHandle);
 
         // Сдвигаем указатель внутри Descriptor Heap на размер шага
-        CpuHandle.ptr += DescriptorHeapIncrementSize;
+        CpuHandle.Offset(1, DescriptorHeapIncrementSize);
     }
 
     // 7. Создаем аллокатор для команд
