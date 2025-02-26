@@ -565,6 +565,11 @@ void LoadAssets()
         srvDesc.Texture2D.MipLevels = 1;
 
         Device->CreateShaderResourceView(CubeFaceTexture.Get(), &srvDesc, srvHeapHandle);
+
+        const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            CubeFaceTexture.Get(),
+            D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        CommandList->ResourceBarrier(1, &barrier);
     }
 
     // 7. Ожидаем выполнение копирования (завершения выполнения Command List)
@@ -586,10 +591,8 @@ void LoadAssets()
         CD3DX12_ROOT_PARAMETER RootParameters[2]{};
         RootParameters->InitAsConstants(sizeof(DirectX::XMMATRIX) / sizeof(DWORD32), 0, 0, D3D12_SHADER_VISIBILITY_ALL);
 
-        {
-            CD3DX12_DESCRIPTOR_RANGE descRange = {D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0};
-            RootParameters[1].InitAsDescriptorTable(1, &descRange);
-        }
+        CD3DX12_DESCRIPTOR_RANGE descRange = {D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0};
+        RootParameters[1].InitAsDescriptorTable(1, &descRange);
 
         CD3DX12_ROOT_SIGNATURE_DESC RootSignatureDesc = {};
         RootSignatureDesc.Init(std::size(RootParameters), RootParameters, 1, &StaticSampler, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
