@@ -1,16 +1,16 @@
 #define WINDOWS_LEAN_AND_MEAN
 
-import <array>;
-import <stdexcept>;
-import <vector>;
-import <iostream>;
+#include <array>
+#include <stdexcept>
+#include <vector>
+#include <iostream>
 
-import "directx/d3dx12.h";
-import <dxgi1_6.h>;
-import <windows.h>;
-import <d3dcompiler.h>;
+#include "directx/d3dx12.h"
+#include <dxgi1_6.h>
+#include <windows.h>
+#include <d3dcompiler.h>
 
-import <DirectXMath.h>;
+#include <DirectXMath.h>
 
 struct Check
 {
@@ -353,8 +353,11 @@ void LoadAssets()
     // 8. Создаем Root Signature и PSO для отрисовки треугольника (радужного бурито, лол)
 
     {
+        CD3DX12_ROOT_PARAMETER RootParameters[1]{};
+        RootParameters->InitAsConstants(sizeof(DirectX::XMMATRIX) / sizeof(DWORD32), 0, 0, D3D12_SHADER_VISIBILITY_ALL);
+
         CD3DX12_ROOT_SIGNATURE_DESC RootSignatureDesc = {};
-        RootSignatureDesc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+        RootSignatureDesc.Init(std::size(RootParameters), RootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
         Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureBlob {};
         Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureErrorBlob {};
@@ -380,12 +383,14 @@ void LoadAssets()
         // Note: вместо компиляции на лету, можно скомпилировать их заранее и получить .cso файлы,
         // которые можно загрузить используя D3DReadFileBlob
 
-        D3DCompileFromFile(L"S:/Dev/my/krendrr/Examples/DxTutor/shaders.hlsl",
-            nullptr, nullptr, "VSMain", "vs_5_0",
-            compileFlags, 0, &VertexShader, nullptr) >> Check{"Failed to compile vertex shader"};
-        D3DCompileFromFile(L"S:/Dev/my/krendrr/Examples/DxTutor/shaders.hlsl",
-            nullptr, nullptr, "PSMain", "ps_5_0",
-            compileFlags, 0, &PixelShader, nullptr) >> Check{"Failed to compile pixel shader"};
+        {
+            D3DCompileFromFile(L"S:/Dev/my/krendrr/Examples/DxTutor/shaders.hlsl",
+                nullptr, nullptr, "VSMain", "vs_5_1",
+                compileFlags, 0, &VertexShader, nullptr) >> Check{"Failed to compile vertex shader"};
+            D3DCompileFromFile(L"S:/Dev/my/krendrr/Examples/DxTutor/shaders.hlsl",
+                nullptr, nullptr, "PSMain", "ps_5_1",
+                compileFlags, 0, &PixelShader, nullptr) >> Check{"Failed to compile pixel shader"};
+        }
 
         D3D12_GRAPHICS_PIPELINE_STATE_DESC PsoDesc = {};
         PsoDesc.InputLayout = { InputLayout, std::size(InputLayout) };
@@ -433,6 +438,16 @@ void Render()
     CommandList->RSSetScissorRects(1, &ScissorRect);
 
     CommandList->OMSetRenderTargets(1, &RtvHandle, true, nullptr);
+
+    DirectX::XMMATRIX ViewMatrix = DirectX::XMMatrixLookAtLH(
+        DirectX::XMVectorSet(0, 0, -1, 1),
+        DirectX::XMVectorSet(0, 0, 0, 1),
+        DirectX::XMVectorSet(0, 1, 0, 0));
+    DirectX::XMMATRIX ProjectionMatrix = DirectX::XMMatrixPerspectiveFovLH(DirectX::XMConvertToRadians(90.f), 800.f / 600.f, 0.1f, 100.f);
+    DirectX::XMMATRIX ModelMatrix = DirectX::XMMatrixRotationZ(FenceValue * 0.01f);
+    DirectX::XMMATRIX MVP = ModelMatrix * ViewMatrix * ProjectionMatrix;
+
+    CommandList->SetGraphicsRoot32BitConstants(0, sizeof(DirectX::XMMATRIX) / sizeof(DWORD32), &MVP, 0);
 
     CommandList->DrawInstanced(3, 1, 0, 0);
 
