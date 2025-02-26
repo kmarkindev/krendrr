@@ -12,6 +12,46 @@
 
 #include <DirectXMath.h>
 
+std::vector<UINT8> GenerateTextureData()
+{
+    UINT TextureWidth = 256;
+    UINT TexturePixelSize = 4;
+    UINT TextureHeight = 256;
+
+    const UINT rowPitch = TextureWidth * TexturePixelSize;
+    const UINT cellPitch = rowPitch >> 3;        // The width of a cell in the checkboard texture.
+    const UINT cellHeight = TextureWidth >> 3;    // The height of a cell in the checkerboard texture.
+    const UINT textureSize = rowPitch * TextureHeight;
+
+    std::vector<UINT8> data(textureSize);
+    UINT8* pData = &data[0];
+
+    for (UINT n = 0; n < textureSize; n += TexturePixelSize)
+    {
+        UINT x = n % rowPitch;
+        UINT y = n / rowPitch;
+        UINT i = x / cellPitch;
+        UINT j = y / cellHeight;
+
+        if (i % 2 == j % 2)
+        {
+            pData[n] = 0x00;        // R
+            pData[n + 1] = 0x00;    // G
+            pData[n + 2] = 0x00;    // B
+            pData[n + 3] = 0xff;    // A
+        }
+        else
+        {
+            pData[n] = 0xff;        // R
+            pData[n + 1] = 0xff;    // G
+            pData[n + 2] = 0xff;    // B
+            pData[n + 3] = 0xff;    // A
+        }
+    }
+
+    return data;
+}
+
 struct Check
 {
     const char* outMsg = "HRESULT failed";
@@ -306,8 +346,14 @@ D3D12_VIEWPORT Viewport = CD3DX12_VIEWPORT(0.f, 0.f, 800.f, 600.f);
 
 Microsoft::WRL::ComPtr<ID3D12Resource> IndexBuffer {};
 D3D12_INDEX_BUFFER_VIEW IndexBufferView {};
-
 int numIndices {};
+
+Microsoft::WRL::ComPtr<ID3D12Resource> CubeFaceTexture;
+Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvHeap {};
+
+CD3DX12_CPU_DESCRIPTOR_HANDLE srvHeapHandle {};
+
+CD3DX12_STATIC_SAMPLER_DESC StaticSampler { };
 
 void LoadAssets()
 {
@@ -444,11 +490,6 @@ void LoadAssets()
         CommandList->ResourceBarrier(1, &barrier);
     }
 
-    CommandList->Close() >> Check{"Failed to close command list"};
-
-    ID3D12CommandList* CommandLists[] = { CommandList.Get() };
-    CommandQueue->ExecuteCommandLists(std::size(CommandLists), CommandLists);
-
     // 6. Создаем View чтобы использовать буфер в будущем.
 
     VertexBufferView = {
@@ -463,18 +504,95 @@ void LoadAssets()
         .Format = DXGI_FORMAT_R16_UINT
     };
 
+    Microsoft::WRL::ComPtr<ID3D12Resource> CubeFaceTextureUploadBuffer {};
+    {
+        auto textureData = GenerateTextureData();
+
+        // Генерируем Mip Maps если нужны...
+
+        CD3DX12_RESOURCE_DESC TexDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM,
+            256,
+            256,
+            1,
+            1
+            );
+
+        CD3DX12_HEAP_PROPERTIES HeapProps {D3D12_HEAP_TYPE_DEFAULT};
+
+        Device->CreateCommittedResource(
+            &HeapProps,
+            D3D12_HEAP_FLAG_NONE,
+            &TexDesc,
+            D3D12_RESOURCE_STATE_COMMON,
+            nullptr,
+            IID_PPV_ARGS(&CubeFaceTexture)
+        ) >> Check{"Failed to create texture"};
+
+        CD3DX12_HEAP_PROPERTIES UploadProps {D3D12_HEAP_TYPE_UPLOAD};
+        auto uploadBufferSize = GetRequiredIntermediateSize(CubeFaceTexture.Get(), 0, 1);
+        auto resDesc = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
+
+        Device->CreateCommittedResource(
+            &UploadProps,
+            D3D12_HEAP_FLAG_NONE,
+            &resDesc,
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(&CubeFaceTextureUploadBuffer)
+        ) >> Check{"Failed to create texture"};
+
+        D3D12_SUBRESOURCE_DATA texturesubresData = {};
+        texturesubresData.pData = &textureData[0];
+        texturesubresData.RowPitch = 256 * 4;
+        texturesubresData.SlicePitch = texturesubresData.RowPitch * 256;
+
+        UpdateSubresources(CommandList.Get(), CubeFaceTexture.Get(), CubeFaceTextureUploadBuffer.Get(), 0, 0, 1, &texturesubresData);
+
+        D3D12_DESCRIPTOR_HEAP_DESC HeapDesc = {
+            .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+            .NumDescriptors = 1,
+            .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+        };
+
+        Device->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(&srvHeap)) >> Check{"Failed to create srv descriptor heap"};
+
+        srvHeapHandle = {srvHeap->GetCPUDescriptorHandleForHeapStart()};
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srvDesc.Format = resDesc.Format;
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Texture2D.MipLevels = 1;
+
+        Device->CreateShaderResourceView(CubeFaceTexture.Get(), &srvDesc, srvHeapHandle);
+    }
+
     // 7. Ожидаем выполнение копирования (завершения выполнения Command List)
+
+    CommandList->Close() >> Check{"Failed to close command list"};
+
+    ID3D12CommandList* CommandLists[] = { CommandList.Get() };
+    CommandQueue->ExecuteCommandLists(std::size(CommandLists), CommandLists);
 
     WaitFence();
 
     // 8. Создаем Root Signature и PSO для отрисовки треугольника (радужного бурито, лол)
 
     {
-        CD3DX12_ROOT_PARAMETER RootParameters[1]{};
+        StaticSampler = {0, D3D12_FILTER_MIN_MAG_MIP_LINEAR};
+    }
+
+    {
+        CD3DX12_ROOT_PARAMETER RootParameters[2]{};
         RootParameters->InitAsConstants(sizeof(DirectX::XMMATRIX) / sizeof(DWORD32), 0, 0, D3D12_SHADER_VISIBILITY_ALL);
 
+        {
+            CD3DX12_DESCRIPTOR_RANGE descRange = {D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0};
+            RootParameters[1].InitAsDescriptorTable(1, &descRange);
+        }
+
         CD3DX12_ROOT_SIGNATURE_DESC RootSignatureDesc = {};
-        RootSignatureDesc.Init(std::size(RootParameters), RootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+        RootSignatureDesc.Init(std::size(RootParameters), RootParameters, 1, &StaticSampler, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
         Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureBlob {};
         Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureErrorBlob {};
@@ -487,7 +605,7 @@ void LoadAssets()
     {
         D3D12_INPUT_ELEMENT_DESC InputLayout[] = {
             { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-            { "COLOR", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+            { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
         };
 
         #if defined(_DEBUG)
@@ -501,12 +619,29 @@ void LoadAssets()
         // которые можно загрузить используя D3DReadFileBlob
 
         {
+            Microsoft::WRL::ComPtr<ID3DBlob> CompilationErrorBlob {};
+
             D3DCompileFromFile(L"S:/Dev/my/krendrr/Examples/DxTutor/shaders.hlsl",
                 nullptr, nullptr, "VSMain", "vs_5_1",
-                compileFlags, 0, &VertexShader, nullptr) >> Check{"Failed to compile vertex shader"};
+                compileFlags, 0, &VertexShader, &CompilationErrorBlob);
+
+            if(CompilationErrorBlob != nullptr)
+            {
+                std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
+                std::cout << error << std::endl;
+                throw std::runtime_error("Failed to compile vertex shader");
+            }
+
             D3DCompileFromFile(L"S:/Dev/my/krendrr/Examples/DxTutor/shaders.hlsl",
                 nullptr, nullptr, "PSMain", "ps_5_1",
-                compileFlags, 0, &PixelShader, nullptr) >> Check{"Failed to compile pixel shader"};
+                compileFlags, 0, &PixelShader, &CompilationErrorBlob);
+
+            if(CompilationErrorBlob != nullptr)
+            {
+                std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
+                std::cout << error << std::endl;
+                throw std::runtime_error("Failed to compile pixel shader");
+            }
         }
 
         D3D12_GRAPHICS_PIPELINE_STATE_DESC PsoDesc = {};
@@ -555,6 +690,9 @@ void Render()
 
     CommandList->RSSetViewports(1, &Viewport);
     CommandList->RSSetScissorRects(1, &ScissorRect);
+
+    CommandList->SetDescriptorHeaps(1, srvHeap.GetAddressOf());
+    CommandList->SetGraphicsRootDescriptorTable(1, srvHeap->GetGPUDescriptorHandleForHeapStart());
 
     CommandList->OMSetRenderTargets(1, &RtvHandle, true, &DepthViewBufferHandle);
 
