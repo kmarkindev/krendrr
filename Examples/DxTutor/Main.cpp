@@ -86,6 +86,10 @@ int FenceValue {};
 Microsoft::WRL::ComPtr<ID3D12Fence> Fence {};
 HANDLE FenceEvent {};
 
+Microsoft::WRL::ComPtr<ID3D12Resource> DepthBuffer {};
+Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> DepthBufferDescriptorHeap {};
+CD3DX12_CPU_DESCRIPTOR_HANDLE DepthViewBufferHandle {};
+
 void InitRender()
 {
     UINT DxgiFactoryFlags = 0;
@@ -100,7 +104,7 @@ void InitRender()
         D3D12GetDebugInterface(IID_PPV_ARGS(&DebugController)) >> Check{"Failed to create debug layer"};
 
         DebugController->EnableDebugLayer();
-        //DebugController->SetEnableGPUBasedValidation(true);
+        DebugController->SetEnableGPUBasedValidation(true);
 
         // Enable additional debug layers.
         DxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
@@ -163,7 +167,6 @@ void InitRender()
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     swapChainDesc.SampleDesc.Count = 1;
-
 
     Microsoft::WRL::ComPtr<IDXGISwapChain1> SwapChain1 {};
     Factory->CreateSwapChainForHwnd(
@@ -229,6 +232,49 @@ void InitRender()
     {
         throw std::runtime_error("Can't create fence event");
     }
+
+    // 10. Создаем Depth Buffer
+
+    {
+        CD3DX12_HEAP_PROPERTIES HeapProperties {D3D12_HEAP_TYPE_DEFAULT};
+        CD3DX12_RESOURCE_DESC DepthBufferDesc = CD3DX12_RESOURCE_DESC::Tex2D(
+            DXGI_FORMAT_D32_FLOAT,
+            800,
+            600,
+            1,
+            0,
+            1,
+            0,
+            D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
+        );
+
+        D3D12_CLEAR_VALUE ClearValue {
+            .Format = DXGI_FORMAT_D32_FLOAT,
+            .DepthStencil = {1.0f, 0}
+        };
+
+        Device->CreateCommittedResource(
+            &HeapProperties,
+            D3D12_HEAP_FLAG_NONE,
+            &DepthBufferDesc,
+            D3D12_RESOURCE_STATE_DEPTH_WRITE,
+            &ClearValue,
+            IID_PPV_ARGS(&DepthBuffer)
+        ) >> Check{"Failed to create depth buffer"};
+
+        D3D12_DESCRIPTOR_HEAP_DESC desc = {
+            .Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
+            .NumDescriptors = 1,
+        };
+
+        Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&DepthBufferDescriptorHeap)) >> Check {"Failed to create descriptor heap"};
+
+        DepthViewBufferHandle = {
+            DepthBufferDescriptorHeap->GetCPUDescriptorHandleForHeapStart()
+        };
+
+        Device->CreateDepthStencilView(DepthBuffer.Get(), nullptr, DepthViewBufferHandle);
+    }
 }
 
 void WaitFence()
@@ -255,8 +301,8 @@ Microsoft::WRL::ComPtr<ID3D12RootSignature> RootSignature {};
 Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineState {};
 Microsoft::WRL::ComPtr<ID3DBlob> VertexShader {};
 Microsoft::WRL::ComPtr<ID3DBlob> PixelShader {};
-D3D12_RECT ScissorRect = {0, 0, LONG_MAX, LONG_MAX};
-D3D12_VIEWPORT Viewport {0, 0, 800, 600};
+D3D12_RECT ScissorRect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
+D3D12_VIEWPORT Viewport = CD3DX12_VIEWPORT(0.f, 0.f, 800.f, 600.f);
 
 Microsoft::WRL::ComPtr<ID3D12Resource> IndexBuffer {};
 D3D12_INDEX_BUFFER_VIEW IndexBufferView {};
@@ -470,8 +516,8 @@ void LoadAssets()
         PsoDesc.PS = CD3DX12_SHADER_BYTECODE(PixelShader.Get());
         PsoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
         PsoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-        PsoDesc.DepthStencilState.DepthEnable = FALSE;
-        PsoDesc.DepthStencilState.StencilEnable = FALSE;
+        PsoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+        PsoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
         PsoDesc.SampleMask = UINT_MAX;
         PsoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
         PsoDesc.NumRenderTargets = 1;
@@ -498,6 +544,7 @@ void Render()
     FLOAT ClearColor[4] = { color, color, color, 1.0f };
     CD3DX12_CPU_DESCRIPTOR_HANDLE RtvHandle { DescriptorHeap->GetCPUDescriptorHandleForHeapStart(), CurrentSwapIndex, DescriptorHeapIncrementSize };
     CommandList->ClearRenderTargetView(RtvHandle, ClearColor, 0, nullptr);
+    CommandList->ClearDepthStencilView(DepthViewBufferHandle, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0.f, 0, nullptr);
 
     CommandList->SetPipelineState(PipelineState.Get());
     CommandList->SetGraphicsRootSignature(RootSignature.Get());
@@ -509,13 +556,13 @@ void Render()
     CommandList->RSSetViewports(1, &Viewport);
     CommandList->RSSetScissorRects(1, &ScissorRect);
 
-    CommandList->OMSetRenderTargets(1, &RtvHandle, true, nullptr);
+    CommandList->OMSetRenderTargets(1, &RtvHandle, true, &DepthViewBufferHandle);
 
     DirectX::XMMATRIX ViewMatrix = DirectX::XMMatrixLookAtLH(
         DirectX::XMVectorSet(0, 0, -5, 1),
         DirectX::XMVectorSet(0, 0, 0, 1),
         DirectX::XMVectorSet(0, 1, 0, 0));
-    DirectX::XMMATRIX ProjectionMatrix = DirectX::XMMatrixPerspectiveFovLH(DirectX::XMConvertToRadians(90.f), 800.f / 600.f, 0.1f, 100.f);
+    DirectX::XMMATRIX ProjectionMatrix = DirectX::XMMatrixPerspectiveFovLH(DirectX::XMConvertToRadians(90.f), 800.f / 600.f, 0.1f, 10.f);
 
     {
         DirectX::XMMATRIX ModelMatrix = DirectX::XMMatrixRotationZ(FenceValue * 0.005f)
