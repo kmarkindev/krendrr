@@ -516,14 +516,28 @@ void Render()
         DirectX::XMVectorSet(0, 0, 0, 1),
         DirectX::XMVectorSet(0, 1, 0, 0));
     DirectX::XMMATRIX ProjectionMatrix = DirectX::XMMatrixPerspectiveFovLH(DirectX::XMConvertToRadians(90.f), 800.f / 600.f, 0.1f, 100.f);
-    DirectX::XMMATRIX ModelMatrix = DirectX::XMMatrixRotationZ(FenceValue * 0.005f)
-        * DirectX::XMMatrixRotationY(FenceValue * 0.007f)
-        * DirectX::XMMatrixRotationX(FenceValue * 0.01f);
-    DirectX::XMMATRIX MVP = DirectX::XMMatrixTranspose(ModelMatrix * ViewMatrix * ProjectionMatrix);
 
-    CommandList->SetGraphicsRoot32BitConstants(0, sizeof(DirectX::XMMATRIX) / sizeof(DWORD32), &MVP, 0);
+    {
+        DirectX::XMMATRIX ModelMatrix = DirectX::XMMatrixRotationZ(FenceValue * 0.005f)
+            * DirectX::XMMatrixRotationY(FenceValue * 0.007f)
+            * DirectX::XMMatrixRotationX(FenceValue * 0.01f);
+        DirectX::XMMATRIX MVP = DirectX::XMMatrixTranspose(ModelMatrix * ViewMatrix * ProjectionMatrix);
 
-    CommandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
+        CommandList->SetGraphicsRoot32BitConstants(0, sizeof(DirectX::XMMATRIX) / sizeof(DWORD32), &MVP, 0);
+
+        CommandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
+    }
+
+    {
+        DirectX::XMMATRIX ModelMatrix = DirectX::XMMatrixRotationZ(FenceValue * -0.005f)
+            * DirectX::XMMatrixRotationY(FenceValue * -0.007f)
+            * DirectX::XMMatrixRotationX(FenceValue * -0.01f);
+        DirectX::XMMATRIX MVP = DirectX::XMMatrixTranspose(ModelMatrix * ViewMatrix * ProjectionMatrix);
+
+        CommandList->SetGraphicsRoot32BitConstants(0, sizeof(DirectX::XMMATRIX) / sizeof(DWORD32), &MVP, 0);
+
+        CommandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
+    }
 
     auto BarrierToPresent = CD3DX12_RESOURCE_BARRIER::Transition(Rtv.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
     CommandList->ResourceBarrier(1, &BarrierToPresent);
