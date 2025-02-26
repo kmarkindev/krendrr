@@ -258,6 +258,11 @@ Microsoft::WRL::ComPtr<ID3DBlob> PixelShader {};
 D3D12_RECT ScissorRect = {0, 0, LONG_MAX, LONG_MAX};
 D3D12_VIEWPORT Viewport {0, 0, 800, 600};
 
+Microsoft::WRL::ComPtr<ID3D12Resource> IndexBuffer {};
+D3D12_INDEX_BUFFER_VIEW IndexBufferView {};
+
+int numIndices {};
+
 void LoadAssets()
 {
     // 1. Определяем данные для загрузки
@@ -265,13 +270,29 @@ void LoadAssets()
     struct Vertex
     {
         DirectX::XMFLOAT3 Position {};
-        DirectX::XMFLOAT4 Color {};
+        DirectX::XMFLOAT2 UV {};
     };
 
+    const WORD IndexData[] = {
+        0, 1, 2, 0, 2, 3,
+        4, 6, 5, 4, 7, 6,
+        4, 5, 1, 4, 1, 0,
+        3, 2, 6, 3, 6, 7,
+        1, 5, 6, 1, 6, 2,
+        4, 0, 3, 4, 3, 7
+    };
+
+    numIndices = std::size(IndexData);
+
     Vertex vertexData[] = {
-        { {0.f, 0.5f, 0.f}, {0.3f, 0.5f, 0.7f, 1.f} },
-        { {0.5f, -0.5f, 0.f}, {0.3f, 0.7f, 0.2f, 1.f} },
-        { {-0.5f, -0.5f, 0.f}, {0.5f, 0.3f, 0.7f, 1.f} },
+        { {-1.0f, -1.0f, -1.0f}, { 0.f, 0.f } }, // 0
+        { {-1.0f,  1.0f, -1.0f}, { 0.f, 1.f } }, // 1
+        { {1.0f,  1.0f, -1.0f}, { 1.f, 1.f } }, // 2
+        { {1.0f, -1.0f, -1.0f}, { 1.f, 0.f } }, // 3
+        { {-1.0f, -1.0f,  1.0f}, { 0.f, 1.f } }, // 4
+        { {-1.0f,  1.0f,  1.0f}, { 0.f, 0.f } }, // 5
+        { {1.0f,  1.0f,  1.0f}, { 1.f, 0.f } }, // 6
+        { {1.0f, -1.0f,  1.0f}, { 1.f, 1.f } }  // 7
     };
 
     // 2. Создаем ресурс для хранения данных на GPU
@@ -289,6 +310,20 @@ void LoadAssets()
         ) >> Check{"Failed to create vertex buffer"};
     }
 
+    {
+        auto HeapProps =  CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+        auto ResourceDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(IndexData));
+
+        Device->CreateCommittedResource(
+            &HeapProps,
+            D3D12_HEAP_FLAG_NONE,
+            &ResourceDesc,
+            D3D12_RESOURCE_STATE_COMMON,
+            nullptr,
+            IID_PPV_ARGS(&IndexBuffer)
+        ) >> Check{"Failed to create index buffer"};
+    }
+
     // 3. Создаем ресурс для загрузки данных в созданный ранее Vertex Buffer
     // Т.к. мы указали D3D12_HEAP_TYPE_DEFAULT, у нас нет возможности писать в буфер из CPU
     // Так что мы создаем еще один, и записываем данные через него.
@@ -296,6 +331,7 @@ void LoadAssets()
     // производительность. Note: upload buffer удаляется, т.к. он не нужен после загрузки.
 
     Microsoft::WRL::ComPtr<ID3D12Resource> VertexUploadBuffer {};
+    Microsoft::WRL::ComPtr<ID3D12Resource> IndexUploadBuffer {};
 
     {
         auto HeapProps =  CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
@@ -311,6 +347,20 @@ void LoadAssets()
             ) >> Check{"Failed to create vertex upload buffer"};
     }
 
+    {
+        auto HeapProps =  CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+        auto ResourceDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(IndexData));
+
+        Device->CreateCommittedResource(
+                &HeapProps,
+                D3D12_HEAP_FLAG_NONE,
+                &ResourceDesc,
+                D3D12_RESOURCE_STATE_GENERIC_READ,
+                nullptr,
+                IID_PPV_ARGS(&IndexUploadBuffer)
+            ) >> Check{"Failed to create index upload buffer"};
+    }
+
     // 4. Мапим GPU память на CPU память, пишем наши данные в буфер, не забываем Unmap.
 
     {
@@ -320,16 +370,31 @@ void LoadAssets()
         VertexUploadBuffer->Unmap(0, nullptr);
     }
 
+    {
+        void* PtrToLoad {};
+        IndexUploadBuffer->Map(0, nullptr, &PtrToLoad) >> Check{"Failed to map index buffer to memory"};
+        std::memcpy(PtrToLoad, IndexData, sizeof(IndexData));
+        IndexUploadBuffer->Unmap(0, nullptr);
+    }
+
     // 5. Как и обещали, копируем данные с upload buffer в обычный buffer.
 
     CommandAllocator->Reset() >> Check{"Failed to reset command allocator"};
     CommandList->Reset(CommandAllocator.Get(), nullptr) >> Check{"Failed to reset command list"};
     CommandList->CopyResource(VertexBuffer.Get(), VertexUploadBuffer.Get());
+    CommandList->CopyResource(IndexBuffer.Get(), IndexUploadBuffer.Get());
 
     {
         const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
             VertexBuffer.Get(),
             D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+        CommandList->ResourceBarrier(1, &barrier);
+    }
+
+    {
+        const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            IndexBuffer.Get(),
+            D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_INDEX_BUFFER);
         CommandList->ResourceBarrier(1, &barrier);
     }
 
@@ -344,6 +409,12 @@ void LoadAssets()
         .BufferLocation = VertexBuffer->GetGPUVirtualAddress(),
         .SizeInBytes = sizeof(vertexData),
         .StrideInBytes = sizeof(Vertex),
+    };
+
+    IndexBufferView = {
+        .BufferLocation = IndexBuffer->GetGPUVirtualAddress(),
+        .SizeInBytes = sizeof(IndexData),
+        .Format = DXGI_FORMAT_R16_UINT
     };
 
     // 7. Ожидаем выполнение копирования (завершения выполнения Command List)
@@ -370,7 +441,7 @@ void LoadAssets()
     {
         D3D12_INPUT_ELEMENT_DESC InputLayout[] = {
             { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-            { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+            { "COLOR", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
         };
 
         #if defined(_DEBUG)
@@ -433,6 +504,7 @@ void Render()
 
     CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     CommandList->IASetVertexBuffers(0, 1, &VertexBufferView);
+    CommandList->IASetIndexBuffer(&IndexBufferView);
 
     CommandList->RSSetViewports(1, &Viewport);
     CommandList->RSSetScissorRects(1, &ScissorRect);
@@ -440,16 +512,18 @@ void Render()
     CommandList->OMSetRenderTargets(1, &RtvHandle, true, nullptr);
 
     DirectX::XMMATRIX ViewMatrix = DirectX::XMMatrixLookAtLH(
-        DirectX::XMVectorSet(0, 0, -1, 1),
+        DirectX::XMVectorSet(0, 0, -5, 1),
         DirectX::XMVectorSet(0, 0, 0, 1),
         DirectX::XMVectorSet(0, 1, 0, 0));
     DirectX::XMMATRIX ProjectionMatrix = DirectX::XMMatrixPerspectiveFovLH(DirectX::XMConvertToRadians(90.f), 800.f / 600.f, 0.1f, 100.f);
-    DirectX::XMMATRIX ModelMatrix = DirectX::XMMatrixRotationZ(FenceValue * 0.01f);
-    DirectX::XMMATRIX MVP = ModelMatrix * ViewMatrix * ProjectionMatrix;
+    DirectX::XMMATRIX ModelMatrix = DirectX::XMMatrixRotationZ(FenceValue * 0.005f)
+        * DirectX::XMMatrixRotationY(FenceValue * 0.007f)
+        * DirectX::XMMatrixRotationX(FenceValue * 0.01f);
+    DirectX::XMMATRIX MVP = DirectX::XMMatrixTranspose(ModelMatrix * ViewMatrix * ProjectionMatrix);
 
     CommandList->SetGraphicsRoot32BitConstants(0, sizeof(DirectX::XMMATRIX) / sizeof(DWORD32), &MVP, 0);
 
-    CommandList->DrawInstanced(3, 1, 0, 0);
+    CommandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
 
     auto BarrierToPresent = CD3DX12_RESOURCE_BARRIER::Transition(Rtv.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
     CommandList->ResourceBarrier(1, &BarrierToPresent);
