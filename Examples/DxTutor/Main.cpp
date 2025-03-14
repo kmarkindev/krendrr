@@ -589,7 +589,7 @@ void LoadAssets()
 
     {
         CD3DX12_ROOT_PARAMETER RootParameters[2]{};
-        RootParameters->InitAsConstants(sizeof(DirectX::XMMATRIX) / sizeof(DWORD32), 0, 0, D3D12_SHADER_VISIBILITY_ALL);
+        RootParameters[0].InitAsConstants(sizeof(DirectX::XMMATRIX) / sizeof(DWORD32), 0, 0, D3D12_SHADER_VISIBILITY_ALL);
 
         CD3DX12_DESCRIPTOR_RANGE descRange = {D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0};
         RootParameters[1].InitAsDescriptorTable(1, &descRange);
