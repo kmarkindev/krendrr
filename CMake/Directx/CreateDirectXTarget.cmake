@@ -25,9 +25,9 @@ add_custom_command(
 )
 
 add_custom_target(
-        CopyDirectxDlls
+        DirectX12AgilitySdk_CopyDirectxDlls
     DEPENDS
         ${CMAKE_BINARY_DIR}/bin/D3D12Core.dll
         ${CMAKE_BINARY_DIR}/bin/d3d12SDKLayers.dll
 )
-add_dependencies(DirectX12AgilitySdk CopyDirectxDlls)
+add_dependencies(DirectX12AgilitySdk DirectX12AgilitySdk_CopyDirectxDlls)
