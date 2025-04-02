@@ -5,4 +5,3 @@ else()
     message(STATUS "Tests are gonna be build")
 endif()
 
-# TODO:

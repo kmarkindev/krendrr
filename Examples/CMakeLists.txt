@@ -5,5 +5,4 @@ else()
     message(STATUS "Examples are gonna be built")
 endif()
 
-add_subdirectory(SumExample)
-add_subdirectory(DxTutor)
+add_subdirectory(RotatingCubesHelloWorld)

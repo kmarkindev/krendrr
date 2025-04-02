@@ -158,35 +158,21 @@ void InitRender()
     Microsoft::WRL::ComPtr<IDXGIFactory6> Factory;
     CreateDXGIFactory2(DxgiFactoryFlags, IID_PPV_ARGS(&Factory)) >> Check{"Failed to create DXGI factory"};
 
-    // Итерируемся по адаптерам и находим подходящий
-    // Создаем Device объект, позволяющий работать с выбранным адаптером.
-
-    Microsoft::WRL::ComPtr<IDXGIAdapter> Adapter {};
-    for(UINT AdapterIndex = 0; Factory->EnumAdapterByGpuPreference(
-            AdapterIndex,
-            DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
-            IID_PPV_ARGS(&Adapter)) >> Check{"Failed to enumerate adapters"}; ++AdapterIndex)
     {
-        if(SUCCEEDED(D3D12CreateDevice(
-            Adapter.Get(),
-            D3D_FEATURE_LEVEL_12_2,
-            IID_PPV_ARGS(&Device)
-        )))
+        HRESULT DeviceCreationResult = D3D12CreateDevice(
+                nullptr,
+                D3D_FEATURE_LEVEL_12_1,
+                IID_PPV_ARGS(&Device)
+            );
+
+        if (DeviceCreationResult == DXGI_ERROR_UNSUPPORTED)
         {
-            break;
+            throw std::runtime_error("DirectX 12 version not supported");
         }
+
+        DeviceCreationResult >> Check{"Failed to create device"};
     }
 
-    if(Device == nullptr)
-    {
-        throw std::runtime_error("Failed to create device");
-    }
-
-    {
-        DXGI_ADAPTER_DESC Desc {};
-        Adapter->GetDesc(&Desc) >> Check{"Failed to get adapter description"};
-        std::wcout << "Selected adapter: " << Desc.Description << std::endl;
-    }
 
 
     // 3. Создаем Command Queue через который в последствии и будем отдавать команды на GPU
@@ -624,9 +610,10 @@ void LoadAssets()
         {
             Microsoft::WRL::ComPtr<ID3DBlob> CompilationErrorBlob {};
 
-            D3DCompileFromFile(L"S:/Dev/my/krendrr/Examples/DxTutor/shaders.hlsl",
+            D3DCompileFromFile(L"shaders.hlsl",
                 nullptr, nullptr, "VSMain", "vs_5_1",
-                compileFlags, 0, &VertexShader, &CompilationErrorBlob);
+                compileFlags, 0, &VertexShader, &CompilationErrorBlob)
+            >> Check{"Failed to compile vertex shader"};
 
             if(CompilationErrorBlob != nullptr)
             {
@@ -635,9 +622,10 @@ void LoadAssets()
                 throw std::runtime_error("Failed to compile vertex shader");
             }
 
-            D3DCompileFromFile(L"S:/Dev/my/krendrr/Examples/DxTutor/shaders.hlsl",
+            D3DCompileFromFile(L"shaders.hlsl",
                 nullptr, nullptr, "PSMain", "ps_5_1",
-                compileFlags, 0, &PixelShader, &CompilationErrorBlob);
+                compileFlags, 0, &PixelShader, &CompilationErrorBlob)
+            >> Check{"Failed to compile pixel shader"};
 
             if(CompilationErrorBlob != nullptr)
             {
