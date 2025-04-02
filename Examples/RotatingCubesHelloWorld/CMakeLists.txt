@@ -1,7 +1,9 @@
 add_executable(RotatingCubesHelloWorld)
 target_sources(RotatingCubesHelloWorld PRIVATE Main.cpp)
 
-target_link_libraries(RotatingCubesHelloWorld PRIVATE Directxtk12 DirectX12AgilitySdk)
+target_link_libraries(RotatingCubesHelloWorld PRIVATE
+    Common
+)
 
 set_target_properties(RotatingCubesHelloWorld
     PROPERTIES
