@@ -8,3 +8,5 @@ target_link_libraries(Common PUBLIC
 target_include_directories(Common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_subdirectory(Utils)
+add_subdirectory(Window)
+add_subdirectory(Render)

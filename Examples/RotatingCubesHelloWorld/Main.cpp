@@ -1,5 +1,7 @@
 #define WINDOWS_LEAN_AND_MEAN
 
+#include "Window/Window.h"
+
 #include <array>
 #include <iostream>
 #include <stdexcept>
@@ -10,50 +12,6 @@
 #include <windows.h>
 #include <d3dcompiler.h>
 #include <DirectXMath.h>
-
-HWND Window {};
-
-LRESULT CALLBACK WindowProc(HWND Hwnd, UINT Message, WPARAM WParam, LPARAM LParam)
-{
-    switch (Message)
-    {
-        case WM_DESTROY:
-            PostQuitMessage(0);
-            break;
-    }
-
-    return DefWindowProc(Hwnd, Message, WParam, LParam);
-}
-
-void CreateRenderWindow()
-{
-    WNDCLASSEX WindowClass = {};
-    WindowClass.cbSize = sizeof(WNDCLASSEX);
-    WindowClass.style = CS_HREDRAW | CS_VREDRAW;
-    WindowClass.lpfnWndProc = WindowProc;
-    WindowClass.hInstance = GetModuleHandle(nullptr);
-    WindowClass.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    WindowClass.lpszClassName = "HelloTriangle";
-    RegisterClassEx(&WindowClass);
-
-    RECT WindowRect = { 0, 0, 800, 600 };
-    AdjustWindowRect(&WindowRect, WS_OVERLAPPEDWINDOW, FALSE);
-
-    Window = CreateWindow(
-        WindowClass.lpszClassName,
-        "Test Directx 12",
-        WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        WindowRect.right - WindowRect.left,
-        WindowRect.bottom - WindowRect.top,
-        nullptr,
-        nullptr,
-        GetModuleHandle(nullptr),
-        nullptr);
-
-    ShowWindow(Window, SW_SHOWNORMAL);
-}
 
 constexpr int FrameCount = 2;
 
@@ -73,6 +31,8 @@ HANDLE FenceEvent {};
 Microsoft::WRL::ComPtr<ID3D12Resource> DepthBuffer {};
 Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> DepthBufferDescriptorHeap {};
 CD3DX12_CPU_DESCRIPTOR_HANDLE DepthViewBufferHandle {};
+
+HWND WindowHandle {};
 
 void InitRender()
 {
@@ -141,7 +101,7 @@ void InitRender()
     Microsoft::WRL::ComPtr<IDXGISwapChain1> SwapChain1 {};
     Factory->CreateSwapChainForHwnd(
         CommandQueue.Get(),
-        Window,
+        WindowHandle,
         &swapChainDesc,
         nullptr,
         nullptr,
@@ -674,7 +634,14 @@ void Render()
 
 int main() try
 {
-    CreateRenderWindow();
+    Window Window {
+        {1200, 300},
+        "Rotating Cubes Hello World",
+    };
+    Window.ShowWindow();
+
+    WindowHandle = Window.GetWindowHandle();
+
     InitRender();
     LoadAssets();
 
