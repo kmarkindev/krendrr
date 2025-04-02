@@ -5,7 +5,7 @@
 #include <vector>
 #include <iostream>
 
-#include "directx/d3dx12.h"
+#include "d3dx12/d3dx12.h"
 #include <dxgi1_6.h>
 #include <windows.h>
 #include <d3dcompiler.h>
@@ -156,7 +156,7 @@ void InitRender()
 
     // Получем факторку для итерации по адаптерам
     Microsoft::WRL::ComPtr<IDXGIFactory6> Factory;
-    CreateDXGIFactory2(DxgiFactoryFlags, IID_PPV_ARGS(&Factory));
+    CreateDXGIFactory2(DxgiFactoryFlags, IID_PPV_ARGS(&Factory)) >> Check{"Failed to create DXGI factory"};
 
     // Итерируемся по адаптерам и находим подходящий
     // Создаем Device объект, позволяющий работать с выбранным адаптером.

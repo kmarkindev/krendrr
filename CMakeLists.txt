@@ -9,6 +9,9 @@ project(kRendrr)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+include(CMake/Directx/CreateDirectXTarget.cmake)
+include(CMake/Directx/CreateDirectxtk12Target.cmake)
+
 add_subdirectory(Sources)
 add_subdirectory(Examples)
 add_subdirectory(Tests)
