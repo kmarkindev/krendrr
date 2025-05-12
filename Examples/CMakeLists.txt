@@ -1,1 +1,2 @@
 add_subdirectory(RotatingCubesHelloWorld)
+add_subdirectory(PhongRenderer)
