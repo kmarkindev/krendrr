@@ -635,7 +635,7 @@ void Render()
 int main() try
 {
     Window Window {
-        {1200, 300},
+        {800, 600},
         "Rotating Cubes Hello World",
     };
     Window.ShowWindow();

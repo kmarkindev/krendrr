@@ -1,7 +1,7 @@
 add_library(Common STATIC)
 
 target_link_libraries(Common PUBLIC
-    Directxtk12
+    #Directxtk12
     DirectX12AgilitySdk
 )
 
