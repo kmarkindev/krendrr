@@ -1,8 +1,7 @@
 #include <exception>
 #include <iostream>
 #include <csignal>
-#define WINDOWS_LEAN_AND_MEAN
-#include <Windows.h>
+#include "Application.h"
 
 bool bGotQuitEvent = false;
 
@@ -49,51 +48,14 @@ void SetupSignals()
     std::signal(SIGFPE, SignalHandler);
 }
 
-void ProcessEvents()
-{
-    MSG Msg = {};
-
-    while (!bGotQuitEvent && PeekMessage(&Msg, nullptr, 0, 0, PM_REMOVE))
-    {
-        bGotQuitEvent = Msg.message == WM_QUIT;
-
-        TranslateMessage(&Msg);
-        DispatchMessage(&Msg);
-    }
-}
-
 int main() try
 {
     SetupSignals();
 
-    Window Window {};
-    RenderDevice RenderDevice {};
-    SwapChain SwapChain {RenderDevice, Window};
-    World World {RenderDevice};
-    ForwardRenderer ForwardRenderer {RenderDevice};
-
-    Window.Initialize();
-    World.Initialize();
-    RenderDevice.Initialize();
-    SwapChain.Initialize();
-
-    while(!bGotQuitEvent)
-    {
-        ProcessEvents();
-
-        if(bGotQuitEvent)
-        {
-            break;
-        }
-
-        World.Tick();
-        ForwardRenderer.Render(World, SwapChain);
-    }
-
-    RenderDevice.Uninitialize();
-    Window.Uninitialize();
-    World.Uninitialize();
-    SwapChain.Uninitialize();
+    Application Application {};
+    Application.Initialize();
+    Application.GameLoop();
+    Application.Deinitialize();
 
     return 0;
 }
