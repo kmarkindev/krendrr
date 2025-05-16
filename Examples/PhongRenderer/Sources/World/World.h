@@ -1,23 +1,29 @@
 #pragma once
+
 #include <memory>
 
-
-class RenderDevice;
-
-class World
+namespace kRendrr
 {
-public:
+    class RenderDevice;
 
-    explicit World(std::shared_ptr<RenderDevice> RenderDevice);
+    class World
+    {
+    public:
 
-    void Tick();
+        double Temp_DeltaTime;
 
-    void Initialize();
+        explicit World(std::shared_ptr<RenderDevice> RenderDevice);
 
-    void Uninitialize();
+        void Tick(double DeltaTime);
 
-private:
+        void Initialize();
 
-    std::shared_ptr<RenderDevice> RenderDevice;
+        void Uninitialize();
 
-};
+    private:
+
+        std::shared_ptr<RenderDevice> RenderDevice;
+
+    };
+
+}

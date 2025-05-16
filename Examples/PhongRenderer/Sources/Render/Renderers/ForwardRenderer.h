@@ -1,25 +1,36 @@
 #pragma once
 
 #include <memory>
+#include "Sources/Render/Resources/Commands/CommandList.h"
+#include "Sources/Render/Resources/Sync/RenderFence.h"
 
-class RenderDevice;
-class World;
-class Viewport;
-
-class ForwardRenderer
+namespace kRendrr
 {
-public:
+    class CommandQueue;
+    class RenderDevice;
+    class World;
+    class Viewport;
 
-    explicit ForwardRenderer(std::shared_ptr<RenderDevice> RenderDevice);
+    class ForwardRenderer
+    {
+    public:
 
-    void Render(const World& World, const Viewport& Viewport);
+        explicit ForwardRenderer(std::shared_ptr<RenderDevice> RenderDevice, std::shared_ptr<CommandQueue> CommandQueue);
 
-    void Initialize();
+        void Render(const World& World, Viewport& Viewport);
 
-    void Uninitialize();
+        void Initialize();
 
-private:
 
-    std::shared_ptr<RenderDevice> RenderDevice {};
 
-};
+    private:
+
+        std::shared_ptr<RenderDevice> RenderDevice {};
+        std::shared_ptr<CommandQueue> CommandQueue {};
+
+        CommandAllocator CommandAllocator {};
+        CommandList CommandList;
+        RenderFence Fence {};
+
+    };
+}

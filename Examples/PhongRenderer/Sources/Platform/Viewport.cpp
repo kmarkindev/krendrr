@@ -1,69 +1,101 @@
 #include "Viewport.h"
+#include "Sources/Render/RenderDevice.h"
+#include "Sources/Render/Resources/Commands/CommandQueue.h"
+#include "Sources/Render/Resources/View/SwapChain.h"
 
-Viewport::Viewport(std::shared_ptr<::RenderDevice> RenderDevice)
-    : Viewport(std::move(RenderDevice), CreateDefaultWindow())
-{
-}
-
-Viewport::Viewport(std::shared_ptr<::RenderDevice> RenderDevice, HWND Hwnd)
-    : RenderDevice(std::move(RenderDevice)), Hwnd(Hwnd)
+namespace kRendrr
 {
 
-}
+    Viewport::Viewport()
+    : Viewport("Window", {1200, 720})
+    {
+    }
 
-void Viewport::Initialize()
-{
-    // TODO: create swap chain and RTV using device
-}
+    Viewport::Viewport(std::string_view WindowName, glm::ivec2 WindowSize, glm::ivec2 WindowPos)
+        : Viewport(CreateDefaultWindow(WindowName, WindowSize, WindowPos))
+    {
+    }
 
-void Viewport::Uninitialize()
-{
+    Viewport::Viewport(HWND Hwnd)
+        : Hwnd(Hwnd), SwapChain(Hwnd)
+    {
 
-}
+    }
 
-glm::vec2 Viewport::GetSize() const
-{
-    RECT Rect {};
-    ::GetWindowRect(Hwnd, &Rect);
+    void Viewport::Initialize(const RenderDevice& RenderDevice, const CommandQueue& CommandQueue)
+    {
+        SwapChain.Initialize(RenderDevice, CommandQueue);
+    }
 
-    return {Rect.right - 1, Rect.bottom - 1};
-}
+    glm::vec2 Viewport::GetSize() const
+    {
+        RECT Rect {};
+        ::GetWindowRect(Hwnd, &Rect);
 
-std::shared_ptr<RenderTargetView> Viewport::GetCurrentRenderTargetView() const
-{
-    return {};
-}
+        return {Rect.right - 1, Rect.bottom - 1};
+    }
 
-void Viewport::PresentAndSwapCurrentRenderTargetView()
-{
+    const SwapChain& Viewport::GetSwapChain() const
+    {
+        return SwapChain;
+    }
 
-}
+    SwapChain& Viewport::GetSwapChain()
+    {
+        return SwapChain;
+    }
 
-HWND Viewport::CreateDefaultWindow()
-{
-    WNDCLASSEX WindowClass = {};
-    WindowClass.cbSize = sizeof(WNDCLASSEX);
-    WindowClass.style = CS_HREDRAW | CS_VREDRAW;
-    WindowClass.lpfnWndProc = DefWindowProc;
-    WindowClass.hInstance = GetModuleHandle(nullptr);
-    WindowClass.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    WindowClass.lpszClassName = "DefaultWindow";
-    ::RegisterClassEx(&WindowClass);
+    LRESULT CALLBACK DefaultWindowWndProc(
+        HWND Hwnd,
+        UINT Msg,
+        WPARAM WParam,
+        LPARAM LParam
+    )
+    {
+        switch (Msg) {
 
-    RECT WindowRect = {0, 0, 1280, 720};
-    ::AdjustWindowRect(&WindowRect, WS_OVERLAPPEDWINDOW, FALSE);
+            case WM_DESTROY:
+                PostQuitMessage(0);
+                return 0;
 
-    return ::CreateWindow(
-        WindowClass.lpszClassName,
-        "Default Window",
-        WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        WindowRect.right - WindowRect.left,
-        WindowRect.bottom - WindowRect.top,
-        nullptr,
-        nullptr,
-        GetModuleHandle(nullptr),
-        nullptr
-    );
+            default:
+                return DefWindowProc(Hwnd, Msg, WParam, LParam);
+        }
+
+        return 0;
+    }
+
+    HWND Viewport::CreateDefaultWindow(std::string_view WindowName, const glm::ivec2& WindowSize, glm::ivec2 WindowPos)
+    {
+        WNDCLASSEX WindowClass = {};
+        WindowClass.cbSize = sizeof(WNDCLASSEX);
+        WindowClass.style = CS_HREDRAW | CS_VREDRAW;
+        WindowClass.lpfnWndProc = DefaultWindowWndProc;
+        WindowClass.hInstance = GetModuleHandle(nullptr);
+        WindowClass.hCursor = LoadCursor(nullptr, IDC_ARROW);
+        WindowClass.lpszClassName = "DefaultViewportWindow";
+        ::RegisterClassEx(&WindowClass);
+
+        RECT WindowRect = {WindowPos.x, WindowPos.y, WindowSize.x, WindowSize.y};
+        ::AdjustWindowRect(&WindowRect, WS_OVERLAPPEDWINDOW, FALSE);
+
+        HWND Handle = ::CreateWindow(
+            WindowClass.lpszClassName,
+            WindowName.data(),
+            WS_OVERLAPPEDWINDOW,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            WindowRect.right - WindowRect.left,
+            WindowRect.bottom - WindowRect.top,
+            nullptr,
+            nullptr,
+            GetModuleHandle(nullptr),
+            nullptr
+        );
+
+        ::ShowWindow(Handle, SW_SHOWNORMAL);
+
+        return Handle;
+    }
+
 }

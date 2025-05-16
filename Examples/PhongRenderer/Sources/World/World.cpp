@@ -1,22 +1,27 @@
 #include "World.h"
 
-World::World(std::shared_ptr<::RenderDevice> RenderDevice)
-    : RenderDevice(std::move(RenderDevice))
+namespace kRendrr
 {
 
-}
+    World::World(std::shared_ptr<kRendrr::RenderDevice> RenderDevice)
+        : RenderDevice(std::move(RenderDevice))
+    {
 
-void World::Tick()
-{
+    }
 
-}
+    void World::Tick(double DeltaTime)
+    {
+        Temp_DeltaTime = DeltaTime;
+    }
 
-void World::Initialize()
-{
+    void World::Initialize()
+    {
 
-}
+    }
 
-void World::Uninitialize()
-{
+    void World::Uninitialize()
+    {
+
+    }
 
 }

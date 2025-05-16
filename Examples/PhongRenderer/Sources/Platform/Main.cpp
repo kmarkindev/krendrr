@@ -52,7 +52,7 @@ int main() try
 {
     SetupSignals();
 
-    Application Application {};
+    kRendrr::Application Application {};
     Application.Initialize();
     Application.GameLoop();
     Application.Deinitialize();

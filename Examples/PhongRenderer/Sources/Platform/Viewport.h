@@ -1,42 +1,45 @@
 #pragma once
-#include <memory>
 
-#include "Window/Window.h"
+#include <string_view>
 #include <glm/vec2.hpp>
+#include <Windows.h>
+#include "Sources/Render/Resources/View/SwapChain.h"
 
-class RenderTargetView;
-class RenderDevice;
-
-/**
- * Represents some window/widget/panel that should be treated as a viewport for drawing.
- */
-class Viewport
+namespace kRendrr
 {
-public:
+    class CommandQueue;
+    class SwapChain;
+    class RenderTarget;
+    class RenderDevice;
 
-    explicit Viewport(std::shared_ptr<RenderDevice> RenderDevice);
+    class Viewport
+    {
+    public:
 
-    Viewport(std::shared_ptr<RenderDevice> RenderDevice, HWND Hwnd);
+        Viewport();
 
-    void Initialize();
+        Viewport(std::string_view WindowName, glm::ivec2 WindowSize, glm::ivec2 WindowPos = {});
 
-    void Uninitialize();
+        explicit Viewport(HWND Hwnd);
 
-    /**
-     * Get viewport pixel size used for drawing (exluding borders, shadows, etc.)
-     */
-    [[nodiscard]] glm::vec2 GetSize() const;
+        void Initialize(const RenderDevice& RenderDevice, const CommandQueue& CommandQueue);
 
-    [[nodiscard]] std::shared_ptr<RenderTargetView> GetCurrentRenderTargetView() const;
+        /**
+         * Get viewport pixel size used for drawing (exluding borders, shadows, etc.)
+         */
+        [[nodiscard]] glm::vec2 GetSize() const;
 
-    void PresentAndSwapCurrentRenderTargetView();
+        [[nodiscard]] const SwapChain& GetSwapChain() const;
 
-private:
+        [[nodiscard]] SwapChain& GetSwapChain();
 
-    std::shared_ptr<RenderDevice> RenderDevice {};
+    private:
 
-    HWND Hwnd {};
+        HWND Hwnd {};
 
-    static HWND CreateDefaultWindow();
+        SwapChain SwapChain;
 
-};
+        static HWND CreateDefaultWindow(std::string_view WindowName, const glm::ivec2& WindowSize, glm::ivec2 WindowPos);
+
+    };
+}

@@ -1,11 +1,38 @@
 #pragma once
 
-class RenderDevice 
+#include <cstdint>
+#include <d3d12.h>
+#include <wrl/client.h>
+#include "Sources/Utils/Mixins/CheckInitializationMixin.h"
+
+namespace kRendrr
 {
-public:
+    class RenderDevice : protected CheckInitializationMixin
+    {
+    public:
 
-    void Initialize();
+        struct RenderDeviceInitParams
+        {
+            enum class DebugMode : uint8_t
+            {
+                Disabled,
+                Enabled,
+                EnabledWithGpuBasedValidation
+            };
 
-    void Deinitialize();
+            DebugMode DebugMode { DebugMode::Disabled };
+        };
 
-};
+        void Initialize(const RenderDeviceInitParams& InitParams);
+
+        [[nodiscard]] uint8_t GetDxgiFlags() const;
+
+        [[nodiscard]] Microsoft::WRL::ComPtr<ID3D12Device> GetDevice() const;
+
+    private:
+
+        Microsoft::WRL::ComPtr<ID3D12Device> Device {};
+        uint8_t DxgiFlags {};
+
+    };
+}

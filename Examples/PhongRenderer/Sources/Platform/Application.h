@@ -1,31 +1,36 @@
 #pragma once
-#include <memory>
 
-class ForwardRenderer;
-class World;
-class Viewport;
-class RenderDevice;
+#include "Sources/Render/Renderers/ForwardRenderer.h"
+#include "Sources/World/World.h"
+#include "Viewport.h"
 
-class Application
+namespace kRendrr
 {
-public:
+    class Application
+    {
+    public:
 
-    virtual ~Application() = default;
+        Application();
 
-    virtual void Initialize();
+        virtual ~Application() = default;
 
-    virtual void GameLoop();
+        virtual void Initialize();
 
-    virtual void Deinitialize();
+        virtual void GameLoop();
 
-    virtual void RequestShutdown();
+        virtual void Deinitialize();
 
-private:
+        virtual void RequestShutdown();
 
-    bool bGotQuitEvent {false};
+    private:
 
-    std::shared_ptr<RenderDevice> RenderDevice {};
-    std::shared_ptr<ForwardRenderer> ForwardRenderer {};
-    std::shared_ptr<Viewport> Viewport {};
-    std::shared_ptr<World> World {};
-};
+        bool bGotQuitEvent {false};
+
+        RenderDevice RenderDevice;
+        CommandQueue CommandQueue;
+        Viewport Viewport;
+        ForwardRenderer ForwardRenderer;
+        World World;
+    };
+
+}
