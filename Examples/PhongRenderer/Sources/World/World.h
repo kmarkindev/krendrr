@@ -10,8 +10,6 @@ namespace kRendrr
     {
     public:
 
-        double Temp_DeltaTime;
-
         explicit World(std::shared_ptr<RenderDevice> RenderDevice);
 
         void Tick(double DeltaTime);

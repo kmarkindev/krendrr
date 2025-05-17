@@ -7,8 +7,10 @@
 #include "glm/detail/func_trigonometric.inl"
 #include "Sources/Platform/Viewport.h"
 #include "Sources/Render/Resources/View/RenderTarget.h"
+#include "Sources/Utils/Constexpr.h"
 #include "Sources/Utils/HResultCheck.h"
 #include "Sources/Utils/Memory.h"
+#include "Sources/Utils/Generators/MeshGenerator.h"
 #include "Sources/World/World.h"
 
 namespace kRendrr
@@ -66,14 +68,7 @@ namespace kRendrr
         }
 
         {
-            static float delta1 = 0.f;
-            delta1 += 0.15f * World.Temp_DeltaTime;
-            static float delta2 = 0.f;
-            delta2 += 0.01f * World.Temp_DeltaTime;
-            static float delta3 = 0.f;
-            delta3 += 0.34f * World.Temp_DeltaTime;
-
-            const glm::vec4 ClearColor = { glm::sin(delta1), glm::sin(delta2), glm::sin(delta3), 1.f };
+            const glm::vec4 ClearColor = { glm::sin(65), glm::sin(35), glm::sin(82), 1.f };
 
             CommandList.GetList()
                 ->ClearRenderTargetView(RenderTargetView.GetCpuHandle(), &ClearColor.r, 0, nullptr);
@@ -111,6 +106,83 @@ namespace kRendrr
         Fence.Initialize(*RenderDevice);
         CommandAllocator.Initialize(*RenderDevice);
         CommandList.Initialize(*RenderDevice);
+
+        constexpr auto CubeVertexArray = ConstexprDynamicContainerToArray<GenerateCubeMeshVertices, true>();
+        constexpr auto CubeIndicesArray = ConstexprDynamicContainerToArray<GenerateCubeMeshIndices>();
+
+        CubeVertexBuffer.Initialize(*RenderDevice, sizeof(CubeVertexArray));
+        CubeVertexBuffer.GetBuffer()->SetName(L"Cube Vertex Buf");
+        CubeIndexBuffer.Initialize(*RenderDevice, sizeof(CubeIndicesArray));
+        CubeIndexBuffer.GetBuffer()->SetName(L"Cube Index Buf");
+        CubeUploadBuffer.Initialize(*RenderDevice, std::max(sizeof(CubeVertexArray), sizeof(CubeIndicesArray)));
+        CubeUploadBuffer.GetBuffer()->SetName(L"Cube Upload Buf");
+
+        CubeVertexBuffer.SetBufferSideAndStride(sizeof(CubeVertexArray), 5 * sizeof(float), std::size(CubeVertexArray));
+        CubeIndexBuffer.SetBufferSizeAndFormat(sizeof(CubeIndexBuffer), DXGI_FORMAT_R32_UINT, std::size(CubeIndicesArray));
+
+        {
+            CubeUploadBuffer.UploadData(CubeVertexArray);
+
+            CommandList.GetList()
+                ->Reset(CommandAllocator.GetAllocator().Get(), nullptr)
+                >> HResultCheck {};
+
+            CommandList.GetList()
+                ->CopyBufferRegion(
+                    CubeVertexBuffer.GetBuffer().Get(),
+                    0,
+                    CubeUploadBuffer.GetBuffer().Get(),
+                    0,
+                    sizeof(CubeVertexArray)
+                );
+
+            CommandList.GetList()
+                ->Close()
+                >> HResultCheck {};
+
+            ID3D12CommandList* List[] = {CommandList.GetList().Get()};
+            CommandQueue->GetQueue()
+                ->ExecuteCommandLists(1, List);
+
+            Fence.SignalQueue(*CommandQueue);
+            Fence.WaitSignaledValueSpinlock();
+        }
+
+        {
+            CubeUploadBuffer.UploadData(CubeIndicesArray);
+
+            CommandList.GetList()
+                ->Reset(CommandAllocator.GetAllocator().Get(), nullptr)
+                >> HResultCheck {};
+
+            CommandList.GetList()
+                ->CopyBufferRegion(
+                    CubeIndexBuffer.GetBuffer().Get(),
+                    0,
+                    CubeUploadBuffer.GetBuffer().Get(),
+                    0,
+                    sizeof(CubeIndicesArray)
+                );
+
+            CommandList.GetList()
+                ->Close()
+                >> HResultCheck {};
+
+            ID3D12CommandList* List[] = { CommandList.GetList().Get() };
+            CommandQueue->GetQueue()
+                ->ExecuteCommandLists(1, List);
+
+            Fence.SignalQueue(*CommandQueue);
+            Fence.WaitSignaledValueSpinlock();
+        }
+
+        {
+            CubeUploadBuffer = {};
+
+            CommandAllocator.GetAllocator()
+                ->Reset()
+                >> HResultCheck {};
+        }
     }
 
 }

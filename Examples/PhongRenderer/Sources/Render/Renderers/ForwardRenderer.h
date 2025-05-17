@@ -1,7 +1,11 @@
 #pragma once
 
 #include <memory>
+
+#include "Sources/Render/Resources/Buffers/UploadBuffer.h"
 #include "Sources/Render/Resources/Commands/CommandList.h"
+#include "Sources/Render/Resources/Geometry/IndexBuffer.h"
+#include "Sources/Render/Resources/Geometry/VertexBuffer.h"
 #include "Sources/Render/Resources/Sync/RenderFence.h"
 
 namespace kRendrr
@@ -21,8 +25,6 @@ namespace kRendrr
 
         void Initialize();
 
-
-
     private:
 
         std::shared_ptr<RenderDevice> RenderDevice {};
@@ -31,6 +33,10 @@ namespace kRendrr
         CommandAllocator CommandAllocator {};
         CommandList CommandList;
         RenderFence Fence {};
+
+        VertexBuffer CubeVertexBuffer {};
+        IndexBuffer CubeIndexBuffer {};
+        UploadBuffer CubeUploadBuffer {};
 
     };
 }

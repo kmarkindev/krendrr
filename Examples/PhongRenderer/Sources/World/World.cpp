@@ -11,7 +11,7 @@ namespace kRendrr
 
     void World::Tick(double DeltaTime)
     {
-        Temp_DeltaTime = DeltaTime;
+
     }
 
     void World::Initialize()

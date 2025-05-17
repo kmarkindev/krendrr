@@ -79,7 +79,7 @@ namespace kRendrr
                 .emplace_back()
                 .Initialize(Resource, DescriptorHandle);
 
-            std::wstring name = std::format(L"Render target {}", i);
+            std::wstring name = std::format(L"Swap Chain RT {}", i);
             Resource->SetName(name.c_str())
                 >> HResultCheck {};
 
