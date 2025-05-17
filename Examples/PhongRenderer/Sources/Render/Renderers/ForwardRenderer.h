@@ -6,6 +6,9 @@
 #include "Sources/Render/Resources/Commands/CommandList.h"
 #include "Sources/Render/Resources/Geometry/IndexBuffer.h"
 #include "Sources/Render/Resources/Geometry/VertexBuffer.h"
+#include "Sources/Render/Resources/Pipeline/PipelineStateObject.h"
+#include "Sources/Render/Resources/Pipeline/RootSignature.h"
+#include "Sources/Render/Resources/Shaders/Shader.h"
 #include "Sources/Render/Resources/Sync/RenderFence.h"
 
 namespace kRendrr
@@ -38,5 +41,10 @@ namespace kRendrr
         IndexBuffer CubeIndexBuffer {};
         UploadBuffer CubeUploadBuffer {};
 
+        Shader CubeVertexShader {};
+        Shader CubePixelShader {};
+
+        RootSignature CubeRootSignature {};
+        PipelineStateObject CubePso;
     };
 }

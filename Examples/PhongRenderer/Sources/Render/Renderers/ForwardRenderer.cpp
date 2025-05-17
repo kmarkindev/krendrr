@@ -1,4 +1,5 @@
 #include "ForwardRenderer.h"
+#include <d3dx12/d3dx12.h>
 #include <d3dx12/d3dx12_barriers.h>
 #include <d3dx12/d3dx12_core.h>
 #include "glm/common.hpp"
@@ -11,14 +12,13 @@
 #include "Sources/Utils/HResultCheck.h"
 #include "Sources/Utils/Memory.h"
 #include "Sources/Utils/Generators/MeshGenerator.h"
-#include "Sources/World/World.h"
 
 namespace kRendrr
 {
 
     ForwardRenderer::ForwardRenderer(std::shared_ptr<kRendrr::RenderDevice> RenderDevice, std::shared_ptr<kRendrr::CommandQueue> CommandQueue)
         : RenderDevice(std::move(RenderDevice)), CommandQueue(std::move(CommandQueue)),
-        CommandList(GetSharedPtrToStack(&CommandAllocator))
+        CommandList(GetSharedPtrToStack(&CommandAllocator)), CubePso(GetSharedPtrToStack(&CubeRootSignature))
     {
 
     }
@@ -107,34 +107,98 @@ namespace kRendrr
         CommandAllocator.Initialize(*RenderDevice);
         CommandList.Initialize(*RenderDevice);
 
-        constexpr auto CubeVertexArray = ConstexprDynamicContainerToArray<GenerateCubeMeshVertices, true>();
-        constexpr auto CubeIndicesArray = ConstexprDynamicContainerToArray<GenerateCubeMeshIndices>();
-
-        CubeVertexBuffer.Initialize(*RenderDevice, sizeof(CubeVertexArray));
-        CubeVertexBuffer.GetBuffer()->SetName(L"Cube Vertex Buffer") >> HResultCheck{};
-        CubeIndexBuffer.Initialize(*RenderDevice, sizeof(CubeIndicesArray));
-        CubeIndexBuffer.GetBuffer()->SetName(L"Cube Index Buffer") >> HResultCheck{};
-        CubeUploadBuffer.Initialize(*RenderDevice, std::max(sizeof(CubeVertexArray), sizeof(CubeIndicesArray)));
-        CubeUploadBuffer.GetBuffer()->SetName(L"Cube Upload Buffer") >> HResultCheck{};
-
         {
-            CubeVertexBuffer.SetBufferSideAndStride(sizeof(CubeVertexArray), 5 * sizeof(float), std::size(CubeVertexArray));
-            CubeUploadBuffer.UploadData(CubeVertexArray);
-            CubeUploadBuffer.UploadDataToBuffer(*RenderDevice, *CommandQueue, CubeVertexBuffer, sizeof(CubeVertexArray));
+            // Load mesh data
+
+            static constexpr auto CubeVertexArray = ConstexprDynamicContainerToArray<GenerateCubeMeshVertices, true>();
+            static constexpr auto CubeIndicesArray = ConstexprDynamicContainerToArray<GenerateCubeMeshIndices>();
+
+            CubeVertexBuffer.Initialize(*RenderDevice, sizeof(CubeVertexArray));
+            CubeVertexBuffer.GetBuffer()->SetName(L"Cube Vertex Buffer") >> HResultCheck{};
+            CubeIndexBuffer.Initialize(*RenderDevice, sizeof(CubeIndicesArray));
+            CubeIndexBuffer.GetBuffer()->SetName(L"Cube Index Buffer") >> HResultCheck{};
+            CubeUploadBuffer.Initialize(*RenderDevice, std::max(sizeof(CubeVertexArray), sizeof(CubeIndicesArray)));
+            CubeUploadBuffer.GetBuffer()->SetName(L"Cube Upload Buffer") >> HResultCheck{};
+
+            {
+                CubeVertexBuffer.SetBufferSideAndStride(sizeof(CubeVertexArray), 5 * sizeof(float), std::size(CubeVertexArray));
+                CubeUploadBuffer.UploadData(CubeVertexArray);
+                CubeUploadBuffer.UploadDataToBuffer(*RenderDevice, *CommandQueue, CubeVertexBuffer, sizeof(CubeVertexArray));
+            }
+
+            {
+                CubeIndexBuffer.SetBufferSizeAndFormat(sizeof(CubeIndicesArray), DXGI_FORMAT_R32_UINT, std::size(CubeIndicesArray));
+                CubeUploadBuffer.UploadData(CubeIndicesArray);
+                CubeUploadBuffer.UploadDataToBuffer(*RenderDevice, *CommandQueue, CubeIndexBuffer, sizeof(CubeIndicesArray));
+            }
+
+            {
+                CubeUploadBuffer = {};
+
+                CommandAllocator.GetAllocator()
+                    ->Reset()
+                    >> HResultCheck {};
+            }
         }
 
         {
-            CubeIndexBuffer.SetBufferSizeAndFormat(sizeof(CubeIndicesArray), DXGI_FORMAT_R32_UINT, std::size(CubeIndicesArray));
-            CubeUploadBuffer.UploadData(CubeIndicesArray);
-            CubeUploadBuffer.UploadDataToBuffer(*RenderDevice, *CommandQueue, CubeIndexBuffer, sizeof(CubeIndicesArray));
+            // Compile shaders
+
+            CubeVertexShader.InitializeFromFile("Shaders/ColoredMeshShader.hlsl", {
+                .Target = "vs_5_1",
+                .EntryPoint = "VSMain",
+                .bCompileDebug = true
+            });
+
+            CubePixelShader.InitializeFromFile("Shaders/ColoredMeshShader.hlsl", {
+                .Target = "ps_5_1",
+                .EntryPoint = "PSMain",
+                .bCompileDebug = true
+            });
         }
 
         {
-            CubeUploadBuffer = {};
+            // Create PSO
 
-            CommandAllocator.GetAllocator()
-                ->Reset()
-                >> HResultCheck {};
+            //CD3DX12_ROOT_PARAMETER RootParams[] = {};
+            //D3D12_STATIC_SAMPLER_DESC Samplers[] = {};
+
+            CubeRootSignature.Initialize(
+                *RenderDevice,
+                {},
+                {},
+                D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
+            );
+
+            D3D12_INPUT_ELEMENT_DESC InputLayoutDescs[] = {
+                {
+                    "POS",
+                    0,
+                    DXGI_FORMAT_R32G32B32_FLOAT,
+                    0,
+                    D3D12_APPEND_ALIGNED_ELEMENT,
+                    D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+                    0
+                },
+                {
+                    "UV",
+                    0,
+                    DXGI_FORMAT_R32G32_FLOAT,
+                    0,
+                    D3D12_APPEND_ALIGNED_ELEMENT,
+                    D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+                    0
+                }
+            };
+
+            CubePso.Initialize(*RenderDevice, {
+                .VertexShader = CubeVertexShader,
+                .PixelShader = CubePixelShader,
+                .InputLayout = {
+                    .pInputElementDescs = InputLayoutDescs,
+                    .NumElements = std::size(InputLayoutDescs)
+                }
+            });
         }
     }
 
