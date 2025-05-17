@@ -5,6 +5,7 @@
 
 namespace kRendrr
 {
+    class CommandQueue;
     class CommandList;
 
     class UploadBuffer : public DataBufferBase
@@ -25,6 +26,15 @@ namespace kRendrr
         {
             UploadDataInternal(Span.data(), Span.size_bytes());
         }
+
+        /**
+         * Creates a Command Allocator, Command List and Fence, uploads data and waits for completion.
+         * Highly unoptimized, but allows to make prototypes faster.
+         *
+         * SizeBytes specifies how much data needs to be copied from upload buffer to target buffer,
+         * in case you reuse upload buffer for multiple uploads.
+         */
+        void UploadDataToBuffer(const RenderDevice& RenderDevice, CommandQueue& CommandQueue, DataBufferBase& TargetBuffer, size_t SizeBytes);
 
     private:
 

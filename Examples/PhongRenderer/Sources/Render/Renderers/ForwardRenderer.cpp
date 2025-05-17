@@ -111,69 +111,22 @@ namespace kRendrr
         constexpr auto CubeIndicesArray = ConstexprDynamicContainerToArray<GenerateCubeMeshIndices>();
 
         CubeVertexBuffer.Initialize(*RenderDevice, sizeof(CubeVertexArray));
-        CubeVertexBuffer.GetBuffer()->SetName(L"Cube Vertex Buf");
+        CubeVertexBuffer.GetBuffer()->SetName(L"Cube Vertex Buffer") >> HResultCheck{};
         CubeIndexBuffer.Initialize(*RenderDevice, sizeof(CubeIndicesArray));
-        CubeIndexBuffer.GetBuffer()->SetName(L"Cube Index Buf");
+        CubeIndexBuffer.GetBuffer()->SetName(L"Cube Index Buffer") >> HResultCheck{};
         CubeUploadBuffer.Initialize(*RenderDevice, std::max(sizeof(CubeVertexArray), sizeof(CubeIndicesArray)));
-        CubeUploadBuffer.GetBuffer()->SetName(L"Cube Upload Buf");
-
-        CubeVertexBuffer.SetBufferSideAndStride(sizeof(CubeVertexArray), 5 * sizeof(float), std::size(CubeVertexArray));
-        CubeIndexBuffer.SetBufferSizeAndFormat(sizeof(CubeIndexBuffer), DXGI_FORMAT_R32_UINT, std::size(CubeIndicesArray));
+        CubeUploadBuffer.GetBuffer()->SetName(L"Cube Upload Buffer") >> HResultCheck{};
 
         {
+            CubeVertexBuffer.SetBufferSideAndStride(sizeof(CubeVertexArray), 5 * sizeof(float), std::size(CubeVertexArray));
             CubeUploadBuffer.UploadData(CubeVertexArray);
-
-            CommandList.GetList()
-                ->Reset(CommandAllocator.GetAllocator().Get(), nullptr)
-                >> HResultCheck {};
-
-            CommandList.GetList()
-                ->CopyBufferRegion(
-                    CubeVertexBuffer.GetBuffer().Get(),
-                    0,
-                    CubeUploadBuffer.GetBuffer().Get(),
-                    0,
-                    sizeof(CubeVertexArray)
-                );
-
-            CommandList.GetList()
-                ->Close()
-                >> HResultCheck {};
-
-            ID3D12CommandList* List[] = {CommandList.GetList().Get()};
-            CommandQueue->GetQueue()
-                ->ExecuteCommandLists(1, List);
-
-            Fence.SignalQueue(*CommandQueue);
-            Fence.WaitSignaledValueSpinlock();
+            CubeUploadBuffer.UploadDataToBuffer(*RenderDevice, *CommandQueue, CubeVertexBuffer, sizeof(CubeVertexArray));
         }
 
         {
+            CubeIndexBuffer.SetBufferSizeAndFormat(sizeof(CubeIndicesArray), DXGI_FORMAT_R32_UINT, std::size(CubeIndicesArray));
             CubeUploadBuffer.UploadData(CubeIndicesArray);
-
-            CommandList.GetList()
-                ->Reset(CommandAllocator.GetAllocator().Get(), nullptr)
-                >> HResultCheck {};
-
-            CommandList.GetList()
-                ->CopyBufferRegion(
-                    CubeIndexBuffer.GetBuffer().Get(),
-                    0,
-                    CubeUploadBuffer.GetBuffer().Get(),
-                    0,
-                    sizeof(CubeIndicesArray)
-                );
-
-            CommandList.GetList()
-                ->Close()
-                >> HResultCheck {};
-
-            ID3D12CommandList* List[] = { CommandList.GetList().Get() };
-            CommandQueue->GetQueue()
-                ->ExecuteCommandLists(1, List);
-
-            Fence.SignalQueue(*CommandQueue);
-            Fence.WaitSignaledValueSpinlock();
+            CubeUploadBuffer.UploadDataToBuffer(*RenderDevice, *CommandQueue, CubeIndexBuffer, sizeof(CubeIndicesArray));
         }
 
         {
