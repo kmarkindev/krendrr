@@ -7,7 +7,10 @@
 #include "Sources/Render/Renderers/ForwardRenderer.h"
 #include "Sources/World/World.h"
 #include <Windows.h>
+
+#include "Sources/Utils/Constexpr.h"
 #include "Sources/Utils/Memory.h"
+#include "Sources/Utils/Generators/MeshGenerator.h"
 
 namespace kRendrr
 {

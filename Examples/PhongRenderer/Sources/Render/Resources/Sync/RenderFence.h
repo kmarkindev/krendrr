@@ -34,7 +34,7 @@ namespace kRendrr
 
         Microsoft::WRL::ComPtr<ID3D12Fence> D3dFence {};
         HANDLE FenceEvent {};
-        uint64_t SignaledFenceValue {};
+        std::uint64_t SignaledFenceValue {};
 
     };
 }

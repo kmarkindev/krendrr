@@ -50,6 +50,10 @@ void SetupSignals()
 
 int main() try
 {
+    std::setlocale(LC_ALL, "");
+    std::locale::global(std::locale(""));
+    std::cout.imbue(std::locale());
+
     SetupSignals();
 
     kRendrr::Application Application {};
