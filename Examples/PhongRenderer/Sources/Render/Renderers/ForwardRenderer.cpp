@@ -18,13 +18,18 @@ namespace kRendrr
 
     ForwardRenderer::ForwardRenderer(std::shared_ptr<kRendrr::RenderDevice> RenderDevice, std::shared_ptr<kRendrr::CommandQueue> CommandQueue)
         : RenderDevice(std::move(RenderDevice)), CommandQueue(std::move(CommandQueue)),
-        CommandList(GetSharedPtrToStack(&CommandAllocator)), CubePso(GetSharedPtrToStack(&CubeRootSignature))
+        CommandList(GetSharedPtrToStack(&CommandAllocator)), MeshPso(GetSharedPtrToStack(&MeshRootSignature))
     {
 
     }
 
     void ForwardRenderer::Render(const World& World, Viewport& Viewport)
     {
+        if(!Viewport.GetSwapChain().HasRenderTarget())
+        {
+            return;
+        }
+
         const RenderTarget& RenderTargetView = Viewport
             .GetSwapChain()
             .GetCurrentRenderTargetView();
@@ -68,10 +73,32 @@ namespace kRendrr
         }
 
         {
-            const glm::vec4 ClearColor = { glm::sin(65), glm::sin(35), glm::sin(82), 1.f };
+            const glm::vec4 ClearColor = { 0.f, 0.f, 0.f, 1.f };
 
             CommandList.GetList()
                 ->ClearRenderTargetView(RenderTargetView.GetCpuHandle(), &ClearColor.r, 0, nullptr);
+        }
+
+        {
+            CommandList.GetList()
+                ->SetGraphicsRootSignature(MeshRootSignature.GetRootSignature().Get());
+
+            CommandList.GetList()
+                ->SetPipelineState(MeshPso.GetPso().Get());
+
+            CommandList.GetList()
+                ->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+            auto VertexBufferView = MeshVertexBuffer.GetVertexBufferView();
+            CommandList.GetList()
+                ->IASetVertexBuffers(0, 1, &VertexBufferView);
+
+            auto IndexBufferView = MeshIndexBuffer.GetIndexBufferView();
+            CommandList.GetList()
+                ->IASetIndexBuffer(&IndexBufferView);
+
+            CommandList.GetList()
+                ->DrawIndexedInstanced(MeshIndexBuffer.GetIndicesCount(), 1, 0, 0, 0);
         }
 
         {
@@ -110,30 +137,30 @@ namespace kRendrr
         {
             // Load mesh data
 
-            static constexpr auto CubeVertexArray = ConstexprDynamicContainerToArray<GenerateCubeMeshVertices, true>();
-            static constexpr auto CubeIndicesArray = ConstexprDynamicContainerToArray<GenerateCubeMeshIndices>();
+            static constexpr auto CubeVertexArray = ConstexprDynamicContainerToArray<GenerateTriangleMeshVertices, true>();
+            static constexpr auto CubeIndicesArray = ConstexprDynamicContainerToArray<GenerateTriangleMeshIndices>();
 
-            CubeVertexBuffer.Initialize(*RenderDevice, sizeof(CubeVertexArray));
-            CubeVertexBuffer.GetBuffer()->SetName(L"Cube Vertex Buffer") >> HResultCheck{};
-            CubeIndexBuffer.Initialize(*RenderDevice, sizeof(CubeIndicesArray));
-            CubeIndexBuffer.GetBuffer()->SetName(L"Cube Index Buffer") >> HResultCheck{};
-            CubeUploadBuffer.Initialize(*RenderDevice, std::max(sizeof(CubeVertexArray), sizeof(CubeIndicesArray)));
-            CubeUploadBuffer.GetBuffer()->SetName(L"Cube Upload Buffer") >> HResultCheck{};
+            MeshVertexBuffer.Initialize(*RenderDevice, sizeof(CubeVertexArray));
+            MeshVertexBuffer.GetBuffer()->SetName(L"Cube Vertex Buffer") >> HResultCheck{};
+            MeshIndexBuffer.Initialize(*RenderDevice, sizeof(CubeIndicesArray));
+            MeshIndexBuffer.GetBuffer()->SetName(L"Cube Index Buffer") >> HResultCheck{};
+            MeshUploadBuffer.Initialize(*RenderDevice, std::max(sizeof(CubeVertexArray), sizeof(CubeIndicesArray)));
+            MeshUploadBuffer.GetBuffer()->SetName(L"Cube Upload Buffer") >> HResultCheck{};
 
             {
-                CubeVertexBuffer.SetBufferSideAndStride(sizeof(CubeVertexArray), 5 * sizeof(float), std::size(CubeVertexArray));
-                CubeUploadBuffer.UploadData(CubeVertexArray);
-                CubeUploadBuffer.UploadDataToBuffer(*RenderDevice, *CommandQueue, CubeVertexBuffer, sizeof(CubeVertexArray));
+                MeshVertexBuffer.SetBufferSideAndStride(sizeof(CubeVertexArray), 5 * sizeof(float), std::size(CubeVertexArray));
+                MeshUploadBuffer.UploadData(CubeVertexArray);
+                MeshUploadBuffer.UploadDataToBuffer(*RenderDevice, *CommandQueue, MeshVertexBuffer, sizeof(CubeVertexArray));
             }
 
             {
-                CubeIndexBuffer.SetBufferSizeAndFormat(sizeof(CubeIndicesArray), DXGI_FORMAT_R32_UINT, std::size(CubeIndicesArray));
-                CubeUploadBuffer.UploadData(CubeIndicesArray);
-                CubeUploadBuffer.UploadDataToBuffer(*RenderDevice, *CommandQueue, CubeIndexBuffer, sizeof(CubeIndicesArray));
+                MeshIndexBuffer.SetBufferSizeAndFormat(sizeof(CubeIndicesArray), DXGI_FORMAT_R32_UINT, std::size(CubeIndicesArray));
+                MeshUploadBuffer.UploadData(CubeIndicesArray);
+                MeshUploadBuffer.UploadDataToBuffer(*RenderDevice, *CommandQueue, MeshIndexBuffer, sizeof(CubeIndicesArray));
             }
 
             {
-                CubeUploadBuffer = {};
+                MeshUploadBuffer = {};
 
                 CommandAllocator.GetAllocator()
                     ->Reset()
@@ -144,13 +171,13 @@ namespace kRendrr
         {
             // Compile shaders
 
-            CubeVertexShader.InitializeFromFile("Shaders/ColoredMeshShader.hlsl", {
+            MeshVertexShader.InitializeFromFile("Shaders/ColoredMeshShader.hlsl", {
                 .Target = "vs_5_1",
                 .EntryPoint = "VSMain",
                 .bCompileDebug = true
             });
 
-            CubePixelShader.InitializeFromFile("Shaders/ColoredMeshShader.hlsl", {
+            MeshPixelShader.InitializeFromFile("Shaders/ColoredMeshShader.hlsl", {
                 .Target = "ps_5_1",
                 .EntryPoint = "PSMain",
                 .bCompileDebug = true
@@ -163,7 +190,7 @@ namespace kRendrr
             //CD3DX12_ROOT_PARAMETER RootParams[] = {};
             //D3D12_STATIC_SAMPLER_DESC Samplers[] = {};
 
-            CubeRootSignature.Initialize(
+            MeshRootSignature.Initialize(
                 *RenderDevice,
                 {},
                 {},
@@ -191,9 +218,9 @@ namespace kRendrr
                 }
             };
 
-            CubePso.Initialize(*RenderDevice, {
-                .VertexShader = CubeVertexShader,
-                .PixelShader = CubePixelShader,
+            MeshPso.Initialize(*RenderDevice, {
+                .VertexShader = MeshVertexShader,
+                .PixelShader = MeshPixelShader,
                 .InputLayout = {
                     .pInputElementDescs = InputLayoutDescs,
                     .NumElements = std::size(InputLayoutDescs)

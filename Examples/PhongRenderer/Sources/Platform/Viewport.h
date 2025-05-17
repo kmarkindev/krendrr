@@ -16,13 +16,13 @@ namespace kRendrr
     {
     public:
 
-        Viewport();
+        explicit Viewport(std::shared_ptr<RenderDevice> RenderDevice);
 
-        Viewport(std::string_view WindowName, glm::ivec2 WindowSize, glm::ivec2 WindowPos = {});
+        Viewport(std::shared_ptr<RenderDevice> RenderDevice, std::string_view WindowName, glm::ivec2 WindowSize, glm::ivec2 WindowPos = {});
 
-        explicit Viewport(HWND Hwnd);
+        explicit Viewport(std::shared_ptr<RenderDevice> RenderDevice, HWND Hwnd);
 
-        void Initialize(const RenderDevice& RenderDevice, const CommandQueue& CommandQueue);
+        void Initialize(const CommandQueue& CommandQueue);
 
         /**
          * Get viewport pixel size used for drawing (exluding borders, shadows, etc.)
@@ -33,13 +33,31 @@ namespace kRendrr
 
         [[nodiscard]] SwapChain& GetSwapChain();
 
+        /**
+         * Responsible for detecting HWND resize and making sure Swap Chain was updated
+         */
+        void HandleHwndResize();
+
+    protected:
+
+        void CatchedResizeEvent();
+
     private:
 
         HWND Hwnd {};
 
         SwapChain SwapChain;
 
-        static HWND CreateDefaultWindow(std::string_view WindowName, const glm::ivec2& WindowSize, glm::ivec2 WindowPos);
+        bool bCatchedResizeEventRecently { false };
+
+        HWND CreateDefaultWindow(std::string_view WindowName, const glm::ivec2& WindowSize, glm::ivec2 WindowPos);
+
+        static LRESULT CALLBACK DefaultWindowWndProc(
+            HWND Hwnd,
+            UINT Msg,
+            WPARAM WParam,
+            LPARAM LParam
+        );
 
     };
 }

@@ -37,14 +37,14 @@ namespace kRendrr
         CommandList CommandList;
         RenderFence Fence {};
 
-        VertexBuffer CubeVertexBuffer {};
-        IndexBuffer CubeIndexBuffer {};
-        UploadBuffer CubeUploadBuffer {};
+        VertexBuffer MeshVertexBuffer {};
+        IndexBuffer MeshIndexBuffer {};
+        UploadBuffer MeshUploadBuffer {};
 
-        Shader CubeVertexShader {};
-        Shader CubePixelShader {};
+        Shader MeshVertexShader {};
+        Shader MeshPixelShader {};
 
-        RootSignature CubeRootSignature {};
-        PipelineStateObject CubePso;
+        RootSignature MeshRootSignature {};
+        PipelineStateObject MeshPso;
     };
 }

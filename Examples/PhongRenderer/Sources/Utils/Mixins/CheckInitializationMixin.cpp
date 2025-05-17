@@ -3,6 +3,11 @@
 
 namespace kRendrr
 {
+    bool CheckInitializationMixin::IsInitialized() const
+    {
+        return bWasInitialized;
+    }
+
     void CheckInitializationMixin::MarkAsInitialized() const
     {
         if(bWasInitialized)

@@ -4,7 +4,7 @@
 
 namespace kRendrr
 {
-    class RenderResource : protected CheckInitializationMixin
+    class RenderResource : public CheckInitializationMixin
     {
 
     public:

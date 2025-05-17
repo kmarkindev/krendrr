@@ -7,7 +7,7 @@
 
 namespace kRendrr
 {
-    class RenderDevice : protected CheckInitializationMixin
+    class RenderDevice : public CheckInitializationMixin
     {
     public:
 

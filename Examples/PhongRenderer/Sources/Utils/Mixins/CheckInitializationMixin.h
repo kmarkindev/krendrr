@@ -4,6 +4,10 @@ namespace kRendrr
 {
     class CheckInitializationMixin
     {
+    public:
+
+        bool IsInitialized() const;
+
     protected:
 
         /**

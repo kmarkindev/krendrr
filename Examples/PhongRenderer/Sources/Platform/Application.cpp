@@ -17,7 +17,7 @@ namespace kRendrr
 
     Application::Application()
         : ForwardRenderer(GetSharedPtrToStack(&RenderDevice), GetSharedPtrToStack(&CommandQueue)),
-        World(GetSharedPtrToStack(&RenderDevice))
+        World(GetSharedPtrToStack(&RenderDevice)), Viewport(GetSharedPtrToStack(&RenderDevice))
     {
     }
 
@@ -27,7 +27,7 @@ namespace kRendrr
             .DebugMode = RenderDevice::RenderDeviceInitParams::DebugMode::Enabled
         });
         CommandQueue.Initialize(RenderDevice);
-        Viewport.Initialize(RenderDevice, CommandQueue);
+        Viewport.Initialize(CommandQueue);
         ForwardRenderer.Initialize();
         World.Initialize();
     }
@@ -72,6 +72,8 @@ namespace kRendrr
             if(bGotQuitEvent) {
                 break;
             }
+
+            Viewport.HandleHwndResize();
 
             ForwardRenderer.Render(World, Viewport);
 
