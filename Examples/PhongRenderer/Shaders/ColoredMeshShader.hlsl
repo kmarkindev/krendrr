@@ -16,5 +16,5 @@ PSInput VSMain(float3 position : POS, float2 uv : UV)
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-    return float4(0.77, 0.24, 0.6, 1);
+    return float4(0.25, 0.24, 0.6, 1);
 }
