@@ -27,8 +27,6 @@ namespace kRendrr
 
     private:
 
-        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CpuRenderTargetsHeap {};
-
         Microsoft::WRL::ComPtr<ID3D12Resource> Resource {};
         D3D12_CPU_DESCRIPTOR_HANDLE CpuHandle {};
 

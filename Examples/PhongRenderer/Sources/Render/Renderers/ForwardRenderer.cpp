@@ -12,6 +12,7 @@
 #include "Sources/Utils/HResultCheck.h"
 #include "Sources/Utils/Memory.h"
 #include "Sources/Utils/Generators/MeshGenerator.h"
+#include "Sources/Utils/Generators/TextureGenerator.h"
 
 namespace kRendrr
 {
@@ -21,6 +22,117 @@ namespace kRendrr
         CommandList(GetSharedPtrToStack(&CommandAllocator)), MeshPso(GetSharedPtrToStack(&MeshRootSignature))
     {
 
+    }
+
+    void ForwardRenderer::Initialize()
+    {
+        Fence.Initialize(*RenderDevice);
+        CommandAllocator.Initialize(*RenderDevice);
+        CommandList.Initialize(*RenderDevice);
+
+        {
+            // Load mesh data
+
+            static constexpr auto CubeVertexArray = ConstexprDynamicContainerToArray<GenerateTriangleMeshVertices, true>();
+            static constexpr auto CubeIndicesArray = ConstexprDynamicContainerToArray<GenerateTriangleMeshIndices>();
+
+            MeshVertexBuffer.Initialize(*RenderDevice, sizeof(CubeVertexArray));
+            MeshVertexBuffer.GetBuffer()->SetName(L"Cube Vertex Buffer") >> HResultCheck{};
+            MeshIndexBuffer.Initialize(*RenderDevice, sizeof(CubeIndicesArray));
+            MeshIndexBuffer.GetBuffer()->SetName(L"Cube Index Buffer") >> HResultCheck{};
+            MeshUploadBuffer.Initialize(*RenderDevice, std::max(sizeof(CubeVertexArray), sizeof(CubeIndicesArray)));
+            MeshUploadBuffer.GetBuffer()->SetName(L"Cube Upload Buffer") >> HResultCheck{};
+
+            {
+                MeshVertexBuffer.SetBufferSideAndStride(sizeof(CubeVertexArray), 5 * sizeof(float), std::size(CubeVertexArray));
+                MeshUploadBuffer.UploadData(CubeVertexArray);
+                MeshUploadBuffer.UploadDataToBuffer(*RenderDevice, *CommandQueue, MeshVertexBuffer, sizeof(CubeVertexArray));
+            }
+
+            {
+                MeshIndexBuffer.SetBufferSizeAndFormat(sizeof(CubeIndicesArray), DXGI_FORMAT_R32_UINT, std::size(CubeIndicesArray));
+                MeshUploadBuffer.UploadData(CubeIndicesArray);
+                MeshUploadBuffer.UploadDataToBuffer(*RenderDevice, *CommandQueue, MeshIndexBuffer, sizeof(CubeIndicesArray));
+            }
+
+            {
+                MeshUploadBuffer = {};
+
+                CommandAllocator.GetAllocator()
+                    ->Reset()
+                    >> HResultCheck {};
+            }
+        }
+
+        {
+            // Compile shaders
+
+            MeshVertexShader.InitializeFromFile("Shaders/ColoredMeshShader.hlsl", {
+                .Target = "vs_5_1",
+                .EntryPoint = "VSMain",
+                .bCompileDebug = true
+            });
+
+            MeshPixelShader.InitializeFromFile("Shaders/ColoredMeshShader.hlsl", {
+                .Target = "ps_5_1",
+                .EntryPoint = "PSMain",
+                .bCompileDebug = true
+            });
+        }
+
+        {
+            // Create PSO
+
+            //CD3DX12_ROOT_PARAMETER RootParams[] = {};
+            //D3D12_STATIC_SAMPLER_DESC Samplers[] = {};
+
+            MeshRootSignature.Initialize(
+                *RenderDevice,
+                {},
+                {},
+                D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
+            );
+
+            D3D12_INPUT_ELEMENT_DESC InputLayoutDescs[] = {
+                {
+                    "POS",
+                    0,
+                    DXGI_FORMAT_R32G32B32_FLOAT,
+                    0,
+                    D3D12_APPEND_ALIGNED_ELEMENT,
+                    D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+                    0
+                },
+                {
+                    "UV",
+                    0,
+                    DXGI_FORMAT_R32G32_FLOAT,
+                    0,
+                    D3D12_APPEND_ALIGNED_ELEMENT,
+                    D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+                    0
+                }
+            };
+
+            MeshPso.Initialize(*RenderDevice, {
+                .VertexShader = MeshVertexShader,
+                .PixelShader = MeshPixelShader,
+                .InputLayout = {
+                    .pInputElementDescs = InputLayoutDescs,
+                    .NumElements = std::size(InputLayoutDescs)
+                }
+            });
+        }
+
+        {
+            // Load Texture
+
+            static constexpr auto MeshTextureArray = ConstexprDynamicContainerToArray<GenerateCheckerTexture>();
+
+
+        }
+
+        MeshUploadBuffer = {};
     }
 
     void ForwardRenderer::Render(const World& World, Viewport& Viewport)
@@ -125,107 +237,6 @@ namespace kRendrr
 
             Fence.SignalQueue(*CommandQueue);
             Fence.WaitSignaledValueSpinlock();
-        }
-    }
-
-    void ForwardRenderer::Initialize()
-    {
-        Fence.Initialize(*RenderDevice);
-        CommandAllocator.Initialize(*RenderDevice);
-        CommandList.Initialize(*RenderDevice);
-
-        {
-            // Load mesh data
-
-            static constexpr auto CubeVertexArray = ConstexprDynamicContainerToArray<GenerateTriangleMeshVertices, true>();
-            static constexpr auto CubeIndicesArray = ConstexprDynamicContainerToArray<GenerateTriangleMeshIndices>();
-
-            MeshVertexBuffer.Initialize(*RenderDevice, sizeof(CubeVertexArray));
-            MeshVertexBuffer.GetBuffer()->SetName(L"Cube Vertex Buffer") >> HResultCheck{};
-            MeshIndexBuffer.Initialize(*RenderDevice, sizeof(CubeIndicesArray));
-            MeshIndexBuffer.GetBuffer()->SetName(L"Cube Index Buffer") >> HResultCheck{};
-            MeshUploadBuffer.Initialize(*RenderDevice, std::max(sizeof(CubeVertexArray), sizeof(CubeIndicesArray)));
-            MeshUploadBuffer.GetBuffer()->SetName(L"Cube Upload Buffer") >> HResultCheck{};
-
-            {
-                MeshVertexBuffer.SetBufferSideAndStride(sizeof(CubeVertexArray), 5 * sizeof(float), std::size(CubeVertexArray));
-                MeshUploadBuffer.UploadData(CubeVertexArray);
-                MeshUploadBuffer.UploadDataToBuffer(*RenderDevice, *CommandQueue, MeshVertexBuffer, sizeof(CubeVertexArray));
-            }
-
-            {
-                MeshIndexBuffer.SetBufferSizeAndFormat(sizeof(CubeIndicesArray), DXGI_FORMAT_R32_UINT, std::size(CubeIndicesArray));
-                MeshUploadBuffer.UploadData(CubeIndicesArray);
-                MeshUploadBuffer.UploadDataToBuffer(*RenderDevice, *CommandQueue, MeshIndexBuffer, sizeof(CubeIndicesArray));
-            }
-
-            {
-                MeshUploadBuffer = {};
-
-                CommandAllocator.GetAllocator()
-                    ->Reset()
-                    >> HResultCheck {};
-            }
-        }
-
-        {
-            // Compile shaders
-
-            MeshVertexShader.InitializeFromFile("Shaders/ColoredMeshShader.hlsl", {
-                .Target = "vs_5_1",
-                .EntryPoint = "VSMain",
-                .bCompileDebug = true
-            });
-
-            MeshPixelShader.InitializeFromFile("Shaders/ColoredMeshShader.hlsl", {
-                .Target = "ps_5_1",
-                .EntryPoint = "PSMain",
-                .bCompileDebug = true
-            });
-        }
-
-        {
-            // Create PSO
-
-            //CD3DX12_ROOT_PARAMETER RootParams[] = {};
-            //D3D12_STATIC_SAMPLER_DESC Samplers[] = {};
-
-            MeshRootSignature.Initialize(
-                *RenderDevice,
-                {},
-                {},
-                D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
-            );
-
-            D3D12_INPUT_ELEMENT_DESC InputLayoutDescs[] = {
-                {
-                    "POS",
-                    0,
-                    DXGI_FORMAT_R32G32B32_FLOAT,
-                    0,
-                    D3D12_APPEND_ALIGNED_ELEMENT,
-                    D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-                    0
-                },
-                {
-                    "UV",
-                    0,
-                    DXGI_FORMAT_R32G32_FLOAT,
-                    0,
-                    D3D12_APPEND_ALIGNED_ELEMENT,
-                    D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-                    0
-                }
-            };
-
-            MeshPso.Initialize(*RenderDevice, {
-                .VertexShader = MeshVertexShader,
-                .PixelShader = MeshPixelShader,
-                .InputLayout = {
-                    .pInputElementDescs = InputLayoutDescs,
-                    .NumElements = std::size(InputLayoutDescs)
-                }
-            });
         }
     }
 

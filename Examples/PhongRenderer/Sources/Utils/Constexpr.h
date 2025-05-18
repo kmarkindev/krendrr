@@ -10,7 +10,7 @@
  * constexpr auto CubeVertsArray = ConstexprDynamicContainerToArray<GenerateCubeMeshVertices, false>();
  */
 template<auto* ContainerGenFunc, auto... Args>
-consteval auto ConstexprDynamicContainerToArray()
+constexpr auto ConstexprDynamicContainerToArray()
 {
     auto Container = ContainerGenFunc(Args...);
     constexpr auto ContainerSize = ContainerGenFunc(Args...).size();

@@ -24,9 +24,9 @@ namespace kRendrr
 
         explicit ForwardRenderer(std::shared_ptr<RenderDevice> RenderDevice, std::shared_ptr<CommandQueue> CommandQueue);
 
-        void Render(const World& World, Viewport& Viewport);
-
         void Initialize();
+
+        void Render(const World& World, Viewport& Viewport);
 
     private:
 

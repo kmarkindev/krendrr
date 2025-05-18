@@ -4,7 +4,7 @@
 #include <windows.h>
 #include <vector>
 
-inline std::vector<UINT8> GenerateTextureData()
+inline std::vector<UINT8> GenerateCheckerTexture()
 {
     UINT TextureWidth = 256;
     UINT TexturePixelSize = 4;

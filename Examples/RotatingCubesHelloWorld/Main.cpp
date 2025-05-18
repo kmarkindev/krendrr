@@ -396,7 +396,7 @@ void LoadAssets()
 
     Microsoft::WRL::ComPtr<ID3D12Resource> CubeFaceTextureUploadBuffer {};
     {
-        auto textureData = GenerateTextureData();
+        auto textureData = GenerateCheckerTexture();
 
         // Генерируем Mip Maps если нужны...
 

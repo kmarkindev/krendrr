@@ -7,7 +7,10 @@ namespace kRendrr
 
     void RenderTarget::Initialize(const RenderDevice& RenderDevice)
     {
-        // TODO:
+        // TODO: Allow to create our own RT, not attached to swap chain
+        // also, we may not want to store cpu handle in RT object...
+        // it's probably better to get it from Swap Chain since it owns Descriptor Heap.
+
         throw std::runtime_error("Not implemented");
     }
 
