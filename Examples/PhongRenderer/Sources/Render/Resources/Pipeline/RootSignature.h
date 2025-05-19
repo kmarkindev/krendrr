@@ -2,6 +2,7 @@
 
 #include <d3d12.h>
 #include <span>
+#include <d3dx12/d3dx12_root_signature.h>
 #include <wrl/client.h>
 #include "Sources/Render/Resources/RenderResource.h"
 
@@ -18,7 +19,7 @@ namespace kRendrr
         void Initialize(
             const RenderDevice& RenderDevice,
             std::span<CD3DX12_ROOT_PARAMETER> RootParams,
-            std::span<D3D12_STATIC_SAMPLER_DESC> Samplers,
+            std::span<CD3DX12_STATIC_SAMPLER_DESC> Samplers,
             D3D12_ROOT_SIGNATURE_FLAGS Flags
         );
 

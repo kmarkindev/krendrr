@@ -13,9 +13,9 @@ namespace kRendrr
         // It's same with indices and without them
 
         return {
-            /* Position */  0.f,   0.5f, 0.f, /* UV */  0.f,   0.5f,
-            /* Position */  0.5f, -0.5f, 0.f, /* UV */  0.5f, -0.5f,
-            /* Position */ -0.5f, -0.5f, 0.f, /* UV */ -0.5f, -0.5f,
+            /* Position */  0.f,   0.5f, 0.f, /* UV */  0.5f,  0.0f,
+            /* Position */  0.5f, -0.5f, 0.f, /* UV */  1.0f,  1.0f,
+            /* Position */ -0.5f, -0.5f, 0.f, /* UV */  0.0f,  1.0f,
         };
     }
 

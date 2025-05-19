@@ -30,18 +30,35 @@ namespace kRendrr
         CommandAllocator.Initialize(*RenderDevice);
         CommandList.Initialize(*RenderDevice);
 
+        RenderSrvDescriptorHeap.Initialize(*RenderDevice, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1, true);
+
+        static constexpr auto CubeVertexArray = ConstexprDynamicContainerToArray<GenerateTriangleMeshVertices, true>();
+        static constexpr auto CubeIndicesArray = ConstexprDynamicContainerToArray<GenerateTriangleMeshIndices>();
+        static constexpr auto MeshTextureArray = ConstexprDynamicContainerToArray<GenerateCheckerTexture>();
+
+        MeshVertexBuffer.Initialize(*RenderDevice, sizeof(CubeVertexArray));
+        MeshVertexBuffer.GetBuffer()->SetName(L"Mesh Vertex Buffer") >> HResultCheck{};
+
+        MeshIndexBuffer.Initialize(*RenderDevice, sizeof(CubeIndicesArray));
+        MeshIndexBuffer.GetBuffer()->SetName(L"Mesh Index Buffer") >> HResultCheck{};
+
+        MeshTexture.Initialize(*RenderDevice, DXGI_FORMAT_R8G8B8A8_UNORM, {64, 64}, 1);
+        MeshTexture.GetTexture()->SetName(L"Mesh Texture") >> HResultCheck{};
+
+        MeshUploadBuffer.Initialize(
+            *RenderDevice,
+            std::max(
+                {
+                    sizeof(CubeVertexArray),
+                    sizeof(CubeIndicesArray),
+                    GetRequiredIntermediateSize(MeshTexture.GetTexture().Get(), 0, 1)
+                }
+            )
+        );
+        MeshUploadBuffer.GetBuffer()->SetName(L"Mesh Upload Buffer") >> HResultCheck{};
+
         {
             // Load mesh data
-
-            static constexpr auto CubeVertexArray = ConstexprDynamicContainerToArray<GenerateTriangleMeshVertices, true>();
-            static constexpr auto CubeIndicesArray = ConstexprDynamicContainerToArray<GenerateTriangleMeshIndices>();
-
-            MeshVertexBuffer.Initialize(*RenderDevice, sizeof(CubeVertexArray));
-            MeshVertexBuffer.GetBuffer()->SetName(L"Cube Vertex Buffer") >> HResultCheck{};
-            MeshIndexBuffer.Initialize(*RenderDevice, sizeof(CubeIndicesArray));
-            MeshIndexBuffer.GetBuffer()->SetName(L"Cube Index Buffer") >> HResultCheck{};
-            MeshUploadBuffer.Initialize(*RenderDevice, std::max(sizeof(CubeVertexArray), sizeof(CubeIndicesArray)));
-            MeshUploadBuffer.GetBuffer()->SetName(L"Cube Upload Buffer") >> HResultCheck{};
 
             {
                 MeshVertexBuffer.SetBufferSideAndStride(sizeof(CubeVertexArray), 5 * sizeof(float), std::size(CubeVertexArray));
@@ -53,14 +70,6 @@ namespace kRendrr
                 MeshIndexBuffer.SetBufferSizeAndFormat(sizeof(CubeIndicesArray), DXGI_FORMAT_R32_UINT, std::size(CubeIndicesArray));
                 MeshUploadBuffer.UploadData(CubeIndicesArray);
                 MeshUploadBuffer.UploadDataToBuffer(*RenderDevice, *CommandQueue, MeshIndexBuffer, sizeof(CubeIndicesArray));
-            }
-
-            {
-                MeshUploadBuffer = {};
-
-                CommandAllocator.GetAllocator()
-                    ->Reset()
-                    >> HResultCheck {};
             }
         }
 
@@ -83,13 +92,26 @@ namespace kRendrr
         {
             // Create PSO
 
-            //CD3DX12_ROOT_PARAMETER RootParams[] = {};
-            //D3D12_STATIC_SAMPLER_DESC Samplers[] = {};
+            CD3DX12_ROOT_PARAMETER RootParams[1] = {};
+
+            D3D12_DESCRIPTOR_RANGE DescriptorRange = {
+                .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+                .NumDescriptors = 1,
+                .BaseShaderRegister = 0,
+            };
+            RootParams[0].InitAsDescriptorTable(1, &DescriptorRange);
+
+            CD3DX12_STATIC_SAMPLER_DESC Samplers[1] = {
+                {
+                    0,
+                    D3D12_FILTER_MIN_MAG_MIP_LINEAR
+                }
+            };
 
             MeshRootSignature.Initialize(
                 *RenderDevice,
-                {},
-                {},
+                RootParams,
+                Samplers,
                 D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
             );
 
@@ -127,12 +149,55 @@ namespace kRendrr
         {
             // Load Texture
 
-            static constexpr auto MeshTextureArray = ConstexprDynamicContainerToArray<GenerateCheckerTexture>();
+            auto Desc = MeshTexture.GetSrvDesc();
+            auto Handle = RenderSrvDescriptorHeap.GetCPUHandle(0);
 
+            RenderDevice->GetDevice()
+                ->CreateShaderResourceView(MeshTexture.GetTexture().Get(), &Desc, Handle);
 
+            D3D12_SUBRESOURCE_DATA SubresourceData[] = {
+                {
+                    .pData = MeshTextureArray.data(),
+                    .RowPitch = 64 * 4,
+                    .SlicePitch = 64 * 4 * 64
+                }
+            };
+
+            CommandList.GetList()
+                ->Reset(CommandAllocator.GetAllocator().Get(), nullptr)
+                >> HResultCheck {};
+
+            if(UpdateSubresources(
+                CommandList.GetList().Get(),
+                MeshTexture.GetTexture().Get(),
+                MeshUploadBuffer.GetBuffer().Get(),
+                0,
+                0,
+                1,
+                SubresourceData) == 0)
+            {
+                throw std::runtime_error("Failed to update texture subresource");
+            }
+
+            CommandList.GetList()
+                ->Close()
+                >> HResultCheck {};
+
+            ID3D12CommandList* Lists[] = { CommandList.GetList().Get() };
+            CommandQueue->GetQueue()
+                ->ExecuteCommandLists(1, Lists);
+
+            Fence.SignalQueue(*CommandQueue);
+            Fence.WaitSignaledValueSpinlock();
         }
 
-        MeshUploadBuffer = {};
+        {
+            MeshUploadBuffer = {};
+
+            CommandAllocator.GetAllocator()
+                ->Reset()
+                >> HResultCheck {};
+        }
     }
 
     void ForwardRenderer::Render(const World& World, Viewport& Viewport)
@@ -193,10 +258,10 @@ namespace kRendrr
 
         {
             CommandList.GetList()
-                ->SetGraphicsRootSignature(MeshRootSignature.GetRootSignature().Get());
+                ->SetPipelineState(MeshPso.GetPso().Get());
 
             CommandList.GetList()
-                ->SetPipelineState(MeshPso.GetPso().Get());
+                ->SetGraphicsRootSignature(MeshRootSignature.GetRootSignature().Get());
 
             CommandList.GetList()
                 ->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -208,6 +273,13 @@ namespace kRendrr
             auto IndexBufferView = MeshIndexBuffer.GetIndexBufferView();
             CommandList.GetList()
                 ->IASetIndexBuffer(&IndexBufferView);
+
+            ID3D12DescriptorHeap* Heaps[] = { RenderSrvDescriptorHeap.GetDescriptorHeap().Get() };
+            CommandList.GetList()
+                ->SetDescriptorHeaps(1, Heaps);
+
+            CommandList.GetList()
+                ->SetGraphicsRootDescriptorTable(0, RenderSrvDescriptorHeap.GetGPUHandle(0));
 
             CommandList.GetList()
                 ->DrawIndexedInstanced(MeshIndexBuffer.GetIndicesCount(), 1, 0, 0, 0);

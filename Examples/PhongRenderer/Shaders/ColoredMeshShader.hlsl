@@ -4,6 +4,9 @@ struct PSInput
     float2 uv : UV;
 };
 
+Texture2D colorTex : register(t0);
+SamplerState linearSamp : register(s0);
+
 PSInput VSMain(float3 position : POS, float2 uv : UV)
 {
     PSInput result;
@@ -16,5 +19,5 @@ PSInput VSMain(float3 position : POS, float2 uv : UV)
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-    return float4(0.25, 0.24, 0.6, 1);
+    return colorTex.Sample(linearSamp, input.uv);
 }

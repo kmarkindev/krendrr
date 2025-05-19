@@ -5,27 +5,27 @@
 namespace kRendrr
 {
     /**
-     * Generates 256x256 R8 G8 B8 A8 UINT texture
+     * Generates 64x64 R8 G8 B8 A8 UINT texture
      */
     constexpr std::vector<std::uint8_t> GenerateCheckerTexture()
     {
-        const std::uint8_t TextureWidth = 256;
-        const std::uint8_t TextureHeight = 256;
-        const std::uint8_t TexturePixelSize = 4;
+        const std::uint32_t TextureWidth = 64;
+        const std::uint32_t TextureHeight = 64;
+        const std::uint32_t TexturePixelSize = 4;
 
-        const std::uint8_t RowPitch = TextureWidth * TexturePixelSize;
-        const std::uint8_t CellPitch = RowPitch >> 3;        // The width of a cell in the checkboard texture.
-        const std::uint8_t CellHeight = TextureWidth >> 3;    // The height of a cell in the checkerboard texture.
-        const std::uint8_t TextureSize = RowPitch * TextureHeight;
+        const std::uint32_t RowPitch = TextureWidth * TexturePixelSize;
+        const std::uint32_t CellPitch = RowPitch >> 3;        // The width of a cell in the checkboard texture.
+        const std::uint32_t CellHeight = TextureWidth >> 3;    // The height of a cell in the checkerboard texture.
+        const std::uint32_t TextureSize = RowPitch * TextureHeight;
 
         std::vector<std::uint8_t> Data(TextureSize);
 
-        for (std::uint8_t n = 0; n < TextureSize; n += TexturePixelSize)
+        for (std::uint32_t n = 0; n < TextureSize; n += TexturePixelSize)
         {
-            std::uint8_t x = n % RowPitch;
-            std::uint8_t y = n / RowPitch;
-            std::uint8_t i = x / CellPitch;
-            std::uint8_t j = y / CellHeight;
+            std::uint32_t x = n % RowPitch;
+            std::uint32_t y = n / RowPitch;
+            std::uint32_t i = x / CellPitch;
+            std::uint32_t j = y / CellHeight;
 
             if (i % 2 == j % 2)
             {

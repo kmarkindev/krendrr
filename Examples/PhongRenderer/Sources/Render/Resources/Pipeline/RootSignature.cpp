@@ -5,7 +5,7 @@
 
 namespace kRendrr
 {
-    void RootSignature::Initialize(const RenderDevice& RenderDevice, std::span<CD3DX12_ROOT_PARAMETER> RootParams, std::span<D3D12_STATIC_SAMPLER_DESC> Samplers,
+    void RootSignature::Initialize(const RenderDevice& RenderDevice, std::span<CD3DX12_ROOT_PARAMETER> RootParams, std::span<CD3DX12_STATIC_SAMPLER_DESC> Samplers,
         D3D12_ROOT_SIGNATURE_FLAGS Flags)
     {
         CheckInitialization(false);

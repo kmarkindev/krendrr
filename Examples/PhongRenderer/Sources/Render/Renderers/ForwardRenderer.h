@@ -2,6 +2,7 @@
 
 #include <memory>
 
+#include "Sources/Render/Resources/Buffers/DescriptorHeap.h"
 #include "Sources/Render/Resources/Buffers/UploadBuffer.h"
 #include "Sources/Render/Resources/Commands/CommandList.h"
 #include "Sources/Render/Resources/Geometry/IndexBuffer.h"
@@ -10,6 +11,12 @@
 #include "Sources/Render/Resources/Pipeline/RootSignature.h"
 #include "Sources/Render/Resources/Shaders/Shader.h"
 #include "Sources/Render/Resources/Sync/RenderFence.h"
+#include "Sources/Render/Resources/Texture/Texture.h"
+
+namespace kRendrr
+{
+    class DescriptorHeap;
+}
 
 namespace kRendrr
 {
@@ -46,5 +53,9 @@ namespace kRendrr
 
         RootSignature MeshRootSignature {};
         PipelineStateObject MeshPso;
+
+        Texture MeshTexture {};
+
+        DescriptorHeap RenderSrvDescriptorHeap {};
     };
 }

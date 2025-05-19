@@ -8,6 +8,11 @@
 
 void kRendrr::Texture::Initialize(const RenderDevice& RenderDevice, DXGI_FORMAT Format, glm::ivec2 Size, std::int8_t MipLevels)
 {
+    if(MipLevels == 0)
+    {
+        throw std::invalid_argument("MipLevels must be greater than 0.");
+    }
+
     CheckInitialization(false);
 
     TextureFormat = Format;
