@@ -38,6 +38,7 @@ void kRendrr::PipelineStateObject::Initialize(const RenderDevice& RenderDevice, 
         },
         .CachedPSO = {}
     };
+    PsoDesc.RasterizerState.FrontCounterClockwise = !Params.bFrontClockwise;
 
     RenderDevice.GetDevice()
         ->CreateGraphicsPipelineState(

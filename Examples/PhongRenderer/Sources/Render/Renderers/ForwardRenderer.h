@@ -54,12 +54,14 @@ namespace kRendrr
         PipelineStateObject MeshPso;
 
         Texture MeshTexture {};
+        DataBufferBase MvpBuffer {};
+        UploadBuffer MvpBufferUpload {};
+        DescriptorHeap RenderSrvCbvDescriptorHeap {};
 
         Texture DepthStencilTexture {};
         glm::ivec2 DepthStencilSize {};
         DescriptorHeap DepthStencilHeap {};
 
-        DescriptorHeap RenderSrvDescriptorHeap {};
 
         void InitializeDepthStencil(glm::ivec2 Size);
     };

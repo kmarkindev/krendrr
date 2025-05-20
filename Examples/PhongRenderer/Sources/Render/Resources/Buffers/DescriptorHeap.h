@@ -24,6 +24,8 @@ namespace kRendrr
 
     private:
 
+        size_t DescriptorSize {};
+
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> D3dDescriptorHeap;
 
         bool bShaderVisible {false};

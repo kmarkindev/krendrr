@@ -2,10 +2,8 @@
 #include <d3dx12/d3dx12.h>
 #include <d3dx12/d3dx12_barriers.h>
 #include <d3dx12/d3dx12_core.h>
-#include "glm/common.hpp"
-#include "glm/vec3.hpp"
-#include "glm/vec4.hpp"
-#include "glm/detail/func_trigonometric.inl"
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include "Sources/Platform/Viewport.h"
 #include "Sources/Render/Resources/View/RenderTarget.h"
 #include "Sources/Utils/Constexpr.h"
@@ -30,10 +28,10 @@ namespace kRendrr
         CommandAllocator.Initialize(*RenderDevice);
         CommandList.Initialize(*RenderDevice);
 
-        RenderSrvDescriptorHeap.Initialize(*RenderDevice, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1, true);
+        RenderSrvCbvDescriptorHeap.Initialize(*RenderDevice, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2, true);
 
-        static constexpr auto CubeVertexArray = ConstexprDynamicContainerToArray<GenerateTriangleMeshVertices, true>();
-        static constexpr auto CubeIndicesArray = ConstexprDynamicContainerToArray<GenerateTriangleMeshIndices>();
+        static constexpr auto CubeVertexArray = ConstexprDynamicContainerToArray<GenerateCubeMeshVertices, true>();
+        static constexpr auto CubeIndicesArray = ConstexprDynamicContainerToArray<GenerateCubeMeshIndices>();
         static constexpr auto MeshTextureArray = ConstexprDynamicContainerToArray<GenerateCheckerTexture>();
 
         MeshVertexBuffer.Initialize(*RenderDevice, sizeof(CubeVertexArray));
@@ -74,6 +72,19 @@ namespace kRendrr
         }
 
         {
+            MvpBufferUpload.Initialize(*RenderDevice, 256);
+            MvpBuffer.Initialize(*RenderDevice, 256);
+
+            D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {
+                .BufferLocation = MvpBuffer.GetBuffer()->GetGPUVirtualAddress(),
+                .SizeInBytes = 256,
+            };
+
+            RenderDevice->GetDevice()
+                ->CreateConstantBufferView(&cbvDesc, RenderSrvCbvDescriptorHeap.GetCPUHandle(1));
+        }
+
+        {
             // Compile shaders
 
             MeshVertexShader.InitializeFromFile("Shaders/ColoredMeshShader.hlsl", {
@@ -92,7 +103,7 @@ namespace kRendrr
         {
             // Create PSO
 
-            CD3DX12_ROOT_PARAMETER RootParams[1] = {};
+            CD3DX12_ROOT_PARAMETER RootParams[2] = {};
 
             D3D12_DESCRIPTOR_RANGE DescriptorRange = {
                 .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
@@ -101,10 +112,19 @@ namespace kRendrr
             };
             RootParams[0].InitAsDescriptorTable(1, &DescriptorRange);
 
+
+            D3D12_DESCRIPTOR_RANGE DescriptorRange2 = {
+                .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
+                .NumDescriptors = 1,
+                .BaseShaderRegister = 0,
+                .OffsetInDescriptorsFromTableStart = 1
+            };
+            RootParams[1].InitAsDescriptorTable(1, &DescriptorRange2);
+
             CD3DX12_STATIC_SAMPLER_DESC Samplers[1] = {
                 {
                     0,
-                    D3D12_FILTER_MIN_MAG_MIP_LINEAR
+                    D3D12_FILTER_MIN_MAG_MIP_POINT
                 }
             };
 
@@ -142,7 +162,8 @@ namespace kRendrr
                 .InputLayout = {
                     .pInputElementDescs = InputLayoutDescs,
                     .NumElements = std::size(InputLayoutDescs)
-                }
+                },
+                .bFrontClockwise = false
             });
         }
 
@@ -150,7 +171,7 @@ namespace kRendrr
             // Load Texture
 
             auto Desc = MeshTexture.GetSrvDesc();
-            auto Handle = RenderSrvDescriptorHeap.GetCPUHandle(0);
+            auto Handle = RenderSrvCbvDescriptorHeap.GetCPUHandle(0);
 
             RenderDevice->GetDevice()
                 ->CreateShaderResourceView(MeshTexture.GetTexture().Get(), &Desc, Handle);
@@ -291,12 +312,63 @@ namespace kRendrr
             CommandList.GetList()
                 ->IASetIndexBuffer(&IndexBufferView);
 
-            ID3D12DescriptorHeap* Heaps[] = { RenderSrvDescriptorHeap.GetDescriptorHeap().Get() };
+            ID3D12DescriptorHeap* Heaps[] = { RenderSrvCbvDescriptorHeap.GetDescriptorHeap().Get() };
             CommandList.GetList()
                 ->SetDescriptorHeaps(1, Heaps);
 
             CommandList.GetList()
-                ->SetGraphicsRootDescriptorTable(0, RenderSrvDescriptorHeap.GetGPUHandle(0));
+                ->SetGraphicsRootDescriptorTable(0, RenderSrvCbvDescriptorHeap.GetGPUHandle(0));
+            CommandList.GetList()
+                ->SetGraphicsRootDescriptorTable(1, RenderSrvCbvDescriptorHeap.GetGPUHandle(0));
+        }
+
+        // Tooooo lazy to create more upload buffers and load them separatly.... so one mesh for now
+        std::array Meshes = {
+            std::tuple{
+                glm::vec3{0, 0, 0}, // pos
+                0.f, // rot
+                glm::vec3{1, 1, 1} // scale
+            },
+            // std::tuple{
+            //     glm::vec3{5, 0, 0},
+            //     0.f,
+            //     glm::vec3{1, 0.5f, 1}
+            // },
+            // std::tuple{
+            //     glm::vec3{0, 5, 0},
+            //     50.f,
+            //     glm::vec3{0.5, 1.5, 0.5}
+            // }
+        };
+
+        glm::mat4 View = glm::lookAt(
+            glm::vec3 {5.f, 1.f, 5.f},
+            glm::vec3 {0.f, 0.f, 0.f},
+            glm::vec3 {0.f, 1.f, 0.f}
+        );
+
+        auto ViewportSize = Viewport.GetSize();
+        float Aspect = static_cast<float>(ViewportSize.x) / static_cast<float>(ViewportSize.y);
+        glm::mat4 Proj = glm::perspective(70.f, Aspect, 0.01f, 100.f);
+
+        for (auto Mesh: Meshes)
+        {
+            glm::mat4 Model = glm::scale(glm::mat4(1.f), std::get<2>(Mesh));
+            Model = glm::rotate(Model, std::get<1>(Mesh), {0.f, 1.f, 0.f});
+            Model = glm::translate(Model, std::get<0>(Mesh));
+
+            glm::mat4 MVP = Proj * View * Model;
+
+            {
+                void* MappedPtr {};
+                MvpBufferUpload.GetBuffer()->Map(0, nullptr, &MappedPtr)
+                    >> HResultCheck {};
+                memcpy(MappedPtr, &MVP, sizeof(glm::mat4));
+                MvpBufferUpload.GetBuffer()->Unmap(0, nullptr);
+
+                CommandList.GetList()
+                    ->CopyResource(MvpBuffer.GetBuffer().Get(), MvpBufferUpload.GetBuffer().Get());
+            }
 
             CommandList.GetList()
                 ->DrawIndexedInstanced(MeshIndexBuffer.GetIndicesCount(), 1, 0, 0, 0);

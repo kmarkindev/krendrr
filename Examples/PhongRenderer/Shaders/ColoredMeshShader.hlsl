@@ -4,6 +4,13 @@ struct PSInput
     float2 uv : UV;
 };
 
+struct MatricesBuffer
+{
+    matrix MVP;
+};
+
+ConstantBuffer<MatricesBuffer> matBuf : register(b0);
+
 Texture2D colorTex : register(t0);
 SamplerState linearSamp : register(s0);
 
@@ -11,7 +18,7 @@ PSInput VSMain(float3 position : POS, float2 uv : UV)
 {
     PSInput result;
 
-    result.position = float4(position, 1.f);
+    result.position = mul(matBuf.MVP, float4(position, 1.f)); //mul(matBuf.MVP, float4(position, 1.f));
     result.uv = uv;
 
     return result;

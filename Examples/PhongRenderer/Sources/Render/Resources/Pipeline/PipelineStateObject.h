@@ -26,6 +26,7 @@ namespace kRendrr
             const Shader& PixelShader;
             D3D12_INPUT_LAYOUT_DESC InputLayout;
             D3D12_PRIMITIVE_TOPOLOGY_TYPE TopologyType { D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE };
+            bool bFrontClockwise { true };
         };
 
         explicit PipelineStateObject(std::shared_ptr<RootSignature> RootSignature);

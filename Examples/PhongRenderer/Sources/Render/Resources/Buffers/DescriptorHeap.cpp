@@ -18,6 +18,8 @@ void kRendrr::DescriptorHeap::Initialize(const RenderDevice& RenderDevice, D3D12
         ->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(&D3dDescriptorHeap))
         >> HResultCheck {};
 
+    DescriptorSize = RenderDevice.GetDevice()->GetDescriptorHandleIncrementSize(Type);
+
     MarkAsInitialized();
 }
 
@@ -36,7 +38,7 @@ CD3DX12_CPU_DESCRIPTOR_HANDLE kRendrr::DescriptorHeap::GetCPUHandle(std::int32_t
         D3dDescriptorHeap->GetCPUDescriptorHandleForHeapStart()
     };
 
-    return Handle.Offset(Index);
+    return Handle.Offset(Index, DescriptorSize);
 }
 
 CD3DX12_GPU_DESCRIPTOR_HANDLE kRendrr::DescriptorHeap::GetGPUHandle(std::int32_t Index) const
@@ -52,5 +54,5 @@ CD3DX12_GPU_DESCRIPTOR_HANDLE kRendrr::DescriptorHeap::GetGPUHandle(std::int32_t
         D3dDescriptorHeap->GetGPUDescriptorHandleForHeapStart()
     };
 
-    return Handle.Offset(Index);
+    return Handle.Offset(Index, DescriptorSize);
 }
