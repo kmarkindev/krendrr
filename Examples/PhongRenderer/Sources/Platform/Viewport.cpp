@@ -31,7 +31,7 @@ namespace kRendrr
         ::ShowWindow(Hwnd, SW_SHOWNORMAL);
     }
 
-    glm::vec2 Viewport::GetSize() const
+    glm::ivec2 Viewport::GetSize() const
     {
         RECT Rect {};
         ::GetClientRect(Hwnd, &Rect);

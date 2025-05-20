@@ -6,7 +6,8 @@
 #include "Sources/Render/RenderDevice.h"
 #include "Sources/Utils/HResultCheck.h"
 
-void kRendrr::Texture::Initialize(const RenderDevice& RenderDevice, DXGI_FORMAT Format, glm::ivec2 Size, std::int8_t MipLevels)
+void kRendrr::Texture::Initialize(const RenderDevice& RenderDevice, DXGI_FORMAT Format, glm::ivec2 Size,
+    std::int8_t MipLevels, D3D12_RESOURCE_FLAGS Flags, const D3D12_CLEAR_VALUE* ClearValue)
 {
     if(MipLevels == 0)
     {
@@ -18,7 +19,7 @@ void kRendrr::Texture::Initialize(const RenderDevice& RenderDevice, DXGI_FORMAT 
     TextureFormat = Format;
 
     CD3DX12_HEAP_PROPERTIES HeapProps { D3D12_HEAP_TYPE_DEFAULT };
-    CD3DX12_RESOURCE_DESC ResDesc = CD3DX12_RESOURCE_DESC::Tex2D(Format, Size.x, Size.y, MipLevels);
+    CD3DX12_RESOURCE_DESC ResDesc = CD3DX12_RESOURCE_DESC::Tex2D(Format, Size.x, Size.y, 1, MipLevels, 1, 0, Flags);
 
     RenderDevice.GetDevice()
         ->CreateCommittedResource(
@@ -26,7 +27,7 @@ void kRendrr::Texture::Initialize(const RenderDevice& RenderDevice, DXGI_FORMAT 
             D3D12_HEAP_FLAG_NONE,
             &ResDesc,
             D3D12_RESOURCE_STATE_COMMON,
-            nullptr,
+            ClearValue,
             IID_PPV_ARGS(&TextureResource)
         ) >> HResultCheck {};
 

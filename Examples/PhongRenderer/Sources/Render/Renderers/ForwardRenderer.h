@@ -1,7 +1,6 @@
 #pragma once
 
 #include <memory>
-
 #include "Sources/Render/Resources/Buffers/DescriptorHeap.h"
 #include "Sources/Render/Resources/Buffers/UploadBuffer.h"
 #include "Sources/Render/Resources/Commands/CommandList.h"
@@ -56,6 +55,12 @@ namespace kRendrr
 
         Texture MeshTexture {};
 
+        Texture DepthStencilTexture {};
+        glm::ivec2 DepthStencilSize {};
+        DescriptorHeap DepthStencilHeap {};
+
         DescriptorHeap RenderSrvDescriptorHeap {};
+
+        void InitializeDepthStencil(glm::ivec2 Size);
     };
 }

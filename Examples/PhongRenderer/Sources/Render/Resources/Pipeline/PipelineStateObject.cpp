@@ -23,7 +23,7 @@ void kRendrr::PipelineStateObject::Initialize(const RenderDevice& RenderDevice, 
         .BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
         .SampleMask = UINT_MAX,
         .RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT),
-        .DepthStencilState = {},
+        .DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT),
         .InputLayout = Params.InputLayout,
         .IBStripCutValue = {},
         .PrimitiveTopologyType = Params.TopologyType,
@@ -31,7 +31,7 @@ void kRendrr::PipelineStateObject::Initialize(const RenderDevice& RenderDevice, 
         .RTVFormats = {
             DXGI_FORMAT_R8G8B8A8_UNORM
         },
-        .DSVFormat = {},
+        .DSVFormat = DXGI_FORMAT_D32_FLOAT,
         .SampleDesc = {
             .Count = 1,
             .Quality = 0

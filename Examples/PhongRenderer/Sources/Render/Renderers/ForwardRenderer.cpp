@@ -198,6 +198,10 @@ namespace kRendrr
                 ->Reset()
                 >> HResultCheck {};
         }
+
+        {
+            DepthStencilHeap.Initialize(*RenderDevice, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1, false);
+        }
     }
 
     void ForwardRenderer::Render(const World& World, Viewport& Viewport)
@@ -222,6 +226,14 @@ namespace kRendrr
         }
 
         {
+            if(auto ViewportSize = Viewport.GetSize(); ViewportSize != DepthStencilSize)
+            {
+                InitializeDepthStencil(ViewportSize);
+                DepthStencilSize = ViewportSize;
+            }
+        }
+
+        {
             auto PresentToRtvBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
                 RenderTargetView.GetResource().Get(),
                 D3D12_RESOURCE_STATE_PRESENT,
@@ -234,8 +246,10 @@ namespace kRendrr
         {
             const D3D12_CPU_DESCRIPTOR_HANDLE RtvDescriptors[] = { RenderTargetView.GetCpuHandle() };
 
+            auto DepthStencilView = DepthStencilHeap.GetCPUHandle(0);
+
             CommandList.GetList()
-                ->OMSetRenderTargets(std::size(RtvDescriptors), RtvDescriptors, true, nullptr);
+                ->OMSetRenderTargets(std::size(RtvDescriptors), RtvDescriptors, true, &DepthStencilView);
         }
 
         {
@@ -254,6 +268,9 @@ namespace kRendrr
 
             CommandList.GetList()
                 ->ClearRenderTargetView(RenderTargetView.GetCpuHandle(), &ClearColor.r, 0, nullptr);
+
+            CommandList.GetList()
+                ->ClearDepthStencilView(DepthStencilHeap.GetCPUHandle(0), D3D12_CLEAR_FLAG_DEPTH, 1.0, 0, 0, nullptr);
         }
 
         {
@@ -312,4 +329,30 @@ namespace kRendrr
         }
     }
 
+    void ForwardRenderer::InitializeDepthStencil(glm::ivec2 Size)
+    {
+        constexpr static D3D12_CLEAR_VALUE ClearValue = {
+            .Format = DXGI_FORMAT_D32_FLOAT,
+            .DepthStencil = {
+                .Depth = 1.0f,
+                .Stencil = 0
+            }
+        };
+
+        DepthStencilTexture = {};
+        DepthStencilTexture.Initialize(*RenderDevice, DXGI_FORMAT_D32_FLOAT, Size, 1, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL, &ClearValue);
+
+        auto CpuHandle = DepthStencilHeap.GetCPUHandle(0);
+        RenderDevice->GetDevice()
+            ->CreateDepthStencilView(DepthStencilTexture.GetTexture().Get(), nullptr, CpuHandle);
+
+        auto BarrierToWrite = CD3DX12_RESOURCE_BARRIER::Transition(
+            DepthStencilTexture.GetTexture().Get(),
+            D3D12_RESOURCE_STATE_COMMON,
+            D3D12_RESOURCE_STATE_DEPTH_WRITE
+        );
+
+        CommandList.GetList()
+            ->ResourceBarrier(1, &BarrierToWrite);
+    }
 }

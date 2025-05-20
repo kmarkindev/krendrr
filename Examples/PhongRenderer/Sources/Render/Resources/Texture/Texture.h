@@ -14,7 +14,8 @@ namespace kRendrr
     {
     public:
 
-        void Initialize(const RenderDevice& RenderDevice, DXGI_FORMAT Format, glm::ivec2 Size, std::int8_t MipLevels);
+        void Initialize(const RenderDevice& RenderDevice, DXGI_FORMAT Format, glm::ivec2 Size, std::int8_t MipLevels,
+            D3D12_RESOURCE_FLAGS Flags = D3D12_RESOURCE_FLAG_NONE, const D3D12_CLEAR_VALUE* ClearValue = nullptr);
 
         Microsoft::WRL::ComPtr<ID3D12Resource> GetTexture() const;
 

@@ -27,7 +27,7 @@ namespace kRendrr
         /**
          * Get viewport pixel size used for drawing (exluding borders, shadows, etc.)
          */
-        [[nodiscard]] glm::vec2 GetSize() const;
+        [[nodiscard]] glm::ivec2 GetSize() const;
 
         [[nodiscard]] const SwapChain& GetSwapChain() const;
 
