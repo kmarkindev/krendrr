@@ -26,5 +26,5 @@ PSInput VSMain(float3 position : POS, float2 uv : UV)
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-    return colorTex.Sample(linearSamp, input.uv);
+    return float4(colorTex.Sample(linearSamp, input.uv).xyz, 1.0f);
 }

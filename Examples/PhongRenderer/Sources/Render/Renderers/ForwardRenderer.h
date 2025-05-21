@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include "assimp/Importer.hpp"
 #include "Sources/Render/Resources/Buffers/DescriptorHeap.h"
 #include "Sources/Render/Resources/Buffers/UploadBuffer.h"
 #include "Sources/Render/Resources/Commands/CommandList.h"
@@ -38,6 +39,8 @@ namespace kRendrr
 
         std::shared_ptr<RenderDevice> RenderDevice {};
         std::shared_ptr<CommandQueue> CommandQueue {};
+
+        Assimp::Importer Importer {};
 
         CommandAllocator CommandAllocator {};
         CommandList CommandList;

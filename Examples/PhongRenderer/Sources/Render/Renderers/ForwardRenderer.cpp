@@ -11,6 +11,12 @@
 #include "Sources/Utils/Memory.h"
 #include "Sources/Utils/Generators/MeshGenerator.h"
 #include "Sources/Utils/Generators/TextureGenerator.h"
+#define STB_IMAGE_IMPLEMENTATION
+#include <iterator>
+#include <stb_image.h>
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
 
 namespace kRendrr
 {
@@ -30,25 +36,65 @@ namespace kRendrr
 
         RenderSrvCbvDescriptorHeap.Initialize(*RenderDevice, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2, true);
 
-        static constexpr auto CubeVertexArray = ConstexprDynamicContainerToArray<GenerateCubeMeshVertices, true>();
-        static constexpr auto CubeIndicesArray = ConstexprDynamicContainerToArray<GenerateCubeMeshIndices>();
-        static constexpr auto MeshTextureArray = ConstexprDynamicContainerToArray<GenerateCheckerTexture>();
+        std::vector<float> MeshVertexArray {};
+        std::vector<std::uint32_t> MeshIndicesArray {};
 
-        MeshVertexBuffer.Initialize(*RenderDevice, sizeof(CubeVertexArray));
+        {
+            const aiScene* Scene = Importer.ReadFile(
+                "Content/Models/Axe/Axe.fbx",
+                aiProcess_Triangulate
+                    | aiProcess_CalcTangentSpace
+                    | aiProcess_JoinIdenticalVertices
+                    | aiProcess_SortByPType
+                    | aiProcess_FlipUVs
+                );
+
+            if (!Scene)
+            {
+                throw std::runtime_error("Failed to load model");
+            }
+
+
+
+            MeshVertexArray.reserve(Scene->mMeshes[0]->mNumVertices * 3);
+            for (unsigned int i = 0; i < Scene->mMeshes[0]->mNumVertices; i++)
+            {
+                MeshVertexArray.push_back(Scene->mMeshes[0]->mVertices[i].x);
+                MeshVertexArray.push_back(Scene->mMeshes[0]->mVertices[i].y);
+                MeshVertexArray.push_back(Scene->mMeshes[0]->mVertices[i].z);
+                MeshVertexArray.push_back(Scene->mMeshes[0]->mTextureCoords[0][i].x);
+                MeshVertexArray.push_back(Scene->mMeshes[0]->mTextureCoords[0][i].y);
+            }
+
+            MeshIndicesArray.reserve(Scene->mMeshes[0]->mNumFaces * 3);
+            for (unsigned int i = 0; i < Scene->mMeshes[0]->mNumFaces; i++)
+            {
+                for (unsigned int j = 0; j < Scene->mMeshes[0]->mFaces[i].mNumIndices; j++)
+                MeshIndicesArray.push_back(Scene->mMeshes[0]->mFaces[i].mIndices[j]);
+            }
+        }
+
+        int TextureWidth {};
+        int TextureHeight {};
+        int TextureComponents {};
+        const auto* TextureData = stbi_load("Content/Models/Axe/Axe_BaseColor.png", &TextureWidth, &TextureHeight, &TextureComponents, STBI_rgb_alpha);
+        TextureComponents = STBI_rgb_alpha;
+
+        MeshVertexBuffer.Initialize(*RenderDevice, sizeof(float) * MeshVertexArray.size());
         MeshVertexBuffer.GetBuffer()->SetName(L"Mesh Vertex Buffer") >> HResultCheck{};
 
-        MeshIndexBuffer.Initialize(*RenderDevice, sizeof(CubeIndicesArray));
+        MeshIndexBuffer.Initialize(*RenderDevice, sizeof(float) * MeshIndicesArray.size());
         MeshIndexBuffer.GetBuffer()->SetName(L"Mesh Index Buffer") >> HResultCheck{};
 
-        MeshTexture.Initialize(*RenderDevice, DXGI_FORMAT_R8G8B8A8_UNORM, {64, 64}, 1);
+        MeshTexture.Initialize(*RenderDevice, DXGI_FORMAT_R8G8B8A8_UNORM, {TextureWidth, TextureHeight}, 1);
         MeshTexture.GetTexture()->SetName(L"Mesh Texture") >> HResultCheck{};
 
         MeshUploadBuffer.Initialize(
             *RenderDevice,
             std::max(
                 {
-                    sizeof(CubeVertexArray),
-                    sizeof(CubeIndicesArray),
+                    sizeof(float) * MeshVertexArray.size(),
+                    sizeof(std::uint32_t) * MeshIndicesArray.size(),
                     GetRequiredIntermediateSize(MeshTexture.GetTexture().Get(), 0, 1)
                 }
             )
@@ -59,15 +105,15 @@ namespace kRendrr
             // Load mesh data
 
             {
-                MeshVertexBuffer.SetBufferSideAndStride(sizeof(CubeVertexArray), 5 * sizeof(float), std::size(CubeVertexArray));
-                MeshUploadBuffer.UploadData(CubeVertexArray);
-                MeshUploadBuffer.UploadDataToBuffer(*RenderDevice, *CommandQueue, MeshVertexBuffer, sizeof(CubeVertexArray));
+                MeshVertexBuffer.SetBufferSideAndStride(sizeof(float) * MeshVertexArray.size(), 5 * sizeof(float), std::size(MeshVertexArray));
+                MeshUploadBuffer.UploadData(MeshVertexArray);
+                MeshUploadBuffer.UploadDataToBuffer(*RenderDevice, *CommandQueue, MeshVertexBuffer, sizeof(float) * MeshVertexArray.size());
             }
 
             {
-                MeshIndexBuffer.SetBufferSizeAndFormat(sizeof(CubeIndicesArray), DXGI_FORMAT_R32_UINT, std::size(CubeIndicesArray));
-                MeshUploadBuffer.UploadData(CubeIndicesArray);
-                MeshUploadBuffer.UploadDataToBuffer(*RenderDevice, *CommandQueue, MeshIndexBuffer, sizeof(CubeIndicesArray));
+                MeshIndexBuffer.SetBufferSizeAndFormat(sizeof(std::uint32_t) * MeshIndicesArray.size(), DXGI_FORMAT_R32_UINT, std::size(MeshIndicesArray));
+                MeshUploadBuffer.UploadData(MeshIndicesArray);
+                MeshUploadBuffer.UploadDataToBuffer(*RenderDevice, *CommandQueue, MeshIndexBuffer, sizeof(std::uint32_t) * MeshIndicesArray.size());
             }
         }
 
@@ -87,13 +133,13 @@ namespace kRendrr
         {
             // Compile shaders
 
-            MeshVertexShader.InitializeFromFile("Shaders/ColoredMeshShader.hlsl", {
+            MeshVertexShader.InitializeFromFile("Content/Shaders/ColoredMeshShader.hlsl", {
                 .Target = "vs_5_1",
                 .EntryPoint = "VSMain",
                 .bCompileDebug = true
             });
 
-            MeshPixelShader.InitializeFromFile("Shaders/ColoredMeshShader.hlsl", {
+            MeshPixelShader.InitializeFromFile("Content/Shaders/ColoredMeshShader.hlsl", {
                 .Target = "ps_5_1",
                 .EntryPoint = "PSMain",
                 .bCompileDebug = true
@@ -178,9 +224,9 @@ namespace kRendrr
 
             D3D12_SUBRESOURCE_DATA SubresourceData[] = {
                 {
-                    .pData = MeshTextureArray.data(),
-                    .RowPitch = 64 * 4,
-                    .SlicePitch = 64 * 4 * 64
+                    .pData = TextureData,
+                    .RowPitch = TextureWidth * TextureComponents,
+                    .SlicePitch = TextureWidth * TextureComponents * TextureHeight
                 }
             };
 
@@ -285,7 +331,7 @@ namespace kRendrr
         }
 
         {
-            const glm::vec4 ClearColor = { 0.f, 0.f, 0.f, 1.f };
+            const glm::vec4 ClearColor = { 0.1f, 0.1f, 0.1f, 1.f };
 
             CommandList.GetList()
                 ->ClearRenderTargetView(RenderTargetView.GetCpuHandle(), &ClearColor.r, 0, nullptr);
@@ -322,12 +368,15 @@ namespace kRendrr
                 ->SetGraphicsRootDescriptorTable(1, RenderSrvCbvDescriptorHeap.GetGPUHandle(0));
         }
 
+        static float del = 0.f;
+        del += .001f;
+
         // Tooooo lazy to create more upload buffers and load them separatly.... so one mesh for now
         std::array Meshes = {
             std::tuple{
                 glm::vec3{0, 0, 0}, // pos
-                0.f, // rot
-                glm::vec3{1, 1, 1} // scale
+                del, // rot
+                glm::vec3{5, 5, 5} // scale
             },
             // std::tuple{
             //     glm::vec3{5, 0, 0},
