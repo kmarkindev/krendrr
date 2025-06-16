@@ -1,12 +1,14 @@
 cmake_minimum_required(VERSION 3.29)
 
-project(kRendrr)
+project(krendrr)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
+set(CMAKE_CXX_EXTENSIONS False)
 
-include(CMake/Directx/CreateDirectXTarget.cmake)
-#include(CMake/Directx/CreateDirectxtk12Target.cmake)
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/CMake)
+include(FetchContent)
+include(ContentHelpers)
+include(CMakeHelpers)
 
-add_subdirectory(Common)
-add_subdirectory(Examples)
+add_subdirectory(Source)

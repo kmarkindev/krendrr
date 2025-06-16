@@ -1,0 +1,25 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "local-win-msvc-debug",
+            "inherits": "win-msvc-debug",
+            "cacheVariables": {
+
+            },
+            "environment": {
+
+            }
+        },
+        {
+            "name": "local-win-msvc-release",
+            "inherits": "win-msvc-release",
+            "cacheVariables": {
+
+            },
+            "environment": {
+
+            }
+        }
+    ]
+}

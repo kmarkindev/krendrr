@@ -30,8 +30,8 @@
         },
 
         {
-            "name": "base-win-msvc-debug",
-            "description": "Base preset of Debug build for Windows using MSVC. Inherit it to specify custom cache vars and env",
+            "name": "win-msvc-debug",
+            "description": "Base preset for Debug build for Windows using MSVC. Inherit it to specify custom cache vars and env if needed.",
             "inherits": [
                 "base",
                 "base-debug",
@@ -39,8 +39,8 @@
             ]
         },
         {
-            "name": "base-win-msvc-release",
-            "description": "Base preset of Release build for Windows using MSVC. Inherit it to specify custom cache vars and env",
+            "name": "win-msvc-release",
+            "description": "Base preset for Release build for Windows using MSVC. Inherit it to specify custom cache vars and env if needed.",
             "inherits": [
                 "base",
                 "base-release",
