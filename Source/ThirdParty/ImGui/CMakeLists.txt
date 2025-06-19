@@ -9,10 +9,10 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(imgui)
 
 # First create a target for backend-agnostic sources
-add_library(krendrr_imgui STATIC)
-add_library(krendrr::imgui ALIAS krendrr_imgui)
+add_library(krendrr_thirdparty_imgui STATIC)
+add_library(krendrr::thirdparty::imgui ALIAS krendrr_thirdparty_imgui)
 
-target_sources(krendrr_imgui PRIVATE
+target_sources(krendrr_thirdparty_imgui PRIVATE
     ${imgui_SOURCE_DIR}/imgui.cpp
     ${imgui_SOURCE_DIR}/imgui_demo.cpp
     ${imgui_SOURCE_DIR}/imgui_draw.cpp
@@ -28,25 +28,25 @@ file(COPY ${IMGUI_COMMON_HEADERS} DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/copied
 file(REMOVE ${CMAKE_CURRENT_BINARY_DIR}/copied_headers/imconfig.h)
 file(CREATE_LINK ${CMAKE_CURRENT_SOURCE_DIR}/imconfig.h ${CMAKE_CURRENT_BINARY_DIR}/copied_headers/imconfig.h)
 
-target_include_directories(krendrr_imgui PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/copied_headers/)
+target_include_directories(krendrr_thirdparty_imgui PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/copied_headers/)
 
 # And create targets for different backends, so other modules can choose what they need
 
 macro(setup_imgui_backend BACKEND_NAME DEPENDENCIES)
 
-    add_library(krendrr_imgui_${BACKEND_NAME} STATIC EXCLUDE_FROM_ALL)
-    add_library(krendrr::imgui_${BACKEND_NAME} ALIAS krendrr_imgui_${BACKEND_NAME})
+    add_library(krendrr_thirdparty_imgui_${BACKEND_NAME} STATIC EXCLUDE_FROM_ALL)
+    add_library(krendrr::thirdparty::imgui_${BACKEND_NAME} ALIAS krendrr_thirdparty_imgui_${BACKEND_NAME})
 
-    target_sources(krendrr_imgui_${BACKEND_NAME} PRIVATE
+    target_sources(krendrr_thirdparty_imgui_${BACKEND_NAME} PRIVATE
             ${imgui_SOURCE_DIR}/backends/imgui_impl_${BACKEND_NAME}.cpp
     )
     file(COPY ${imgui_SOURCE_DIR}/backends/imgui_impl_${BACKEND_NAME}.h DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/copied_headers_backed_${BACKEND_NAME})
-    target_include_directories(krendrr_imgui_${BACKEND_NAME} PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/copied_headers_backed_${BACKEND_NAME})
-    target_link_libraries(krendrr_imgui_${BACKEND_NAME} PUBLIC krendrr_imgui ${DEPENDENCIES})
+    target_include_directories(krendrr_thirdparty_imgui_${BACKEND_NAME} PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/copied_headers_backed_${BACKEND_NAME})
+    target_link_libraries(krendrr_thirdparty_imgui_${BACKEND_NAME} PUBLIC krendrr_thirdparty_imgui ${DEPENDENCIES})
 
 endmacro()
 
 setup_imgui_backend(opengl3 "")
 setup_imgui_backend(dx12 "")
 setup_imgui_backend(win32 "")
-setup_imgui_backend(sdl3 krendrr::sdl3)
+setup_imgui_backend(sdl3 krendrr::thirdparty::sdl3)

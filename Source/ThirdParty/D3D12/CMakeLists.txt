@@ -7,10 +7,10 @@ endif ()
 # so no need to download Agility SDK here, just link system libraries.
 # BUT, it is a nightmare to use without DirectX-Headers, so download and include them.
 
-add_library(krendrr_directx12 INTERFACE)
-add_library(krendrr::directx12 ALIAS krendrr_directx12)
+add_library(krendrr_thirdparty_directx12 INTERFACE)
+add_library(krendrr::thirdparty::directx12 ALIAS krendrr_thirdparty_directx12)
 
-target_link_libraries(krendrr_directx12 INTERFACE D3D12.lib dxguid.lib Dxgi.lib D3DCompiler.lib)
+target_link_libraries(krendrr_thirdparty_directx12 INTERFACE D3D12.lib dxguid.lib Dxgi.lib D3DCompiler.lib)
 
 FetchContent_Declare(
     directx12-headers
@@ -19,4 +19,4 @@ FetchContent_Declare(
     EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(directx12-headers)
-target_link_libraries(krendrr_directx12 INTERFACE DirectX-Headers)
+target_link_libraries(krendrr_thirdparty_directx12 INTERFACE DirectX-Headers)

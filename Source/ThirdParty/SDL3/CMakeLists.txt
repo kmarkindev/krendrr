@@ -9,7 +9,7 @@ set(SDL_STATIC ON)
 set(SDL_SHARED OFF)
 FetchContent_MakeAvailable(sdl3)
 
-add_library(krendrr_sdl3 INTERFACE)
-add_library(krendrr::sdl3 ALIAS krendrr_sdl3)
+add_library(krendrr_thirdparty_sdl3 INTERFACE)
+add_library(krendrr::thirdparty::sdl3 ALIAS krendrr_thirdparty_sdl3)
 
-target_link_libraries(krendrr_sdl3 INTERFACE SDL3-static)
+target_link_libraries(krendrr_thirdparty_sdl3 INTERFACE SDL3-static)

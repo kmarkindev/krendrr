@@ -6,7 +6,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glm)
 
-add_library(krendrr_glm INTERFACE)
-add_library(krendrr::glm ALIAS krendrr_glm)
+add_library(krendrr_thirdparty_glm INTERFACE)
+add_library(krendrr::thirdparty::glm ALIAS krendrr_thirdparty_glm)
 
-target_link_libraries(krendrr_glm INTERFACE glm::glm)
+target_link_libraries(krendrr_thirdparty_glm INTERFACE glm::glm)

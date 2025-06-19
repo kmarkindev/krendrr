@@ -10,7 +10,7 @@ set(ASSIMP_BUILD_TESTS OFF)
 set(ASSIMP_COVERALLS OFF)
 FetchContent_MakeAvailable(assimp)
 
-add_library(krendrr_assimp INTERFACE)
-add_library(krendrr::assimp ALIAS krendrr_assimp)
+add_library(krendrr_thirdparty_assimp INTERFACE)
+add_library(krendrr::thirdparty::assimp ALIAS krendrr_thirdparty_assimp)
 
-target_link_libraries(krendrr_assimp INTERFACE assimp)
+target_link_libraries(krendrr_thirdparty_assimp INTERFACE assimp)
