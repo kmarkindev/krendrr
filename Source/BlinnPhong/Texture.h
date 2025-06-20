@@ -10,7 +10,13 @@ class Texture
 public:
 
     Texture();
+    Texture(const Texture& Other) = delete;
+    Texture& operator=(const Texture& Other) = delete;
+    Texture(Texture&& Other) noexcept;
+    Texture& operator=(Texture&& Other) noexcept;
     ~Texture();
+
+    void MoveFrom(Texture& Other) noexcept;
 
     struct TextureLoadParams
     {

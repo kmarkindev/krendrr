@@ -11,7 +11,13 @@ namespace krendrr::render
     public:
 
         Shader();
+        Shader(const Shader& Other) = delete;
+        Shader& operator=(const Shader& Other) = delete;
+        Shader(Shader&& Other) noexcept;
+        Shader& operator=(Shader&& Other) noexcept;
         ~Shader();
+
+        void MoveFrom(Shader& Other) noexcept;
 
         void Load(const std::string_view& VertexShaderFileName, const std::string_view& FragmentShaderFileName);
 

@@ -98,6 +98,22 @@ namespace krendrr::render
             throw std::runtime_error(ErrorStream.str());
     }
 
+    Shader::Shader(Shader&& Other) noexcept
+    {
+        MoveFrom(Other);
+    }
+
+    Shader& Shader::operator=(Shader&& Other) noexcept
+    {
+        MoveFrom(Other);
+        return *this;
+    }
+
+    void Shader::MoveFrom(Shader& Other) noexcept
+    {
+        ProgramId = std::exchange(Other.ProgramId, 0);
+    }
+
     Shader::~Shader()
     {
         if(ProgramId > 0)

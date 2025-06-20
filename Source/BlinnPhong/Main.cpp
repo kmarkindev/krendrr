@@ -7,6 +7,7 @@
 #include <glm/fwd.hpp>
 #include <glm/detail/type_quat.hpp>
 #include "Mesh.h"
+#include "Model.h"
 #include "Shader.h"
 #include "Texture.h"
 
@@ -49,7 +50,6 @@ void callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei le
         }
     }();
 
-
     if(severity == GL_DEBUG_SEVERITY_NOTIFICATION)
         return;
 
@@ -58,8 +58,6 @@ void callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei le
                   << severity_str << ", "
                   << id           << ": "
                   << message      << std::endl;
-
-    __debugbreak();
 }
 
 void SetupOpenGlDebugPrints()
@@ -68,90 +66,46 @@ void SetupOpenGlDebugPrints()
     glDebugMessageCallback(callback, nullptr);
 }
 
+SDL_Window *Window {};
 bool bShouldQuit {false};
 
-struct Object
-{
-    glm::vec3 Position {};
-    glm::quat Rotation {};
-    glm::vec3 Scale {};
-
-    glm::vec3 Color {};
-
-    krendrr::render::Mesh Mesh {};
-};
-
-std::vector<Object> Objects {};
-
 krendrr::render::Shader Shader {};
-krendrr::render::Texture Texture {};
+krendrr::render::Model Mp7Model {};
 
 void LoadRenderer()
 {
     Shader.Load("Content/blinnphong.vert", "Content/blinnphong.frag");
-
-    Objects.push_back({});
-    Object& obj = Objects[0];
-
-    obj.Color = glm::vec3(.5f, .3f, 1.0f);
-
-    float vertices[] = {
-        // positions          // colors           // texture coords
-       //  0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f, // top right
-       //  0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, // bottom right
-       // -0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f, // bottom left
-       // -0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f  // top left
-
-        0.5f,  0.5f, 0.0f, 1.0f, 1.0f,   // top right
-        0.5f, -0.5f, 0.0f, 1.0f, 0.0f,    // bottom right
-       -0.5f, -0.5f, 0.0f, 0.0f, 0.0f,   // bottom left
-       -0.5f,  0.5f, 0.0f, 0.0f, 1.0f    // top left
-   };
-    std::uint32_t indices[] = {
-        3, 1, 0, // first triangle
-        3, 2, 1  // second triangle
-    };
-
-    obj.Mesh.LoadIndexed(
-        std::array{
-            krendrr::render::Mesh::VertexBufferLayout{
-                .Stride = 5 * sizeof(float),
-                .Offset = 0,
-                .Type = GL_FLOAT,
-                .Count = 3
-            },
-            krendrr::render::Mesh::VertexBufferLayout{
-                .Stride = 5 * sizeof(float),
-                .Offset = 3 * sizeof(float),
-                .Type = GL_FLOAT,
-                .Count = 2
-            }
-        },
-        vertices,
-        indices
-    );
-
-    Texture.Load("Content/Texture.png", {
-        .TextureWrapS = GL_CLAMP_TO_EDGE,
-        .TextureWrapT = GL_CLAMP_TO_EDGE,
-        .bFlipTexture = true
-    });
+    Mp7Model.Load("Content/hk-mp7-a1/source/MP7_for_Sketchfab.fbx");
 }
 
 void Render()
 {
-    glClearColor(0.7f, 0.9f, 0.1f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
+    int Width {};
+    int Height{};
+    SDL_GetWindowSize(Window, &Width, &Height);
+    glViewport(0, 0, Width, Height);
 
-    Objects[0].Mesh.BindVAO();
+    glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    Texture.ActivateTexture(0);
+    glm::mat4 ModelMatrix = glm::mat4(1.0f);
+    glm::mat4 ViewMatrix = glm::lookAt(
+        glm::vec3 {0.f, 70.f, -55.f},
+        glm::vec3 {0.f, 50.f, 0.f},
+        glm::vec3 {0.f, 1.f, 0.f}
+    );
+    glm::mat4 ProjMatrix = glm::perspective(glm::degrees(70.f), static_cast<float>(Width) / static_cast<float>(Height), 0.1f, 100.0f);
+    glm::mat4 MVP = ProjMatrix * ViewMatrix * ModelMatrix;
 
     Shader.Use();
-    Shader.SetInt("texture1", 0);
-    Shader.SetVec3("Color", Objects[0].Color);
+    Shader.SetMatrix4("MVP", MVP);
 
-    glDrawElements(GL_TRIANGLES, Objects[0].Mesh.GetPrimitivesCount(), GL_UNSIGNED_INT, reinterpret_cast<void*>(Objects[0].Mesh.GetPrimitivesOffset()));
+    for (const krendrr::render::Model::TexturedMesh& TexturedMesh : Mp7Model.GetMeshes())
+    {
+        TexturedMesh.Mesh.BindVAO();
+        Shader.SetVec3("Color", TexturedMesh.Color);
+        glDrawElements(GL_TRIANGLES, TexturedMesh.Mesh.GetPrimitivesCount(), GL_UNSIGNED_INT, reinterpret_cast<void*>(TexturedMesh.Mesh.GetPrimitivesOffset()));
+    }
 }
 
 void OnKeyDown(const SDL_Event& Event)
@@ -171,13 +125,13 @@ int main()
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 6);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
-    SDL_Window *window = SDL_CreateWindow(
+    Window = SDL_CreateWindow(
         "Blinn-Phong Renderer using OpenGL and SDL",
         800, 600,
         SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_MOUSE_FOCUS
     );
 
-    SDL_GLContext context = SDL_GL_CreateContext(window);
+    SDL_GLContext context = SDL_GL_CreateContext(Window);
 
     int version = gladLoadGL(SDL_GL_GetProcAddress);
     if (version == 0) {
@@ -195,6 +149,9 @@ int main()
 
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
+
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
 
     LoadRenderer();
 
@@ -217,20 +174,14 @@ int main()
             }
         }
 
-        int width {};
-        int height{};
-        SDL_GetWindowSize(window, &width, &height);
-        glViewport(0, 0, width, height);
-
         Render();
-
-        SDL_GL_SwapWindow(window);
+        SDL_GL_SwapWindow(Window);
     }
 
     // Deinitialize
 
     SDL_GL_DestroyContext(context);
-    SDL_DestroyWindow(window);
+    SDL_DestroyWindow(Window);
     SDL_Quit();
 
     return 0;

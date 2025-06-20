@@ -8,6 +8,18 @@ krendrr::render::Mesh::Mesh()
 {
 }
 
+krendrr::render::Mesh::Mesh(Mesh&& Other) noexcept
+{
+    MoveFrom(Other);
+}
+
+krendrr::render::Mesh& krendrr::render::Mesh::operator=(Mesh&& Other) noexcept
+{
+    MoveFrom(Other);
+
+    return *this;
+}
+
 krendrr::render::Mesh::~Mesh()
 {
     if(VAO != 0)
@@ -20,8 +32,19 @@ krendrr::render::Mesh::~Mesh()
         glDeleteBuffers(1, &EBO);
 }
 
+void krendrr::render::Mesh::MoveFrom(Mesh& Other) noexcept
+{
+    VAO = std::exchange(Other.VAO, 0);
+    VBO = std::exchange(Other.VBO, 0);
+    EBO = std::exchange(Other.EBO, 0);
+    PrimitivesCount = Other.PrimitivesCount;
+    PrimitivesOffset = Other.PrimitivesOffset;
+}
+
 void krendrr::render::Mesh::BindVAO() const
 {
+    CheckLoaded();
+
     glBindVertexArray(VAO);
 }
 
@@ -54,16 +77,22 @@ bool krendrr::render::Mesh::IsLoaded() const
 
 bool krendrr::render::Mesh::IsUsingIndices() const
 {
+    CheckLoaded();
+
     return EBO != 0;
 }
 
 std::int32_t krendrr::render::Mesh::GetPrimitivesCount() const
 {
+    CheckLoaded();
+
     return PrimitivesCount;
 }
 
 std::ptrdiff_t krendrr::render::Mesh::GetPrimitivesOffset() const
 {
+    CheckLoaded();
+
     return PrimitivesOffset;
 }
 

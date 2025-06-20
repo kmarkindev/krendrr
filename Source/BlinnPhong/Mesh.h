@@ -20,7 +20,13 @@ public:
     };
 
     Mesh();
+    Mesh(const Mesh& Other) = delete;
+    Mesh& operator=(const Mesh& Other) = delete;
+    Mesh(Mesh&& Other) noexcept;
+    Mesh& operator=(Mesh&& Other) noexcept;
     ~Mesh();
+
+    void MoveFrom(Mesh& Other) noexcept;
 
     void BindVAO() const;
 

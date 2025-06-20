@@ -11,6 +11,22 @@ krendrr::render::Texture::Texture()
 {
 }
 
+krendrr::render::Texture::Texture(Texture&& Other) noexcept
+{
+    MoveFrom(Other);
+}
+
+krendrr::render::Texture& krendrr::render::Texture::operator=(Texture&& Other) noexcept
+{
+    MoveFrom(Other);
+    return *this;
+}
+
+void krendrr::render::Texture::MoveFrom(Texture& Other) noexcept
+{
+    TextureId = std::exchange(Other.TextureId, 0);
+}
+
 krendrr::render::Texture::~Texture()
 {
     if(TextureId > 0)
