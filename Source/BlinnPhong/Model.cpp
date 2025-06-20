@@ -60,7 +60,6 @@ void krendrr::render::Model::Load(const std::string_view& ModelFileName, const L
         }
         GlobalTransform = glm::transpose(GlobalTransform);
 
-
         for(unsigned meshIndex = 0; meshIndex < Node->mNumMeshes; meshIndex++)
         {
             aiMesh* Mesh = Scene->mMeshes[Node->mMeshes[meshIndex]];

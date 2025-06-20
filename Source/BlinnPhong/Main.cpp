@@ -1,6 +1,5 @@
 #include <array>
 #include <iostream>
-#include <vector>
 #include <SDL3/SDL.h>
 #include <glad/gl.h>
 #include <windows.h>
@@ -9,7 +8,6 @@
 #include "Mesh.h"
 #include "Model.h"
 #include "Shader.h"
-#include "Texture.h"
 
 void callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, GLchar const* message, void const* user_param)
 {
