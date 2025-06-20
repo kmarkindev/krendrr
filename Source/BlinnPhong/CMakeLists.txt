@@ -9,6 +9,7 @@ target_link_libraries(krendrr_blinnphong PRIVATE
     krendrr::thirdparty::imgui_sdl3
     krendrr::thirdparty::imgui_opengl3
     krendrr::thirdparty::glm
+    krendrr::thirdparty::stb_image
 )
 
 target_setup_content_folder(krendrr_blinnphong ${CMAKE_CURRENT_SOURCE_DIR}/Content ${CMAKE_CURRENT_BINARY_DIR}/Build/Content)

@@ -14,7 +14,7 @@ public:
     struct VertexBufferLayout
     {
         GLint Stride;
-        std::uintptr_t Offset;
+        GLuint Offset;
         GLenum Type;
         GLint Count;
     };
@@ -22,7 +22,7 @@ public:
     Mesh();
     ~Mesh();
 
-    void BindVAO();
+    void BindVAO() const;
 
     void Load(const std::span<const VertexBufferLayout>& Layout, const std::span<const std::byte>& VertexData);
 
@@ -46,7 +46,7 @@ private:
     GLuint VBO;
     GLuint EBO;
 
-    std::uint32_t PrimitivesCount;
+    std::int32_t PrimitivesCount;
     std::ptrdiff_t PrimitivesOffset;
 
     void CheckLoaded() const;

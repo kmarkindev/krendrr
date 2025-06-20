@@ -20,7 +20,7 @@ krendrr::render::Mesh::~Mesh()
         glDeleteBuffers(1, &EBO);
 }
 
-void krendrr::render::Mesh::BindVAO()
+void krendrr::render::Mesh::BindVAO() const
 {
     glBindVertexArray(VAO);
 }
@@ -28,30 +28,23 @@ void krendrr::render::Mesh::BindVAO()
 void krendrr::render::Mesh::Load(const std::span<const VertexBufferLayout>& Layout, const std::span<const std::byte>& VertexData)
 {
     glCreateVertexArrays(1, &VAO);
+
     LoadAndBindVertexBuffer(Layout, VertexData);
 
-    PrimitivesCount = VertexData.size();
-
-    glBindVertexArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    PrimitivesCount = static_cast<std::int32_t>(VertexData.size());
 }
 
 void krendrr::render::Mesh::LoadIndexed(const std::span<const VertexBufferLayout>& Layout, const utils::BytesArray& VertexData, const std::span<const std::uint32_t>& IndexData)
 {
     glCreateVertexArrays(1, &VAO);
-    glBindVertexArray(VAO);
 
     LoadAndBindVertexBuffer(Layout, VertexData);
 
     glCreateBuffers(1, &EBO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(IndexData.size_bytes()), IndexData.data(), GL_STATIC_DRAW);
+    glNamedBufferData(EBO, static_cast<GLsizeiptr>(IndexData.size_bytes()), IndexData.data(), GL_STATIC_DRAW);
+    glVertexArrayElementBuffer(VAO, EBO);
 
     PrimitivesCount = static_cast<std::int32_t>(IndexData.size());
-
-    glBindVertexArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
 bool krendrr::render::Mesh::IsLoaded() const
@@ -83,13 +76,16 @@ void krendrr::render::Mesh::CheckLoaded() const
 void krendrr::render::Mesh::LoadAndBindVertexBuffer(const std::span<const VertexBufferLayout>& Layout, const utils::BytesArray& VertexData)
 {
     glCreateBuffers(1, &VBO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
 
-    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(VertexData.size_bytes()), VertexData.data(), GL_STATIC_DRAW);
+    glNamedBufferData(VBO, static_cast<GLsizeiptr>(VertexData.size_bytes()), VertexData.data(), GL_STATIC_DRAW);
+
+    if(!Layout.empty())
+        glVertexArrayVertexBuffer(VAO, 0, VBO, 0, Layout[0].Stride);
 
     for(int i = 0; i < Layout.size(); i++)
     {
-        glVertexAttribPointer(i, Layout[i].Count, Layout[i].Type, GL_FALSE, Layout[i].Stride, reinterpret_cast<void*>(Layout[i].Offset));
-        glEnableVertexAttribArray(i);
+        glEnableVertexArrayAttrib(VAO, i);
+        glVertexArrayAttribFormat(VAO, i, Layout[i].Count, Layout[i].Type, GL_FALSE, Layout[i].Offset);
+        glVertexArrayAttribBinding(VAO, i, 0);
     }
 }

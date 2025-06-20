@@ -6,9 +6,67 @@
 #include <windows.h>
 #include <glm/fwd.hpp>
 #include <glm/detail/type_quat.hpp>
-
 #include "Mesh.h"
 #include "Shader.h"
+#include "Texture.h"
+
+void callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, GLchar const* message, void const* user_param)
+{
+    auto source_str = [source]() -> std::string {
+        switch (source)
+        {
+            case GL_DEBUG_SOURCE_API: return "API";
+            case GL_DEBUG_SOURCE_WINDOW_SYSTEM: return "WINDOW SYSTEM";
+            case GL_DEBUG_SOURCE_SHADER_COMPILER: return "SHADER COMPILER";
+            case GL_DEBUG_SOURCE_THIRD_PARTY:  return "THIRD PARTY";
+            case GL_DEBUG_SOURCE_APPLICATION: return "APPLICATION";
+            case GL_DEBUG_SOURCE_OTHER: return "OTHER";
+            default: return "UNKNOWN";
+        }
+    }();
+
+    auto type_str = [type]() {
+        switch (type)
+        {
+            case GL_DEBUG_TYPE_ERROR: return "ERROR";
+            case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: return "DEPRECATED_BEHAVIOR";
+            case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR: return "UNDEFINED_BEHAVIOR";
+            case GL_DEBUG_TYPE_PORTABILITY: return "PORTABILITY";
+            case GL_DEBUG_TYPE_PERFORMANCE: return "PERFORMANCE";
+            case GL_DEBUG_TYPE_MARKER:  return "MARKER";
+            case GL_DEBUG_TYPE_OTHER: return "OTHER";
+            default: return "UNKNOWN";
+        }
+    }();
+
+    auto severity_str = [severity]() {
+        switch (severity) {
+            case GL_DEBUG_SEVERITY_NOTIFICATION: return "NOTIFICATION";
+            case GL_DEBUG_SEVERITY_LOW: return "LOW";
+            case GL_DEBUG_SEVERITY_MEDIUM: return "MEDIUM";
+            case GL_DEBUG_SEVERITY_HIGH: return "HIGH";
+            default: return "UNKNOWN";
+        }
+    }();
+
+
+    if(severity == GL_DEBUG_SEVERITY_NOTIFICATION)
+        return;
+
+    std::cout << source_str       << ", "
+                  << type_str     << ", "
+                  << severity_str << ", "
+                  << id           << ": "
+                  << message      << std::endl;
+
+    __debugbreak();
+}
+
+void SetupOpenGlDebugPrints()
+{
+    glEnable(GL_DEBUG_OUTPUT);
+    glDebugMessageCallback(callback, nullptr);
+}
 
 bool bShouldQuit {false};
 
@@ -26,6 +84,7 @@ struct Object
 std::vector<Object> Objects {};
 
 krendrr::render::Shader Shader {};
+krendrr::render::Texture Texture {};
 
 void LoadRenderer()
 {
@@ -43,10 +102,10 @@ void LoadRenderer()
        // -0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f, // bottom left
        // -0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f  // top left
 
-        0.5f,  0.5f, 0.0f,   // top right
-        0.5f, -0.5f, 0.0f,    // bottom right
-       -0.5f, -0.5f, 0.0f,   // bottom left
-       -0.5f,  0.5f, 0.0f,     // top left
+        0.5f,  0.5f, 0.0f, 1.0f, 1.0f,   // top right
+        0.5f, -0.5f, 0.0f, 1.0f, 0.0f,    // bottom right
+       -0.5f, -0.5f, 0.0f, 0.0f, 0.0f,   // bottom left
+       -0.5f,  0.5f, 0.0f, 0.0f, 1.0f    // top left
    };
     std::uint32_t indices[] = {
         3, 1, 0, // first triangle
@@ -56,15 +115,27 @@ void LoadRenderer()
     obj.Mesh.LoadIndexed(
         std::array{
             krendrr::render::Mesh::VertexBufferLayout{
-                .Stride = 3 * sizeof(float),
+                .Stride = 5 * sizeof(float),
                 .Offset = 0,
                 .Type = GL_FLOAT,
                 .Count = 3
+            },
+            krendrr::render::Mesh::VertexBufferLayout{
+                .Stride = 5 * sizeof(float),
+                .Offset = 3 * sizeof(float),
+                .Type = GL_FLOAT,
+                .Count = 2
             }
         },
         vertices,
         indices
     );
+
+    Texture.Load("Content/Texture.png", {
+        .TextureWrapS = GL_CLAMP_TO_EDGE,
+        .TextureWrapT = GL_CLAMP_TO_EDGE,
+        .bFlipTexture = true
+    });
 }
 
 void Render()
@@ -74,12 +145,13 @@ void Render()
 
     Objects[0].Mesh.BindVAO();
 
+    Texture.ActivateTexture(0);
+
     Shader.Use();
+    Shader.SetInt("texture1", 0);
     Shader.SetVec3("Color", Objects[0].Color);
 
     glDrawElements(GL_TRIANGLES, Objects[0].Mesh.GetPrimitivesCount(), GL_UNSIGNED_INT, reinterpret_cast<void*>(Objects[0].Mesh.GetPrimitivesOffset()));
-
-    glBindVertexArray(0);
 }
 
 void OnKeyDown(const SDL_Event& Event)
@@ -116,6 +188,8 @@ int main()
     std::cout << "GPU Vendor: " << glGetString(GL_VENDOR) << "\n";
     std::cout << "GPU: " << glGetString(GL_RENDERER) << "\n";
     std::cout << "OpenGL Driver: " << glGetString(GL_VERSION) << std::endl;
+
+    SetupOpenGlDebugPrints();
 
     SDL_GL_SetSwapInterval(1);
 
