@@ -1,4 +1,5 @@
 #include <array>
+#include <chrono>
 #include <iostream>
 #include <SDL3/SDL.h>
 #include <glad/gl.h>
@@ -66,6 +67,7 @@ void SetupOpenGlDebugPrints()
 
 SDL_Window *Window {};
 bool bShouldQuit {false};
+double DeltaTime {};
 
 krendrr::render::Shader Shader {};
 krendrr::render::Model Mp7Model {};
@@ -76,7 +78,7 @@ void LoadRenderer()
     Mp7Model.Load("Content/hk-mp7-a1/source/MP7_for_Sketchfab.fbx");
 }
 
-void Render()
+void Render(double DeltaTime)
 {
     int Width {};
     int Height{};
@@ -142,6 +144,8 @@ int main()
     SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 6);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
+    SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
     Window = SDL_CreateWindow(
@@ -180,6 +184,9 @@ int main()
 
     SDL_Event event;
 
+    std::chrono::steady_clock::time_point LastRecordedTime = std::chrono::steady_clock::now();
+    DeltaTime = 0.0;
+
     while(!bShouldQuit) {
 
         while (SDL_PollEvent(&event)) {
@@ -195,8 +202,16 @@ int main()
             }
         }
 
-        Render();
+        Render(DeltaTime);
+
         SDL_GL_SwapWindow(Window);
+
+        std::chrono::steady_clock::time_point NewRecordedTime = std::chrono::steady_clock::now();
+        auto Difference = std::chrono::duration_cast<std::chrono::duration<double, std::chrono::seconds::period>>(NewRecordedTime - LastRecordedTime);
+        DeltaTime = Difference.count();
+        LastRecordedTime = NewRecordedTime;
+
+        std::cout << DeltaTime << std::endl;
     }
 
     // Deinitialize
