@@ -122,6 +122,9 @@ namespace krendrr::render
 
     void Shader::Load(const std::string_view& VertexShaderFileName, const std::string_view& FragmentShaderFileName)
     {
+        if(IsLoaded())
+            throw std::runtime_error("Shader already loaded");
+
         if(!VertexShaderFileName.ends_with(".vert"))
             throw std::runtime_error(std::string{"Invalid vertex shader provided, file not ending with .vert, got \""} + VertexShaderFileName.data() + "\"");
 

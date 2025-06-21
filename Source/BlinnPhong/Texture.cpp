@@ -35,6 +35,9 @@ krendrr::render::Texture::~Texture()
 
 void krendrr::render::Texture::Load(const std::string_view& TextureFileName, const TextureLoadParams& Params)
 {
+    if(TextureId > 0)
+        throw std::runtime_error("Texture already loaded");
+
     glCreateTextures(GL_TEXTURE_2D, 1, &TextureId);
 
     stbi_set_flip_vertically_on_load(Params.bFlipTexture);

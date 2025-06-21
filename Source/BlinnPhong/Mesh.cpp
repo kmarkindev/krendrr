@@ -50,6 +50,9 @@ void krendrr::render::Mesh::BindVAO() const
 
 void krendrr::render::Mesh::Load(const std::span<const VertexBufferLayout>& Layout, const std::span<const std::byte>& VertexData)
 {
+    if(VAO > 0)
+        throw std::runtime_error("Mesh already loaded");
+
     glCreateVertexArrays(1, &VAO);
 
     LoadAndBindVertexBuffer(Layout, VertexData);
@@ -59,6 +62,9 @@ void krendrr::render::Mesh::Load(const std::span<const VertexBufferLayout>& Layo
 
 void krendrr::render::Mesh::LoadIndexed(const std::span<const VertexBufferLayout>& Layout, const utils::BytesArray& VertexData, const std::span<const std::uint32_t>& IndexData)
 {
+    if(VAO > 0)
+        throw std::runtime_error("Mesh already loaded");
+
     glCreateVertexArrays(1, &VAO);
 
     LoadAndBindVertexBuffer(Layout, VertexData);

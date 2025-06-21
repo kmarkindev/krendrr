@@ -1,6 +1,7 @@
 #include "Model.h"
 #include <array>
 #include <stdexcept>
+#include <unordered_map>
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
@@ -29,6 +30,17 @@ void krendrr::render::Model::Load(const std::string_view& ModelFileName, const L
 
     if(!Scene || Scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !Scene->mRootNode)
         throw std::runtime_error("Failed to load model. File is invalid.");
+
+    std::string_view ModelDirectory {};
+    {
+        auto LastSlashPos = ModelFileName.find_last_of('/');
+        if(LastSlashPos != std::string_view::npos)
+        {
+            ModelDirectory = ModelFileName.substr(0,  LastSlashPos);
+        }
+    }
+
+    std::unordered_map<std::string, std::shared_ptr<Texture>> LoadedTextures {};
 
     std::vector<aiNode*> ToProcess {};
     ToProcess.reserve(10);
@@ -170,6 +182,41 @@ void krendrr::render::Model::Load(const std::string_view& ModelFileName, const L
                 static_cast<double>(rand()) / (RAND_MAX + 1.0)
             };
             NewTexturedMesh.Mesh.LoadIndexed(MeshLayout, std::span<const Vertex> {Vertices}, Indices);
+
+            aiMaterial* Material = Scene->mMaterials[Mesh->mMaterialIndex];
+
+            auto LoadTexture = [&](aiTextureType Type, std::shared_ptr<Texture>& Texture, GLint Format)
+            {
+                if(Material->GetTextureCount(Type) > 0)
+                {
+                    aiString RelativeTexturePath {};
+                    Material->GetTexture(Type, 0, &RelativeTexturePath);
+
+                    std::string TexturePath { ModelDirectory.begin(), ModelDirectory.end() };
+                    TexturePath.append("/");
+                    TexturePath.append(RelativeTexturePath.C_Str());
+
+                    auto LoadedTextureIter = LoadedTextures.find(TexturePath);
+                    if(LoadedTextureIter != LoadedTextures.end())
+                    {
+                        Texture = LoadedTextureIter->second;
+                    }
+                    else
+                    {
+                        Texture = std::make_shared<render::Texture>();
+                        Texture->Load(TexturePath, {
+                            .ApiFormat = Format,
+                            .bFlipTexture = true,
+                        });
+                        LoadedTextures.insert({TexturePath, Texture});
+                    }
+                }
+            };
+
+            LoadTexture(aiTextureType_DIFFUSE, NewTexturedMesh.BaseColorTexture, GL_SRGB8_ALPHA8);
+            LoadTexture(aiTextureType_METALNESS, NewTexturedMesh.MetallicTexture, GL_R8);
+            LoadTexture(aiTextureType_SHININESS, NewTexturedMesh.RoughnessTexture, GL_R8);
+            LoadTexture(aiTextureType_NORMALS, NewTexturedMesh.NormalTexture, GL_RGB8);
         }
     }
 }

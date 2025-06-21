@@ -101,8 +101,29 @@ void Render()
     for (const krendrr::render::Model::TexturedMesh& TexturedMesh : Mp7Model.GetMeshes())
     {
         TexturedMesh.Mesh.BindVAO();
+
         Shader.SetVec3("Color", TexturedMesh.Color);
+
+        Shader.SetInt("BaseColorTexture", 0);
+        Shader.SetInt("MetallicTexture", 1);
+        Shader.SetInt("RoughnessTexture", 2);
+        Shader.SetInt("NormalsTexture", 3);
+
+        if(TexturedMesh.BaseColorTexture)
+            TexturedMesh.BaseColorTexture->ActivateTexture(0);
+        if(TexturedMesh.MetallicTexture)
+            TexturedMesh.MetallicTexture->ActivateTexture(1);
+        if(TexturedMesh.RoughnessTexture)
+            TexturedMesh.RoughnessTexture->ActivateTexture(2);
+        if(TexturedMesh.NormalTexture)
+            TexturedMesh.NormalTexture->ActivateTexture(3);
+
         glDrawElements(GL_TRIANGLES, TexturedMesh.Mesh.GetPrimitivesCount(), GL_UNSIGNED_INT, reinterpret_cast<void*>(TexturedMesh.Mesh.GetPrimitivesOffset()));
+
+        glBindTextureUnit(0, 0);
+        glBindTextureUnit(1, 0);
+        glBindTextureUnit(2, 0);
+        glBindTextureUnit(3, 0);
     }
 }
 
@@ -150,6 +171,8 @@ int main()
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
+
+    glEnable(GL_FRAMEBUFFER_SRGB);
 
     LoadRenderer();
 

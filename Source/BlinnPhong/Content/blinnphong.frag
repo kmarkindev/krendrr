@@ -7,8 +7,12 @@ in vec3 normal;
 out vec4 FragColor;
 
 uniform vec3 Color;
+uniform sampler2D BaseColorTexture;
+uniform sampler2D MetallicTexture;
+uniform sampler2D RoughnessTexture;
+uniform sampler2D NormalsTexture;
 
 void main()
 {
-    FragColor = vec4(Color, 1.0);
+    FragColor = texture(BaseColorTexture, uv);
 }

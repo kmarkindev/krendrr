@@ -26,7 +26,8 @@
         {
             "name": "base-win",
             "hidden": true,
-            "description": "Base for all Windows presets"
+            "description": "Base for all Windows presets",
+            "generator": "Ninja"
         },
 
         {

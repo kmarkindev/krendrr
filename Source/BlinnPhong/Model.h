@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <vector>
 #include "Mesh.h"
 #include "Texture.h"
@@ -14,9 +15,11 @@ namespace krendrr::render
         struct TexturedMesh
         {
             Mesh Mesh {};
-            Texture DiffuseTexture {};
-            Texture SpecularTexture {};
-            Texture NormalTexture {};
+
+            std::shared_ptr<Texture> BaseColorTexture {};
+            std::shared_ptr<Texture> MetallicTexture {};
+            std::shared_ptr<Texture> RoughnessTexture {};
+            std::shared_ptr<Texture> NormalTexture {};
 
             glm::vec3 Color {};
         };
