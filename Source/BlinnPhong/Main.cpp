@@ -6,6 +6,7 @@
 #include <windows.h>
 #include <glm/fwd.hpp>
 #include <glm/detail/type_quat.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include "Mesh.h"
 #include "Model.h"
 #include "Shader.h"
@@ -67,7 +68,20 @@ void SetupOpenGlDebugPrints()
 
 SDL_Window *Window {};
 bool bShouldQuit {false};
-double DeltaTime {};
+float DeltaTime {};
+
+bool bWasSpacePressed {};
+bool bWasShiftPressed {};
+bool bWasWPressed {};
+bool bWasAPressed {};
+bool bWasSPressed {};
+bool bWasDPressed {};
+bool bWasEPressed {};
+bool bWasQPressed {};
+glm::vec2 MouseMove {};
+
+glm::vec3 CameraPosition {};
+glm::quat CameraRotation {1, {}};
 
 krendrr::render::Shader Shader {};
 krendrr::render::Model Mp7Model {};
@@ -78,7 +92,50 @@ void LoadRenderer()
     Mp7Model.Load("Content/hk-mp7-a1/source/MP7_for_Sketchfab.fbx");
 }
 
-void Render(double DeltaTime)
+void Update(float DeltaTime)
+{
+    float CameraMoveSpeed = 50.f;
+    float CameraRotationScale = 0.35f;
+    float CameraRollSpeed = 45.f;
+
+    glm::mat4 CameraRotMatrix = glm::mat4_cast(CameraRotation);
+    glm::vec3 CameraUpVector = CameraRotMatrix * glm::vec4{0.f, 1.f, 0.f, 0.f};
+    glm::vec3 CameraForwardVector = CameraRotMatrix * glm::vec4{0.f,0.f,1.f, 0.f};
+    glm::vec3 CameraRightVector = CameraRotMatrix * glm::vec4{-1.f, 0.f, 0.f, 0.f};
+
+    if(bWasSpacePressed)
+        CameraPosition += CameraUpVector * CameraMoveSpeed * DeltaTime;
+
+    if(bWasShiftPressed)
+        CameraPosition += CameraUpVector * -CameraMoveSpeed * DeltaTime;
+
+    if(bWasWPressed)
+        CameraPosition += CameraForwardVector * CameraMoveSpeed * DeltaTime;
+    if(bWasAPressed)
+        CameraPosition += CameraRightVector * -CameraMoveSpeed * DeltaTime;
+    if(bWasSPressed)
+        CameraPosition += CameraForwardVector * -CameraMoveSpeed * DeltaTime;
+    if(bWasDPressed)
+        CameraPosition += CameraRightVector * CameraMoveSpeed * DeltaTime;
+
+    glm::quat MouseXRotation = glm::angleAxis(-glm::radians(MouseMove.x * CameraRotationScale), CameraUpVector);
+    glm::quat MouseYRotation = glm::angleAxis(-glm::radians(MouseMove.y * CameraRotationScale), CameraRightVector);
+    CameraRotation = MouseYRotation * MouseXRotation * CameraRotation;
+
+    if(bWasEPressed)
+    {
+        glm::quat CameraRollRight = glm::angleAxis(-glm::radians(CameraRollSpeed * DeltaTime), CameraForwardVector);
+        CameraRotation = CameraRollRight * CameraRotation;
+    }
+
+    if(bWasQPressed)
+    {
+        glm::quat CameraRollLeft = glm::angleAxis(glm::radians(CameraRollSpeed * DeltaTime), CameraForwardVector);
+        CameraRotation = CameraRollLeft * CameraRotation;
+    }
+}
+
+void Render(float DeltaTime)
 {
     int Width {};
     int Height{};
@@ -89,12 +146,16 @@ void Render(double DeltaTime)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glm::mat4 ModelMatrix = glm::mat4(1.0f);
+
+    glm::vec3 CameraForwardVector = glm::mat4_cast(CameraRotation) * glm::vec4{0.f,0.f,1.f, 0.f};
+    glm::vec3 CameraUpVector = glm::mat4_cast(CameraRotation) * glm::vec4{0.f, 1.f, 0.f, 0.f};
     glm::mat4 ViewMatrix = glm::lookAt(
-        glm::vec3 {0.f, 70.f, -55.f},
-        glm::vec3 {0.f, 50.f, 0.f},
-        glm::vec3 {0.f, 1.f, 0.f}
+        CameraPosition,
+        CameraPosition + CameraForwardVector,
+        CameraUpVector
     );
-    glm::mat4 ProjMatrix = glm::perspective(glm::degrees(70.f), static_cast<float>(Width) / static_cast<float>(Height), 0.1f, 100.0f);
+
+    glm::mat4 ProjMatrix = glm::perspective(glm::radians(70.f), static_cast<float>(Width) / static_cast<float>(Height), 0.1f, 1000.0f);
     glm::mat4 MVP = ProjMatrix * ViewMatrix * ModelMatrix;
 
     Shader.Use();
@@ -131,7 +192,69 @@ void Render(double DeltaTime)
 
 void OnKeyDown(const SDL_Event& Event)
 {
+    switch (Event.key.key)
+    {
+        case SDLK_SPACE:
+            bWasSpacePressed = true;
+            break;
+        case SDLK_LSHIFT:
+            bWasShiftPressed = true;
+            break;
+        case SDLK_W:
+            bWasWPressed = true;
+            break;
+        case SDLK_A:
+            bWasAPressed = true;
+            break;
+        case SDLK_S:
+            bWasSPressed = true;
+            break;
+        case SDLK_D:
+            bWasDPressed = true;
+            break;
+        case SDLK_Q:
+            bWasEPressed = true;
+        break;
+        case SDLK_E:
+            bWasQPressed = true;
+        break;
+    }
+}
 
+void OnKeyUp(const SDL_Event& Event)
+{
+    switch (Event.key.key)
+    {
+        case SDLK_SPACE:
+            bWasSpacePressed = false;
+        break;
+        case SDLK_LSHIFT:
+            bWasShiftPressed = false;
+        break;
+        case SDLK_W:
+            bWasWPressed = false;
+        break;
+        case SDLK_A:
+            bWasAPressed = false;
+        break;
+        case SDLK_S:
+            bWasSPressed = false;
+        break;
+        case SDLK_D:
+            bWasDPressed = false;
+        break;
+        case SDLK_Q:
+            bWasEPressed = false;
+        break;
+        case SDLK_E:
+            bWasQPressed = false;
+        break;
+    }
+}
+
+void OnMouseMove(const SDL_Event& Event)
+{
+    MouseMove = {Event.motion.xrel, Event.motion.yrel};
 }
 
 int main()
@@ -150,8 +273,8 @@ int main()
 
     Window = SDL_CreateWindow(
         "Blinn-Phong Renderer using OpenGL and SDL",
-        800, 600,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_MOUSE_FOCUS
+        1200, 720,
+        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_INPUT_FOCUS
     );
 
     SDL_GLContext context = SDL_GL_CreateContext(Window);
@@ -178,6 +301,9 @@ int main()
 
     glEnable(GL_FRAMEBUFFER_SRGB);
 
+    //SDL_HideCursor();
+    SDL_SetWindowRelativeMouseMode(Window, true);
+
     LoadRenderer();
 
     // Game Loop
@@ -197,21 +323,28 @@ int main()
                 case SDL_EVENT_KEY_DOWN:
                     OnKeyDown(event);
                 break;
+                case SDL_EVENT_KEY_UP:
+                    OnKeyUp(event);
+                break;
+                case SDL_EVENT_MOUSE_MOTION:
+                    OnMouseMove(event);
                 default:
                     break;
             }
         }
 
+        Update(DeltaTime);
+
         Render(DeltaTime);
 
         SDL_GL_SwapWindow(Window);
 
+        MouseMove = {};
+
         std::chrono::steady_clock::time_point NewRecordedTime = std::chrono::steady_clock::now();
-        auto Difference = std::chrono::duration_cast<std::chrono::duration<double, std::chrono::seconds::period>>(NewRecordedTime - LastRecordedTime);
+        auto Difference = std::chrono::duration_cast<std::chrono::duration<float, std::chrono::seconds::period>>(NewRecordedTime - LastRecordedTime);
         DeltaTime = Difference.count();
         LastRecordedTime = NewRecordedTime;
-
-        std::cout << DeltaTime << std::endl;
     }
 
     // Deinitialize
