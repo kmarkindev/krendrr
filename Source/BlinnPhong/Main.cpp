@@ -80,7 +80,7 @@ bool bWasEPressed {};
 bool bWasQPressed {};
 glm::vec2 MouseMove {};
 
-glm::vec3 CameraPosition {};
+glm::vec3 CameraPosition {-30, 30, -85};
 glm::quat CameraRotation {1, {}};
 
 krendrr::render::Shader Shader {};
