@@ -11,12 +11,13 @@ out vec2 uv;
 out vec3 normal;
 
 uniform mat4 MVP;
+uniform mat4 ModelMatrix;
 
 void main()
 {
-    position = aPosition;
     uv = aUV;
-    normal = aNormal;
+    normal = mat3(transpose(inverse(ModelMatrix))) * aNormal;
+    position = vec3(ModelMatrix * vec4(aPosition, 1.0));
 
     gl_Position = MVP * vec4(aPosition, 1.0);
 }

@@ -23,7 +23,7 @@ public:
         GLint TextureWrapS = GL_REPEAT;
         GLint TextureWrapT = GL_REPEAT;
         GLint TextureMinFilter = GL_LINEAR_MIPMAP_LINEAR;
-        GLint TextureMagFilter = GL_NEAREST;
+        GLint TextureMagFilter = GL_LINEAR;
         GLint ApiFormat = GL_RGBA8;
         GLint MipMapsCount = 0;
         bool bFlipTexture = false;

@@ -160,6 +160,8 @@ void Render(float DeltaTime)
 
     Shader.Use();
     Shader.SetMatrix4("MVP", MVP);
+    Shader.SetMatrix4("ModelMatrix", ModelMatrix);
+    Shader.SetVec3("CameraPos", CameraPosition);
 
     for (const krendrr::render::Model::TexturedMesh& TexturedMesh : Mp7Model.GetMeshes())
     {
