@@ -32,6 +32,8 @@ namespace krendrr::render
 
         void SetFloat(const std::string_view& Name, float Value);
 
+        void SetMatrix3(const std::string_view& Name, const glm::mat3& Value);
+
         void SetMatrix4(const std::string_view& Name, const glm::mat4& Value);
 
         void SetVec3(const std::string_view& Name, const glm::vec3& Value);

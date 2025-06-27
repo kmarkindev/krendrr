@@ -158,9 +158,12 @@ void Render(float DeltaTime)
     glm::mat4 ProjMatrix = glm::perspective(glm::radians(70.f), static_cast<float>(Width) / static_cast<float>(Height), 0.1f, 1000.0f);
     glm::mat4 MVP = ProjMatrix * ViewMatrix * ModelMatrix;
 
+    glm::mat3 NormalMatrix = glm::transpose(glm::inverse(ModelMatrix));
+
     Shader.Use();
     Shader.SetMatrix4("MVP", MVP);
     Shader.SetMatrix4("ModelMatrix", ModelMatrix);
+    Shader.SetMatrix3("NormalMatrix", NormalMatrix);
     Shader.SetVec3("CameraPos", CameraPosition);
 
     for (const krendrr::render::Model::TexturedMesh& TexturedMesh : Mp7Model.GetMeshes())

@@ -82,40 +82,33 @@ void krendrr::render::Model::Load(const std::string_view& ModelFileName, const L
                 glm::vec2 UV {};
                 glm::vec3 Normal {};
                 glm::vec3 Tangent {};
-                glm::vec3 Bitangent {};
             };
 
             constexpr std::array MeshLayout = {
                 Mesh::VertexBufferLayout {
-                    .Stride = 14 * sizeof(float),
+                    .Stride = 11 * sizeof(float),
                     .Offset = 0,
                     .Type = GL_FLOAT,
                     .Count = 3,
                 },
                 Mesh::VertexBufferLayout {
-                    .Stride = 14 * sizeof(float),
+                    .Stride = 11 * sizeof(float),
                     .Offset = 3 * sizeof(float),
                     .Type = GL_FLOAT,
                     .Count = 2
                 },
                 Mesh::VertexBufferLayout {
-                    .Stride = 14 * sizeof(float),
+                    .Stride = 11 * sizeof(float),
                     .Offset = 5 * sizeof(float),
                     .Type = GL_FLOAT,
                     .Count = 3
                 },
                 Mesh::VertexBufferLayout {
-                    .Stride = 14 * sizeof(float),
+                    .Stride = 11 * sizeof(float),
                     .Offset = 8 * sizeof(float),
                     .Type = GL_FLOAT,
                     .Count = 3
                 },
-                Mesh::VertexBufferLayout {
-                    .Stride = 14 * sizeof(float),
-                    .Offset = 11 * sizeof(float),
-                    .Type = GL_FLOAT,
-                    .Count = 3
-                }
             };
 
             std::vector<Vertex> Vertices {};
@@ -126,7 +119,7 @@ void krendrr::render::Model::Load(const std::string_view& ModelFileName, const L
 
             for(unsigned vertIndex = 0; vertIndex < Mesh->mNumVertices; vertIndex++)
             {
-                auto& [Position, UV, Normal, Tangent, Bitangent] = Vertices.emplace_back();
+                auto& [Position, UV, Normal, Tangent] = Vertices.emplace_back();
 
                 Position = GlobalTransform * glm::vec4{
                     Mesh->mVertices[vertIndex].x,
@@ -156,12 +149,6 @@ void krendrr::render::Model::Load(const std::string_view& ModelFileName, const L
                     Mesh->mTangents[vertIndex].x,
                     Mesh->mTangents[vertIndex].y,
                     Mesh->mTangents[vertIndex].z
-                };
-
-                Bitangent = {
-                    Mesh->mBitangents[vertIndex].x,
-                    Mesh->mBitangents[vertIndex].y,
-                    Mesh->mBitangents[vertIndex].z
                 };
             }
 

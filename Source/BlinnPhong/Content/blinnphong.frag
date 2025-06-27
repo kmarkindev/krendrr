@@ -3,6 +3,7 @@
 in vec3 position;
 in vec2 uv;
 in vec3 normal;
+in mat3 TBN;
 
 out vec4 FragColor;
 
@@ -16,9 +17,13 @@ uniform vec3 CameraPos;
 
 void main()
 {
-    FragColor = vec4(texture(MetallicTexture, uv).r, texture(MetallicTexture, uv).r, texture(MetallicTexture, uv).r, 1.0);
-
     vec3 lightPos = vec3(0, 0, -100);
+
+    // Normal Mapping
+
+    vec3 sampledNormal = texture(NormalsTexture, uv).rgb;
+    sampledNormal = normalize(sampledNormal * 2.0 - 1.0);
+    vec3 normalNorm = normalize(TBN * sampledNormal);
 
     // Ambient
 
@@ -31,7 +36,6 @@ void main()
 
     vec3 diffuseColor = vec3(1.0, 1.0, 1.0);
 
-    vec3 normalNorm = normalize(normal);
     vec3 lightDir = normalize(lightPos - position);
 
     float diffuseLightIntensity = max(0.0, dot(normalNorm, lightDir));

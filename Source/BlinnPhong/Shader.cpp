@@ -54,6 +54,11 @@ namespace krendrr::render
         glUniformMatrix4fv(glGetUniformLocation(ProgramId, Name.data()), 1, GL_FALSE, glm::value_ptr(Value));
     }
 
+    void Shader::SetMatrix3(const std::string_view& Name, const glm::mat3& Value)
+    {
+        glUniformMatrix3fv(glGetUniformLocation(ProgramId, Name.data()), 1, GL_FALSE, glm::value_ptr(Value));
+    }
+
     void Shader::SetVec3(const std::string_view& Name, const glm::vec3& Value)
     {
         glUniform3f(glGetUniformLocation(ProgramId, Name.data()), Value.x, Value.y, Value.z);
