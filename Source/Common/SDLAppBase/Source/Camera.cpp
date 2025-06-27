@@ -109,8 +109,8 @@ namespace krendrr::SDLAppBase
     {
         glm::mat4 CameraRotMatrix = glm::mat4_cast(CameraRotation);
         glm::vec3 CameraUpVector = CameraRotMatrix * glm::vec4{0.f, 1.f, 0.f, 0.f};
-        glm::vec3 CameraForwardVector = CameraRotMatrix * glm::vec4{0.f,0.f,1.f, 0.f};
-        glm::vec3 CameraRightVector = CameraRotMatrix * glm::vec4{-1.f, 0.f, 0.f, 0.f};
+        glm::vec3 CameraForwardVector = CameraRotMatrix * glm::vec4{0.f,0.f,-1.f, 0.f};
+        glm::vec3 CameraRightVector = CameraRotMatrix * glm::vec4{1.f, 0.f, 0.f, 0.f};
 
         // Move
         CameraPosition += CameraRightVector * CameraMoveSpeed * InputMoveDirection.x * DeltaTime;
@@ -130,7 +130,7 @@ namespace krendrr::SDLAppBase
     glm::mat4 Camera::GetViewMatrix() const
     {
         glm::mat4 CameraRotMatrix = glm::mat4_cast(CameraRotation);
-        glm::vec3 CameraForwardVector = CameraRotMatrix * glm::vec4{0.f,0.f,1.f, 0.f};
+        glm::vec3 CameraForwardVector = CameraRotMatrix * glm::vec4{0.f,0.f,-1.f, 0.f};
         glm::vec3 CameraUpVector = CameraRotMatrix * glm::vec4{0.f, 1.f, 0.f, 0.f};
 
         return glm::lookAt(

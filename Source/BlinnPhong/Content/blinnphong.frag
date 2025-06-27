@@ -17,7 +17,7 @@ uniform vec3 CameraPos;
 
 void main()
 {
-    vec3 lightPos = vec3(0, 0, -100);
+    vec3 lightPos = vec3(0, 0, 100);
 
     // Normal Mapping
 

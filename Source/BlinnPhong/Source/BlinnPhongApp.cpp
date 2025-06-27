@@ -18,7 +18,7 @@ void krendrr::BlinnPhong::BlinnPhongApp::BeforeMainLoop()
 
     Shader.Load("Content/blinnphong.vert", "Content/blinnphong.frag");
     Mp7Model.Load("Content/hk-mp7-a1/source/MP7_for_Sketchfab.fbx");
-    Camera.SetPosition({-30, 30, -85});
+    Camera.SetPosition({-30, 50, 100});
 }
 
 void krendrr::BlinnPhong::BlinnPhongApp::AfterMainLoop()
