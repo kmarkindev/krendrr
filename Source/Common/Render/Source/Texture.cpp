@@ -1,39 +1,36 @@
-#include "Texture.h"
-
+#include "Render/Texture.h"
 #include <algorithm>
 #include <stb_image.h>
 #include <stdexcept>
 #include <string>
 #include <cmath>
 
-krendrr::render::Texture::Texture()
-    : TextureId{}
+namespace krendrr::Render
 {
-}
 
-krendrr::render::Texture::Texture(Texture&& Other) noexcept
+Texture::Texture(Texture&& Other) noexcept
 {
     MoveFrom(Other);
 }
 
-krendrr::render::Texture& krendrr::render::Texture::operator=(Texture&& Other) noexcept
+Texture& Texture::operator=(Texture&& Other) noexcept
 {
     MoveFrom(Other);
     return *this;
 }
 
-void krendrr::render::Texture::MoveFrom(Texture& Other) noexcept
+void Texture::MoveFrom(Texture& Other) noexcept
 {
     TextureId = std::exchange(Other.TextureId, 0);
 }
 
-krendrr::render::Texture::~Texture()
+Texture::~Texture()
 {
     if(TextureId > 0)
         glDeleteTextures(1, &TextureId);
 }
 
-void krendrr::render::Texture::Load(const std::string_view& TextureFileName, const TextureLoadParams& Params)
+void Texture::Load(const std::string_view& TextureFileName, const TextureLoadParams& Params)
 {
     if(TextureId > 0)
         throw std::runtime_error("Texture already loaded");
@@ -89,10 +86,12 @@ void krendrr::render::Texture::Load(const std::string_view& TextureFileName, con
     stbi_image_free(Data);
 }
 
-void krendrr::render::Texture::ActivateTexture(std::uint32_t TextureUnit) const
+void Texture::ActivateTexture(std::uint32_t TextureUnit) const
 {
     if(TextureId == 0)
         throw std::runtime_error("Trying to use unloaded texture");
 
     glBindTextureUnit(std::clamp(TextureUnit, 0u, 15u), TextureId);
+}
+
 }

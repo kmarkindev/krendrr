@@ -2,7 +2,7 @@
 
 #include <span>
 
-namespace krendrr::utils
+namespace krendrr::Utils
 {
     /**
      * Allows to get any array or container and represent it as span<byte>

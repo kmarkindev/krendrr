@@ -2,9 +2,9 @@
 
 #include <span>
 #include <glad/gl.h>
-#include "BytesArray.h"
+#include "Utils/BytesArray.h"
 
-namespace krendrr::render
+namespace krendrr::Render
 {
 
 class Mesh 
@@ -32,7 +32,7 @@ public:
 
     void Load(const std::span<const VertexBufferLayout>& Layout, const std::span<const std::byte>& VertexData);
 
-    void LoadIndexed(const std::span<const VertexBufferLayout>& Layout, const utils::BytesArray& VertexData, const std::span<const std::uint32_t>& IndexData);
+    void LoadIndexed(const std::span<const VertexBufferLayout>& Layout, const Utils::BytesArray& VertexData, const std::span<const std::uint32_t>& IndexData);
 
     [[nodiscard]]
     bool IsLoaded() const;
@@ -48,16 +48,16 @@ public:
 
 private:
 
-    GLuint VAO;
-    GLuint VBO;
-    GLuint EBO;
+    GLuint VAO{};
+    GLuint VBO{};
+    GLuint EBO{};
 
-    std::int32_t PrimitivesCount;
-    std::ptrdiff_t PrimitivesOffset;
+    std::int32_t PrimitivesCount{};
+    std::ptrdiff_t PrimitivesOffset{};
 
     void CheckLoaded() const;
 
-    void LoadAndBindVertexBuffer(const std::span<const VertexBufferLayout>& Layout, const utils::BytesArray& VertexData);
+    void LoadAndBindVertexBuffer(const std::span<const VertexBufferLayout>& Layout, const Utils::BytesArray& VertexData);
 
 };
 

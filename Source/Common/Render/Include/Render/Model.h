@@ -6,7 +6,7 @@
 #include "Texture.h"
 #include "glm/vec3.hpp"
 
-namespace krendrr::render
+namespace krendrr::Render
 {
     class Model
     {

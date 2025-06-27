@@ -1,5 +1,5 @@
 
-function(target_setup_content_folder TARGET CONTENT_FOLDER)
+function(target_setup_content_folder TARGET)
 
     set(CUSTOM_TARGET_NAME "copy_content_folder_${TARGET}")
     set(DESTINATION_FOLDER $<TARGET_FILE_DIR:${TARGET}>/Content)
@@ -13,7 +13,7 @@ function(target_setup_content_folder TARGET CONTENT_FOLDER)
         COMMAND
             # TODO: use rsync for UNIX systems and robocopy on WIN32 to mirror folders (to also remove files, not only copy)
             # robocopy ${CONTENT_FOLDER} ${DESTINATION_FOLDER} /MIR
-            ${CMAKE_COMMAND} -E copy_directory_if_different ${CONTENT_FOLDER} ${DESTINATION_FOLDER}
+            ${CMAKE_COMMAND} -E copy_directory_if_different ${CMAKE_CURRENT_SOURCE_DIR}/Content ${DESTINATION_FOLDER}
     )
 
     add_dependencies(${TARGET} ${CUSTOM_TARGET_NAME})

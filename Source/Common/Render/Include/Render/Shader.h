@@ -4,7 +4,7 @@
 #include <glad/gl.h>
 #include <glm/fwd.hpp>
 
-namespace krendrr::render
+namespace krendrr::Render
 {
     class Shader final
     {

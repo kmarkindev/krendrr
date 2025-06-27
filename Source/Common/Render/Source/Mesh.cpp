@@ -1,26 +1,27 @@
-#include "Mesh.h"
+#include "Render/Mesh.h"
 #include <stdexcept>
+#include "Utils/BytesArray.h"
 
-#include "BytesArray.h"
+namespace krendrr::Render
+{
 
-krendrr::render::Mesh::Mesh()
-    : VAO{0}, VBO{0}, EBO{0}, PrimitivesCount{0}, PrimitivesOffset{0}
+Mesh::Mesh()
 {
 }
 
-krendrr::render::Mesh::Mesh(Mesh&& Other) noexcept
+Mesh::Mesh(Mesh&& Other) noexcept
 {
     MoveFrom(Other);
 }
 
-krendrr::render::Mesh& krendrr::render::Mesh::operator=(Mesh&& Other) noexcept
+Mesh& Mesh::operator=(Mesh&& Other) noexcept
 {
     MoveFrom(Other);
 
     return *this;
 }
 
-krendrr::render::Mesh::~Mesh()
+Mesh::~Mesh()
 {
     if(VAO != 0)
         glDeleteVertexArrays(1, &VAO);
@@ -32,7 +33,7 @@ krendrr::render::Mesh::~Mesh()
         glDeleteBuffers(1, &EBO);
 }
 
-void krendrr::render::Mesh::MoveFrom(Mesh& Other) noexcept
+void Mesh::MoveFrom(Mesh& Other) noexcept
 {
     VAO = std::exchange(Other.VAO, 0);
     VBO = std::exchange(Other.VBO, 0);
@@ -41,14 +42,14 @@ void krendrr::render::Mesh::MoveFrom(Mesh& Other) noexcept
     PrimitivesOffset = Other.PrimitivesOffset;
 }
 
-void krendrr::render::Mesh::BindVAO() const
+void Mesh::BindVAO() const
 {
     CheckLoaded();
 
     glBindVertexArray(VAO);
 }
 
-void krendrr::render::Mesh::Load(const std::span<const VertexBufferLayout>& Layout, const std::span<const std::byte>& VertexData)
+void Mesh::Load(const std::span<const VertexBufferLayout>& Layout, const std::span<const std::byte>& VertexData)
 {
     if(VAO > 0)
         throw std::runtime_error("Mesh already loaded");
@@ -60,7 +61,7 @@ void krendrr::render::Mesh::Load(const std::span<const VertexBufferLayout>& Layo
     PrimitivesCount = static_cast<std::int32_t>(VertexData.size());
 }
 
-void krendrr::render::Mesh::LoadIndexed(const std::span<const VertexBufferLayout>& Layout, const utils::BytesArray& VertexData, const std::span<const std::uint32_t>& IndexData)
+void Mesh::LoadIndexed(const std::span<const VertexBufferLayout>& Layout, const Utils::BytesArray& VertexData, const std::span<const std::uint32_t>& IndexData)
 {
     if(VAO > 0)
         throw std::runtime_error("Mesh already loaded");
@@ -76,39 +77,39 @@ void krendrr::render::Mesh::LoadIndexed(const std::span<const VertexBufferLayout
     PrimitivesCount = static_cast<std::int32_t>(IndexData.size());
 }
 
-bool krendrr::render::Mesh::IsLoaded() const
+bool Mesh::IsLoaded() const
 {
     return VAO != 0 && VBO != 0;
 }
 
-bool krendrr::render::Mesh::IsUsingIndices() const
+bool Mesh::IsUsingIndices() const
 {
     CheckLoaded();
 
     return EBO != 0;
 }
 
-std::int32_t krendrr::render::Mesh::GetPrimitivesCount() const
+std::int32_t Mesh::GetPrimitivesCount() const
 {
     CheckLoaded();
 
     return PrimitivesCount;
 }
 
-std::ptrdiff_t krendrr::render::Mesh::GetPrimitivesOffset() const
+std::ptrdiff_t Mesh::GetPrimitivesOffset() const
 {
     CheckLoaded();
 
     return PrimitivesOffset;
 }
 
-void krendrr::render::Mesh::CheckLoaded() const
+void Mesh::CheckLoaded() const
 {
     if(!IsLoaded())
         throw std::runtime_error("Trying to use mesh which is not loaded");
 }
 
-void krendrr::render::Mesh::LoadAndBindVertexBuffer(const std::span<const VertexBufferLayout>& Layout, const utils::BytesArray& VertexData)
+void Mesh::LoadAndBindVertexBuffer(const std::span<const VertexBufferLayout>& Layout, const Utils::BytesArray& VertexData)
 {
     glCreateBuffers(1, &VBO);
 
@@ -123,4 +124,6 @@ void krendrr::render::Mesh::LoadAndBindVertexBuffer(const std::span<const Vertex
         glVertexArrayAttribFormat(VAO, i, Layout[i].Count, Layout[i].Type, GL_FALSE, Layout[i].Offset);
         glVertexArrayAttribBinding(VAO, i, 0);
     }
+}
+
 }

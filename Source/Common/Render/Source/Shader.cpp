@@ -1,12 +1,11 @@
-#include "Shader.h"
+#include "Render/Shader.h"
 #include <glad/gl.h>
 #include <fstream>
 #include <iostream>
 #include <sstream>
-#include <glm/mat4x4.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-namespace krendrr::render
+namespace krendrr::Render
 {
     Shader::Shader()
         : ProgramId{0}

@@ -1,15 +1,16 @@
 #pragma once
+
 #include <string_view>
 #include <glad/gl.h>
 
-namespace krendrr::render
+namespace krendrr::Render
 {
 
 class Texture
 {
 public:
 
-    Texture();
+    Texture() = default;
     Texture(const Texture& Other) = delete;
     Texture& operator=(const Texture& Other) = delete;
     Texture(Texture&& Other) noexcept;
@@ -35,7 +36,7 @@ public:
 
 private:
 
-    GLuint TextureId;
+    GLuint TextureId{};
 
 };
 
