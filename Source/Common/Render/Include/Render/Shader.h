@@ -36,6 +36,8 @@ namespace krendrr::Render
 
         void SetMatrix4(const std::string_view& Name, const glm::mat4& Value);
 
+        void SetVec2(const std::string_view& Name, const glm::vec2& Value);
+
         void SetVec3(const std::string_view& Name, const glm::vec3& Value);
 
     private:

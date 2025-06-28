@@ -15,13 +15,21 @@ protected:
     SDLAppBase::Camera Camera {};
     Render::Model AsianCityModel {};
     Render::Shader GeometryPassShader {};
+    Render::Shader AmbientDirectionalLightPassShader {};
+    Render::Shader PointLightPassShader {};
+    Render::Shader PostProcessShader {};
+    Render::Mesh FullscreenQuadMesh {};
 
     GLuint GBufferFramebufferId {};
     GLuint GBufferColorTextureId {};
     GLuint GBufferPositionTextureId {};
     GLuint GBufferNormalTextureId {};
     GLuint GBufferMetallicTextureId {};
-    GLuint GBufferDepthStencilTextureId {};
+    GLuint GBufferDepthStencilRenderBufferId {};
+
+    GLuint LightPassFramebufferId {};
+    GLuint LightPassColorTextureId {};
+    GLuint LightPassDepthStencilRenderBufferId {};
 
     void BeforeMainLoop() override;
 
@@ -42,6 +50,7 @@ protected:
 private:
 
     void InitializeGBuffer();
+    void InitializeLightPassBuffer();
 
 };
 

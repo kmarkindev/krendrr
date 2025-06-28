@@ -8,6 +8,7 @@ layout (location = 3) out vec4 FragMetallic;
 in vec3 oWorldPosition;
 in vec2 oUv;
 in mat3 oTBNMatrix;
+in vec3 oVertNormal;
 
 uniform sampler2D BaseColorTexture;
 uniform sampler2D MetallicTexture;
@@ -24,4 +25,5 @@ void main()
     SampledNormal = SampledNormal * 2 - 1.0;
 
     FragWorldNormal = vec4(oTBNMatrix * SampledNormal, 1.0);
+    FragWorldNormal = vec4(oVertNormal, 1.0);
 }

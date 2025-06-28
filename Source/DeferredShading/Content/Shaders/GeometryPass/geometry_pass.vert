@@ -8,6 +8,7 @@ layout (location = 3) in vec3 aTangent;
 out vec3 oWorldPosition;
 out vec2 oUv;
 out mat3 oTBNMatrix;
+out vec3 oVertNormal;
 
 uniform mat3 NormalMatrix;
 uniform mat4 ModelMatrix;
@@ -25,4 +26,5 @@ void main()
     oTBNMatrix = mat3(Tangent, Bitangent, Normal);
 
     gl_Position = MVPMatrix * vec4(aPosition, 1.0);
+    oVertNormal = Normal;
 }

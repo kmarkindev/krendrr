@@ -13,10 +13,35 @@ namespace krendrr::DeferredShading
         SDL_HideCursor();
         SDL_SetWindowMouseGrab(Window, true);
 
-        Camera.SetPosition({0, 35, 0});
+        Camera.SetPosition({0, 65, 450});
 
-        GeometryPassShader.Load("Content/Shaders/geometry_pass.vert", "Content/Shaders/geometry_pass.frag");
+        GeometryPassShader.Load("Content/Shaders/GeometryPass/geometry_pass.vert", "Content/Shaders/GeometryPass/geometry_pass.frag");
+
+        AmbientDirectionalLightPassShader.Load("Content/Shaders/LightPass/Quad/ambient_light_quad.vert",
+            "Content/Shaders/LightPass/Quad/light_pass_ambient_directional.frag");
+        //PointLightPassShader.Load("Content/Shaders/LightPass/Sphere/ambient_light_sphere.vert", "Content/Shaders/LightPass/Sphere/light_pass_point.frag");
+
+        PostProcessShader.Load("Content/Shaders/post_process.vert", "Content/Shaders/post_process.frag");
+
         AsianCityModel.Load("Content/AsianCity/AsianCity.fbx");
+
+        constexpr float QuadMesh[] = {
+            -1, 1,
+            -1, -1,
+            1, -1,
+            1, 1,
+            -1, 1,
+            1, -1
+        };
+        constexpr Render::Mesh::VertexBufferLayout Layout[] = {
+            {
+                .Stride = 2 * sizeof(float),
+                .Offset = 0,
+                .Type = GL_FLOAT,
+                .Count = 2
+            }
+        };
+        FullscreenQuadMesh.Load(Layout, Utils::BytesArray{QuadMesh});
 
         // Setup ImGui
         ImGui::CreateContext();
@@ -78,6 +103,7 @@ namespace krendrr::DeferredShading
         {
             glViewport(0, 0, Width, Height);
             InitializeGBuffer();
+            InitializeLightPassBuffer();
 
             PrevHeight = Height;
             PrevWidth = Width;
@@ -137,12 +163,58 @@ namespace krendrr::DeferredShading
 
         // Lighting Pass
 
+        // Copy Depth from geometry pass
+        glBlitNamedFramebuffer(GBufferFramebufferId, LightPassFramebufferId,
+            0, 0, Width, Height, 0, 0, Width, Height, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, LightPassFramebufferId);
+
+        glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        glBindTextureUnit(0, GBufferColorTextureId);
+        glBindTextureUnit(1, GBufferPositionTextureId);
+        glBindTextureUnit(2, GBufferNormalTextureId);
+        glBindTextureUnit(3, GBufferMetallicTextureId);
+
+        // Render Ambient and Directional light
+
+        AmbientDirectionalLightPassShader.Use();
+        AmbientDirectionalLightPassShader.SetInt("GBufferColorTexture", 0);
+        AmbientDirectionalLightPassShader.SetInt("GBufferWorldPositionTexture", 1);
+        AmbientDirectionalLightPassShader.SetInt("GBufferWorldNormalTexture", 2);
+        AmbientDirectionalLightPassShader.SetInt("GBufferMetallicTexture", 3);
+        AmbientDirectionalLightPassShader.SetVec2("ScreenSize", {Width, Height});
+
+        FullscreenQuadMesh.BindVAO();
+        glDrawArrays(GL_TRIANGLES, 0, FullscreenQuadMesh.GetPrimitivesCount());
+
+        // Render other lights using Light Volumes
+
+        glEnable(GL_BLEND);
+        glBlendFuncSeparate(GL_SRC_COLOR, GL_DST_COLOR, GL_ONE, GL_ONE);
+        glBlendEquationSeparate(GL_FUNC_ADD, GL_MAX); // resulting alpha is max(one, one) = one.
+
+        // Render point lights
+        // TODO:
+
+        glDisable(GL_BLEND);
+
         // Post Processing Pass
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
         glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        PostProcessShader.Use();
+
+        glBindTextureUnit(0, LightPassColorTextureId);
+        PostProcessShader.SetInt("FinalRenderTexture", 0);
+        PostProcessShader.SetVec2("ScreenSize", {Width, Height});
+
+        FullscreenQuadMesh.BindVAO();
+        glDrawArrays(GL_TRIANGLES, 0, FullscreenQuadMesh.GetPrimitivesCount());
 
         // ImGui
         ImGui::Render();
@@ -215,7 +287,7 @@ namespace krendrr::DeferredShading
             glDeleteTextures(1, &GBufferPositionTextureId);
             glDeleteTextures(1, &GBufferNormalTextureId);
             glDeleteTextures(1, &GBufferMetallicTextureId);
-            glDeleteRenderbuffers(1, &GBufferDepthStencilTextureId);
+            glDeleteRenderbuffers(1, &GBufferDepthStencilRenderBufferId);
             glDeleteFramebuffers(1, &GBufferFramebufferId);
         }
 
@@ -245,10 +317,10 @@ namespace krendrr::DeferredShading
         glTextureParameteri(GBufferMetallicTextureId, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTextureParameteri(GBufferMetallicTextureId, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-        glCreateRenderbuffers(1, &GBufferDepthStencilTextureId);
-        glNamedRenderbufferStorage(GBufferDepthStencilTextureId, GL_DEPTH24_STENCIL8, Width, Height);
+        glCreateRenderbuffers(1, &GBufferDepthStencilRenderBufferId);
+        glNamedRenderbufferStorage(GBufferDepthStencilRenderBufferId, GL_DEPTH24_STENCIL8, Width, Height);
 
-        glNamedFramebufferRenderbuffer(GBufferFramebufferId, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, GBufferDepthStencilTextureId);
+        glNamedFramebufferRenderbuffer(GBufferFramebufferId, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, GBufferDepthStencilRenderBufferId);
         glNamedFramebufferTexture(GBufferFramebufferId, GL_COLOR_ATTACHMENT0, GBufferColorTextureId, 0);
         glNamedFramebufferTexture(GBufferFramebufferId, GL_COLOR_ATTACHMENT1, GBufferPositionTextureId, 0);
         glNamedFramebufferTexture(GBufferFramebufferId, GL_COLOR_ATTACHMENT2, GBufferNormalTextureId, 0);
@@ -260,12 +332,48 @@ namespace krendrr::DeferredShading
             glDeleteTextures(1, &GBufferPositionTextureId);
             glDeleteTextures(1, &GBufferNormalTextureId);
             glDeleteTextures(1, &GBufferMetallicTextureId);
-            glDeleteRenderbuffers(1, &GBufferDepthStencilTextureId);
+            glDeleteRenderbuffers(1, &GBufferDepthStencilRenderBufferId);
             glDeleteFramebuffers(1, &GBufferFramebufferId);
             throw std::runtime_error("GBuffer framebuffer is not complete");
         }
 
         GLuint AttachmentsToEnable[4] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3};
         glNamedFramebufferDrawBuffers(GBufferFramebufferId, 4, AttachmentsToEnable);
+    }
+
+    void DeferredShadingApp::InitializeLightPassBuffer()
+    {
+        // If we need to reinitialize GBuffer, first we should remove the old one
+        if(LightPassFramebufferId > 0)
+        {
+            glDeleteTextures(1, &LightPassColorTextureId);
+            glDeleteRenderbuffers(1, &LightPassDepthStencilRenderBufferId);
+            glDeleteFramebuffers(1, &LightPassFramebufferId);
+        }
+
+        int Width {};
+        int Height{};
+        SDL_GetWindowSize(Window, &Width, &Height);
+
+        glCreateFramebuffers(1, &LightPassFramebufferId);
+
+        glCreateRenderbuffers(1, &LightPassDepthStencilRenderBufferId);
+        glNamedRenderbufferStorage(LightPassDepthStencilRenderBufferId, GL_DEPTH24_STENCIL8, Width, Height);
+
+        glCreateTextures(GL_TEXTURE_2D, 1, &LightPassColorTextureId);
+        glTextureStorage2D(LightPassColorTextureId, 1, GL_RGBA32F, Width, Height);
+        glTextureParameteri(LightPassColorTextureId, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTextureParameteri(LightPassColorTextureId, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+        glNamedFramebufferRenderbuffer(LightPassFramebufferId, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, LightPassDepthStencilRenderBufferId);
+        glNamedFramebufferTexture(LightPassFramebufferId, GL_COLOR_ATTACHMENT0, LightPassColorTextureId, 0);
+
+        if(glCheckNamedFramebufferStatus(GBufferFramebufferId, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        {
+            glDeleteTextures(1, &LightPassColorTextureId);
+            glDeleteRenderbuffers(1, &LightPassDepthStencilRenderBufferId);
+            glDeleteFramebuffers(1, &LightPassFramebufferId);
+            throw std::runtime_error("Light pass framebuffer is not complete");
+        }
     }
 }
