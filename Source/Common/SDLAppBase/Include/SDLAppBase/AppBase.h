@@ -14,6 +14,7 @@ public:
     virtual ~AppBase() = default;
 
     void Initialize(const std::string_view& Title, const glm::ivec2& WindowSize);
+
     void ExecuteMainLoop();
     void Uninitialize();
 
@@ -25,6 +26,8 @@ protected:
     virtual void BeforeMainLoop();
 
     virtual void AfterMainLoop();
+
+    virtual void OnEvent(const SDL_Event& Event);
 
     virtual void OnKeyUp(const SDL_Event& Event);
 

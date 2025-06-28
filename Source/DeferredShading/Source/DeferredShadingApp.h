@@ -16,9 +16,18 @@ protected:
     Render::Model AsianCityModel {};
     Render::Shader GeometryPassShader {};
 
+    GLuint GBufferFramebufferId {};
+    GLuint GBufferColorTextureId {};
+    GLuint GBufferPositionTextureId {};
+    GLuint GBufferNormalTextureId {};
+    GLuint GBufferMetallicTextureId {};
+    GLuint GBufferDepthStencilTextureId {};
+
     void BeforeMainLoop() override;
 
     void AfterMainLoop() override;
+
+    void OnEvent(const SDL_Event& Event) override;
 
     void OnKeyUp(const SDL_Event& Event) override;
 
@@ -29,6 +38,11 @@ protected:
     void Render(float DeltaTime) override;
 
     void Update(float DeltaTime) override;
+
+private:
+
+    void InitializeGBuffer();
+
 };
 
 }

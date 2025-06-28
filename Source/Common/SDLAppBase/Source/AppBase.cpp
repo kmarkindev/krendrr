@@ -116,6 +116,10 @@ namespace krendrr::SDLAppBase
     {
     }
 
+    void AppBase::OnEvent(const SDL_Event& Event)
+    {
+    }
+
     void AppBase::OnKeyUp(const SDL_Event& Event)
     {
     }
@@ -147,6 +151,9 @@ namespace krendrr::SDLAppBase
         while(!bShouldQuit) {
 
             while (SDL_PollEvent(&event)) {
+
+                OnEvent(event);
+
                 switch(event.type) {
                     case SDL_EVENT_QUIT:
                         bShouldQuit = true;

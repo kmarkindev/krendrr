@@ -1,22 +1,47 @@
 #include "DeferredShadingApp.h"
 
+#include <imgui.h>
+#include <imgui_impl_sdl3.h>
+#include <imgui_impl_opengl3.h>
+
 namespace krendrr::DeferredShading
 {
     void DeferredShadingApp::BeforeMainLoop()
     {
         AppBase::BeforeMainLoop();
 
-        SDL_SetWindowRelativeMouseMode(Window, true);
+        SDL_HideCursor();
+        SDL_SetWindowMouseGrab(Window, true);
 
         Camera.SetPosition({0, 35, 0});
 
         GeometryPassShader.Load("Content/Shaders/geometry_pass.vert", "Content/Shaders/geometry_pass.frag");
         AsianCityModel.Load("Content/AsianCity/AsianCity.fbx");
+
+        // Setup ImGui
+        ImGui::CreateContext();
+        ImGuiIO& io = ImGui::GetIO();
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse;
+        io.IniFilename = nullptr;
+        io.LogFilename = nullptr;
+
+        ImGui_ImplSDL3_InitForOpenGL(Window, Context);
+        ImGui_ImplOpenGL3_Init();
     }
 
     void DeferredShadingApp::AfterMainLoop()
     {
         AppBase::AfterMainLoop();
+
+        ImGui_ImplOpenGL3_Shutdown();
+        ImGui_ImplSDL3_Shutdown();
+        ImGui::DestroyContext();
+    }
+
+    void DeferredShadingApp::OnEvent(const SDL_Event& Event)
+    {
+        AppBase::OnEvent(Event);
+        ImGui_ImplSDL3_ProcessEvent(&Event);
     }
 
     void DeferredShadingApp::OnKeyUp(const SDL_Event& Event)
@@ -44,16 +69,29 @@ namespace krendrr::DeferredShading
     {
         AppBase::Render(DeltaTime);
 
+        static int PrevWidth {-1};
+        static int PrevHeight {-1};
+        int Width {};
+        int Height {};
+        SDL_GetWindowSize(Window, &Width, &Height);
+        if(PrevHeight != Height || PrevWidth != Width)
+        {
+            glViewport(0, 0, Width, Height);
+            InitializeGBuffer();
+
+            PrevHeight = Height;
+            PrevWidth = Width;
+        }
+
+        // Geometry Pass
+
+        glBindFramebuffer(GL_FRAMEBUFFER, GBufferFramebufferId);
+
         glEnable(GL_CULL_FACE);
         glCullFace(GL_BACK);
 
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(GL_LESS);
-
-        int Width {};
-        int Height{};
-        SDL_GetWindowSize(Window, &Width, &Height);
-        glViewport(0, 0, Width, Height);
 
         glClearColor(0.f, 0.f, 0.f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -63,11 +101,11 @@ namespace krendrr::DeferredShading
             if(TexturedMesh.BaseColorTexture)
                 TexturedMesh.BaseColorTexture->ActivateTexture(0);
             if(TexturedMesh.MetallicTexture)
-                TexturedMesh.BaseColorTexture->ActivateTexture(1);
+                TexturedMesh.MetallicTexture->ActivateTexture(1);
             if(TexturedMesh.NormalTexture)
-                TexturedMesh.BaseColorTexture->ActivateTexture(2);
+                TexturedMesh.NormalTexture->ActivateTexture(2);
             if(TexturedMesh.RoughnessTexture)
-                TexturedMesh.BaseColorTexture->ActivateTexture(3);
+                TexturedMesh.RoughnessTexture->ActivateTexture(3);
 
             GeometryPassShader.Use();
             GeometryPassShader.SetInt("BaseColorTexture", 0);
@@ -96,11 +134,138 @@ namespace krendrr::DeferredShading
             glBindTextureUnit(2, 0);
             glBindTextureUnit(3, 0);
         }
+
+        // Lighting Pass
+
+        // Post Processing Pass
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        // ImGui
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     }
 
     void DeferredShadingApp::Update(float DeltaTime)
     {
         AppBase::Update(DeltaTime);
+
+        // Position mouse at the center, so it never touches window edge and we always get mouse moves
+        int Width {};
+        int Height{};
+        SDL_GetWindowSize(Window, &Width, &Height);
+        SDL_WarpMouseInWindow(Window, Width / 2, Height / 2);
+
+        // ImGui
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplSDL3_NewFrame();
+        ImGui::NewFrame();
+
         Camera.Update(DeltaTime);
+
+        if(GBufferFramebufferId > 0)
+        {
+            ImGui::Begin("GBuffer", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+            ImGui::SetWindowPos({ 0, 0 });
+
+            if(ImGui::BeginTable("GBuffer Table", 2))
+            {
+                float AspectRatio = static_cast<float>(Width) / static_cast<float>(Height);
+                float ScaledWidth = 256 * AspectRatio;
+                float ScaledHeight = 256;
+
+                ImGui::TableNextRow();
+
+                ImGui::TableSetColumnIndex(0);
+                ImGui::Text("Color");
+                ImGui::Image(GBufferColorTextureId, {ScaledWidth, ScaledHeight}, {0, 1}, {1, 0});
+
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("World Position");
+                ImGui::Image(GBufferPositionTextureId, {ScaledWidth, ScaledHeight}, {0, 1}, {1, 0});
+
+                ImGui::TableNextRow();
+
+                ImGui::TableSetColumnIndex(0);
+                ImGui::Text("Normal");
+                ImGui::Image(GBufferNormalTextureId, {ScaledWidth, ScaledHeight}, {0, 1}, {1, 0});
+
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("Metallic");
+                ImGui::Image(GBufferMetallicTextureId, {ScaledWidth, ScaledHeight}, {0, 1}, {1, 0});
+
+                ImGui::EndTable();
+            }
+
+            ImGui::End();
+        }
+
+        ImGui::EndFrame();
+    }
+
+    void DeferredShadingApp::InitializeGBuffer()
+    {
+        // If we need to reinitialize GBuffer, first we should remove the old one
+        if(GBufferFramebufferId > 0)
+        {
+            glDeleteTextures(1, &GBufferColorTextureId);
+            glDeleteTextures(1, &GBufferPositionTextureId);
+            glDeleteTextures(1, &GBufferNormalTextureId);
+            glDeleteTextures(1, &GBufferMetallicTextureId);
+            glDeleteRenderbuffers(1, &GBufferDepthStencilTextureId);
+            glDeleteFramebuffers(1, &GBufferFramebufferId);
+        }
+
+        int Width {};
+        int Height{};
+        SDL_GetWindowSize(Window, &Width, &Height);
+
+        glCreateFramebuffers(1, &GBufferFramebufferId);
+
+        glCreateTextures(GL_TEXTURE_2D, 1, &GBufferColorTextureId);
+        glTextureStorage2D(GBufferColorTextureId, 1, GL_RGBA8, Width, Height);
+        glTextureParameteri(GBufferColorTextureId, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTextureParameteri(GBufferColorTextureId, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+        glCreateTextures(GL_TEXTURE_2D, 1, &GBufferPositionTextureId);
+        glTextureStorage2D(GBufferPositionTextureId, 1, GL_RGBA32F, Width, Height);
+        glTextureParameteri(GBufferPositionTextureId, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTextureParameteri(GBufferPositionTextureId, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+        glCreateTextures(GL_TEXTURE_2D, 1, &GBufferNormalTextureId);
+        glTextureStorage2D(GBufferNormalTextureId, 1, GL_RGBA32F, Width, Height);
+        glTextureParameteri(GBufferNormalTextureId, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTextureParameteri(GBufferNormalTextureId, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+        glCreateTextures(GL_TEXTURE_2D, 1, &GBufferMetallicTextureId);
+        glTextureStorage2D(GBufferMetallicTextureId, 1, GL_RGBA8, Width, Height);
+        glTextureParameteri(GBufferMetallicTextureId, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTextureParameteri(GBufferMetallicTextureId, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+        glCreateRenderbuffers(1, &GBufferDepthStencilTextureId);
+        glNamedRenderbufferStorage(GBufferDepthStencilTextureId, GL_DEPTH24_STENCIL8, Width, Height);
+
+        glNamedFramebufferRenderbuffer(GBufferFramebufferId, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, GBufferDepthStencilTextureId);
+        glNamedFramebufferTexture(GBufferFramebufferId, GL_COLOR_ATTACHMENT0, GBufferColorTextureId, 0);
+        glNamedFramebufferTexture(GBufferFramebufferId, GL_COLOR_ATTACHMENT1, GBufferPositionTextureId, 0);
+        glNamedFramebufferTexture(GBufferFramebufferId, GL_COLOR_ATTACHMENT2, GBufferNormalTextureId, 0);
+        glNamedFramebufferTexture(GBufferFramebufferId, GL_COLOR_ATTACHMENT3, GBufferMetallicTextureId, 0);
+
+        if(glCheckNamedFramebufferStatus(GBufferFramebufferId, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        {
+            glDeleteTextures(1, &GBufferColorTextureId);
+            glDeleteTextures(1, &GBufferPositionTextureId);
+            glDeleteTextures(1, &GBufferNormalTextureId);
+            glDeleteTextures(1, &GBufferMetallicTextureId);
+            glDeleteRenderbuffers(1, &GBufferDepthStencilTextureId);
+            glDeleteFramebuffers(1, &GBufferFramebufferId);
+            throw std::runtime_error("GBuffer framebuffer is not complete");
+        }
+
+        GLuint AttachmentsToEnable[4] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3};
+        glNamedFramebufferDrawBuffers(GBufferFramebufferId, 4, AttachmentsToEnable);
     }
 }
