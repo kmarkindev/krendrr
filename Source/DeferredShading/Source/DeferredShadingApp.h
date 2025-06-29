@@ -13,7 +13,7 @@ class DeferredShadingApp : public SDLAppBase::AppBase
 protected:
 
     SDLAppBase::Camera Camera {};
-    Render::Model AsianCityModel {};
+    Render::Model EnvModel {};
     Render::Shader GeometryPassShader {};
     Render::Shader AmbientDirectionalLightPassShader {};
     Render::Shader PointLightPassShader {};

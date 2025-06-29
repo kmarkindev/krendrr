@@ -25,9 +25,12 @@ void main()
     sampledNormal = normalize(sampledNormal * 2.0 - 1.0);
     vec3 normalNorm = normalize(TBN * sampledNormal);
 
+    // Convert from directx to opengl normals
+    normalNorm.z = -normalNorm.z;
+
     // Ambient
 
-    float ambientIntensity = 0.1;
+    float ambientIntensity = 0.15;
     vec3 ambientColor = vec3(1.0, 1.0, 1.0);
 
     vec3 ambientLightcolor = ambientColor * ambientIntensity;
@@ -44,14 +47,14 @@ void main()
     // Specular
 
     bool useBlinnPhong = true;
-    int shininess = 32; // must be power of 2
+    int shininess = 64; // must be power of 2
 
     float specularIntensity = texture(MetallicTexture, uv).r;
     vec3 specularColor = vec3(1.0, 1.0, 1.0);
 
     vec3 cameraDir = normalize(CameraPos - position);
 
-    vec3 specularLightColor = vec3(0.0, 0.0, 0.0);
+    vec3 specularLightColor = vec3(0.0);
 
     if(useBlinnPhong)
     {
@@ -72,6 +75,5 @@ void main()
     // Combine
 
     vec3 objectColor = texture(BaseColorTexture, uv).rgb;
-
     FragColor = vec4((ambientLightcolor + diffuseResultColor + specularLightColor) * objectColor, 1.0);
 }

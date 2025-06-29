@@ -13,17 +13,18 @@ namespace krendrr::DeferredShading
         SDL_HideCursor();
         SDL_SetWindowMouseGrab(Window, true);
 
-        Camera.SetPosition({0, 65, 450});
+        Camera.SetPosition({-234.753769, 132.926086, 199.352264});
+        Camera.SetRotation({0.937867283, {-0.00230924808, -0.345554471, -0.0317467079}});
 
         GeometryPassShader.Load("Content/Shaders/GeometryPass/geometry_pass.vert", "Content/Shaders/GeometryPass/geometry_pass.frag");
 
         AmbientDirectionalLightPassShader.Load("Content/Shaders/LightPass/Quad/ambient_light_quad.vert",
             "Content/Shaders/LightPass/Quad/light_pass_ambient_directional.frag");
-        //PointLightPassShader.Load("Content/Shaders/LightPass/Sphere/ambient_light_sphere.vert", "Content/Shaders/LightPass/Sphere/light_pass_point.frag");
+        PointLightPassShader.Load("Content/Shaders/LightPass/Sphere/ambient_light_sphere.vert", "Content/Shaders/LightPass/Sphere/light_pass_point.frag");
 
         PostProcessShader.Load("Content/Shaders/post_process.vert", "Content/Shaders/post_process.frag");
 
-        AsianCityModel.Load("Content/AsianCity/AsianCity.fbx");
+        EnvModel.Load("Content/FuturisticRoom/source/CyberPunkRoom.fbx");
 
         constexpr float QuadMesh[] = {
             -1, 1,
@@ -122,7 +123,7 @@ namespace krendrr::DeferredShading
         glClearColor(0.f, 0.f, 0.f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        for (auto Meshes = AsianCityModel.GetMeshes(); const auto& TexturedMesh : Meshes)
+        for (auto Meshes = EnvModel.GetMeshes(); const auto& TexturedMesh : Meshes)
         {
             if(TexturedMesh.BaseColorTexture)
                 TexturedMesh.BaseColorTexture->ActivateTexture(0);
@@ -144,7 +145,7 @@ namespace krendrr::DeferredShading
             glm::mat4 ProjMatrix = glm::perspective(glm::radians(70.f), static_cast<float>(Width) / static_cast<float>(Height), 0.1f, 1000.0f);
 
             glm::mat4 MVPMatrix = ProjMatrix * ViewMatrix * ModelMatrix;
-            glm::mat3 NormalMatrix = glm::transpose(glm::inverse(ModelMatrix));
+            glm::mat3 NormalMatrix = glm::transpose(glm::inverse(glm::mat3(ModelMatrix)));
 
             GeometryPassShader.Use();
             GeometryPassShader.SetMatrix4("MVPMatrix", MVPMatrix);
@@ -361,7 +362,8 @@ namespace krendrr::DeferredShading
         glNamedRenderbufferStorage(LightPassDepthStencilRenderBufferId, GL_DEPTH24_STENCIL8, Width, Height);
 
         glCreateTextures(GL_TEXTURE_2D, 1, &LightPassColorTextureId);
-        glTextureStorage2D(LightPassColorTextureId, 1, GL_RGBA32F, Width, Height);
+        // Use GL_RGBA16F so we can use HDR colors for this buffer
+        glTextureStorage2D(LightPassColorTextureId, 1, GL_RGBA16F, Width, Height);
         glTextureParameteri(LightPassColorTextureId, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTextureParameteri(LightPassColorTextureId, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 

@@ -18,15 +18,16 @@ void main()
 
     // Ambient
 
-    float ambientIntensity = 0.05;
+    float ambientIntensity = 0.01;
     vec3 ambientColor = vec3(1.0, 1.0, 1.0);
 
     vec3 ambientLight = ambientColor * ambientIntensity;
 
     // Directional
 
-    vec3 DirectionalDir = normalize(vec3(-0.2f, -1.0f, -0.3f));
-    float DirectionalIntensity = 1.0;
+    vec3 DirectionalDir = normalize(vec3(0.0f, -1.0f, -1.0f));
+
+    float DirectionalIntensity = 0.5;
     vec3 DirectionalColor = vec3(1.0, 1.0, 1.0);
 
     vec3 DirectionalLight = max(0.0, dot(-DirectionalDir, WorldNormal)) * DirectionalColor * DirectionalIntensity;
