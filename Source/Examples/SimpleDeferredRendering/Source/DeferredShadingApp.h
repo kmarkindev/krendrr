@@ -2,6 +2,8 @@
 
 #include <SDLAppBase/AppBase.h>
 #include <SDLAppBase/Camera.h>
+
+#include "PointLight.h"
 #include "Render/Model.h"
 #include "Render/Shader.h"
 
@@ -16,9 +18,12 @@ protected:
     Render::Model EnvModel {};
     Render::Shader GeometryPassShader {};
     Render::Shader AmbientDirectionalLightPassShader {};
-    Render::Shader PointLightPassShader {};
     Render::Shader PostProcessShader {};
     Render::Mesh FullscreenQuadMesh {};
+
+    Render::Shader PointLightPassShader {};
+    Render::Model PointLightUnitSphereModel {};
+    std::vector<PointLight> PointLights {};
 
     GLuint GBufferFramebufferId {};
     GLuint GBufferColorTextureId {};
