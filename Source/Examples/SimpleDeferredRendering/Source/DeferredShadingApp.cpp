@@ -105,6 +105,13 @@ namespace krendrr::DeferredShading
         Camera.ReceiveMouseMoveEvent(Event);
     }
 
+    void DeferredShadingApp::OnMouseWheel(const SDL_Event& Event)
+    {
+        AppBase::OnMouseWheel(Event);
+
+        Camera.ReceiveScrollEvent(Event);
+    }
+
     void DeferredShadingApp::Render(float DeltaTime)
     {
         AppBase::Render(DeltaTime);

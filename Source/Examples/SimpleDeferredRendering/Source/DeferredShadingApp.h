@@ -48,6 +48,8 @@ protected:
 
     void OnMouseMove(const SDL_Event& Event) override;
 
+    void OnMouseWheel(const SDL_Event& Event) override;
+
     void Render(float DeltaTime) override;
 
     void Update(float DeltaTime) override;

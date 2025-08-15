@@ -32,6 +32,11 @@ namespace krendrr::SDLAppBase
         InputRoll = glm::clamp(NewDirection, -1.0f, 1.0f);
     }
 
+    void Camera::ReceiveScrollInput(float ScrollDelta)
+    {
+        CameraMoveSpeed = glm::clamp(CameraMoveSpeed + ScrollDelta * ScrollMagnifier, MinMoveSpeed, MaxMoveSpeed);
+    }
+
     void Camera::ReceiveMouseMoveEvent(const SDL_Event& Event)
     {
         InputMouseMove = {Event.motion.xrel, Event.motion.yrel};
@@ -103,6 +108,11 @@ namespace krendrr::SDLAppBase
 
         ReceiveMoveInput(InputMoveDirection);
         ReceiveRollInput(InputRoll);
+    }
+
+    void Camera::ReceiveScrollEvent(const SDL_Event& Event)
+    {
+        ReceiveScrollInput(Event.wheel.y);
     }
 
     void Camera::Update(float DeltaTime)

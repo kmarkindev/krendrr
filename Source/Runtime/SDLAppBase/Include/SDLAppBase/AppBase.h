@@ -35,6 +35,8 @@ protected:
 
     virtual void OnMouseMove(const SDL_Event& Event);
 
+    virtual void OnMouseWheel(const SDL_Event& Event);
+
     virtual void Render(float DeltaTime);
 
     virtual void Update(float DeltaTime);

@@ -19,10 +19,12 @@ public:
     void ReceiveMoveInput(const glm::vec3& NewDirection);
     void ReceiveMouseMove(const glm::vec2& NewMouseMove);
     void ReceiveRollInput(float NewDirection);
+    void ReceiveScrollInput(float ScrollDelta);
 
     void ReceiveMouseMoveEvent(const SDL_Event& Event);
     void ReceiveKeyDownEvent(const SDL_Event& Event);
     void ReceiveKeyUpEvent(const SDL_Event& Event);
+    void ReceiveScrollEvent(const SDL_Event& Event);
 
     void Update(float DeltaTime);
 
@@ -30,9 +32,13 @@ public:
 
 private:
 
-    float CameraMoveSpeed = 50.f;
+    float CameraMoveSpeed = 100.f;
     float CameraRotationScale = 0.35f;
     float CameraRollSpeed = 45.f;
+
+    float ScrollMagnifier = 5.f;
+    float MinMoveSpeed = 10.f;
+    float MaxMoveSpeed = 300.f;
 
     glm::vec3 CameraPosition {};
     glm::quat CameraRotation {1, {}};

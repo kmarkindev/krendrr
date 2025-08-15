@@ -132,6 +132,10 @@ namespace krendrr::SDLAppBase
     {
     }
 
+    void AppBase::OnMouseWheel(const SDL_Event& Event)
+    {
+    }
+
     void AppBase::Render(float DeltaTime)
     {
     }
@@ -166,6 +170,10 @@ namespace krendrr::SDLAppBase
                     break;
                     case SDL_EVENT_MOUSE_MOTION:
                         OnMouseMove(event);
+                    break;
+                    case SDL_EVENT_MOUSE_WHEEL:
+                        OnMouseWheel(event);
+                    break;
                     default:
                         break;
                 }
