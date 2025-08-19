@@ -7,6 +7,7 @@
             "description": "Base for all presets",
             "binaryDir": "Build/${presetName}"
         },
+
         {
             "name": "base-debug",
             "hidden": true,
@@ -23,11 +24,24 @@
                 "CMAKE_BUILD_TYPE": "Release"
             }
         },
+
         {
             "name": "base-win",
             "hidden": true,
-            "description": "Base for all Windows presets",
-            "generator": "Ninja"
+            "description": "Base for all Windows presets"
+        },
+
+        {
+            "name": "base-msvc",
+            "hidden": true,
+            "description": "Base for all MSVC presets",
+            "generator": "Visual Studio 17 2022",
+            "cacheVariables": {
+                "CMAKE_CXX_COMPILER": "cl",
+                "CMAKE_CC_COMPILER": "cl",
+                "CMAKE_GENERATOR_TOOLSET": "v143,host=x64",
+                "CMAKE_GENERATOR_PLATFORM": "x64,version=10.0"
+            }
         },
 
         {
@@ -35,8 +49,9 @@
             "description": "Base preset for Debug build for Windows using MSVC. Inherit it to specify custom cache vars and env if needed.",
             "inherits": [
                 "base",
-                "base-debug",
-                "base-win"
+                "base-win",
+                "base-msvc",
+                "base-debug"
             ]
         },
         {
@@ -44,8 +59,9 @@
             "description": "Base preset for Release build for Windows using MSVC. Inherit it to specify custom cache vars and env if needed.",
             "inherits": [
                 "base",
-                "base-release",
-                "base-win"
+                "base-win",
+                "base-msvc",
+                "base-release"
             ]
         }
     ]

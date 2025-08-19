@@ -1,18 +1,24 @@
 # krendrr
 
-A bunch of projects aimed to practice graphics programming using different APIs.
-
-At the moment, main develop branch only contains OpenGL code. Other branches contain DX12 code.
 
 ## Building
 
-Install MSVC toolkit and run CMake. All dependencies are going to be downloaded automatically during CMake generation.
+All project's dependencies are downloaded and compiled by CMake. You only need to install platform-specific toolchains described below.
 
-## Repo Structure
+Each section describes CMake presets related to the platform and their requirements.
 
-It is very similar to Unreal Engine's modules.
+### Windows build using MSVC (Visual Studio)
 
-There are nested directories inside Source folder. Each leaf directory is a project (much like UE module). Each project usually contains it's own Source folder together with Content folder.
-Content folder gets copied near project's resulting executable.
+Use Visual Studio Installer to install Windows SDK 10.0.x and MSVC v143 toolchain, preferably the latest version.
 
-Projects may be linked by other projects. Usually, executable projects link to library projects. 
+CMake presets:
+- win-msvc-debug
+- win-msvc-release
+
+### Notes on CMake
+
+- All non-third party and non-custom target names start with krendrr_ prefix
+- krendrr target name always includes path to the target in Source folder
+- Third party targets should not be linked into krendrr targets directly. 
+Instead, a library target with krendrr_ prefix should be created and then used for linking 
+
