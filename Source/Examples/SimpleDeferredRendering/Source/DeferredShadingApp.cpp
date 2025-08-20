@@ -19,19 +19,23 @@ namespace krendrr::DeferredShading
         Camera.SetPosition({-234.753769, 132.926086, 199.352264});
         Camera.SetRotation({0.937867283, {-0.00230924808, -0.345554471, -0.0317467079}});
 
-        GeometryPassShader.Load("Content/Shaders/GeometryPass/geometry_pass.vert", "Content/Shaders/GeometryPass/geometry_pass.frag");
+        GeometryPassShader.Load("../Content/krendrr_examples_simpledeferredrendering/Shaders/GeometryPass/geometry_pass.vert",
+            "../Content/krendrr_examples_simpledeferredrendering/Shaders/GeometryPass/geometry_pass.frag");
 
-        AmbientDirectionalLightPassShader.Load("Content/Shaders/LightPass/Quad/light_pass_quad.vert",
-            "Content/Shaders/LightPass/Quad/light_pass_ambient_directional.frag");
+        AmbientDirectionalLightPassShader.Load("../Content/krendrr_examples_simpledeferredrendering/Shaders/LightPass/Quad/light_pass_quad.vert",
+            "../Content/krendrr_examples_simpledeferredrendering/Shaders/LightPass/Quad/light_pass_ambient_directional.frag");
 
-        PostProcessShader.Load("Content/Shaders/post_process.vert", "Content/Shaders/post_process.frag");
+        PostProcessShader.Load("../Content/krendrr_examples_simpledeferredrendering/Shaders/post_process.vert",
+            "../Content/krendrr_examples_simpledeferredrendering/Shaders/post_process.frag");
 
-        PointLightShadowShader.Load("Content/Shaders/ShadowPass/PointLight/point_light_shadow.vert", "Content/Shaders/ShadowPass/PointLight/point_light_shadow.frag");
+        PointLightShadowShader.Load("../Content/krendrr_examples_simpledeferredrendering/Shaders/ShadowPass/PointLight/point_light_shadow.vert",
+            "../Content/krendrr_examples_simpledeferredrendering/Shaders/ShadowPass/PointLight/point_light_shadow.frag");
 
-        EnvModel.Load("Content/FuturisticRoom/source/CyberPunkRoom.fbx");
+        EnvModel.Load("../Content/krendrr_examples_simpledeferredrendering/FuturisticRoom/source/CyberPunkRoom.fbx");
 
-        PointLightPassShader.Load("Content/Shaders/LightPass/Sphere/light_pass_point_light_sphere.vert", "Content/Shaders/LightPass/Sphere/light_pass_sphere.frag");
-        PointLightUnitSphereModel.Load("Content/UnitIcoSphere.obj");
+        PointLightPassShader.Load("../Content/krendrr_examples_simpledeferredrendering/Shaders/LightPass/Sphere/light_pass_point_light_sphere.vert",
+            "../Content/krendrr_examples_simpledeferredrendering/Shaders/LightPass/Sphere/light_pass_sphere.frag");
+        PointLightUnitSphereModel.Load("../Content/krendrr_examples_simpledeferredrendering/UnitIcoSphere.obj");
 
         PointLights = {
             {
