@@ -17,7 +17,9 @@ uniform mat4 MVPMatrix;
 void main()
 {
     oUv = aUv;
-    oWorldPosition = (ModelMatrix * vec4(aPosition, 1.0)).xyz;
+
+    vec4 HomogenusWorldPos = ModelMatrix * vec4(aPosition, 1.0);
+    oWorldPosition = HomogenusWorldPos.xyz / HomogenusWorldPos.w;
 
     vec3 Normal = normalize(NormalMatrix * aNormal);
     vec3 Tangent = normalize(NormalMatrix * aTangent);

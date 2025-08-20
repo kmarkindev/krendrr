@@ -4,8 +4,11 @@ uniform sampler2D GBufferColorTexture;
 uniform sampler2D GBufferWorldPositionTexture;
 uniform sampler2D GBufferWorldNormalTexture;
 uniform sampler2D GBufferMetallicTexture;
+uniform samplerCube PointLightShadowCubeMap;
 uniform vec2 ScreenSize;
 uniform vec3 CameraPos;
+
+uniform float PointLightFarPlane;
 
 uniform vec3 PointLightPosition;
 uniform vec3 PointLightDiffuseColor;
@@ -25,6 +28,7 @@ void main()
 
     vec3 LightDir = normalize(WorldPosition - PointLightPosition);
 
+    float ShadowMapDepthDistance = texture(PointLightShadowCubeMap, LightDir).r * PointLightFarPlane;
     float PointLightDistance = length(PointLightPosition - WorldPosition);
     float Attenuation = 1.0 / (PointLightAttenuationConstant + PointLightAttenuationLinear * PointLightDistance + PointLightAttenuationQuad * (PointLightDistance * PointLightDistance));
 
@@ -43,5 +47,13 @@ void main()
     // combine
 
     vec3 BaseColor = texture(GBufferColorTexture, GBufferUv).rgb;
+
     FragColor = vec4(BaseColor * (ResultDiffuseColor + ResultSpecularColor), 1);
+
+    // apply shadow
+    float ShadowValue = ShadowMapDepthDistance <= PointLightDistance ? 1.f : 0.f;
+
+    // TODO: add PFC for shadow
+
+    FragColor *= 1.0 - ShadowValue;
 }

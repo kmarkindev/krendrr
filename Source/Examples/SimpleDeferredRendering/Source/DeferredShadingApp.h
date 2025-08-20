@@ -23,6 +23,7 @@ protected:
 
     Render::Shader PointLightPassShader {};
     Render::Model PointLightUnitSphereModel {};
+    Render::Shader PointLightShadowShader {};
     std::vector<PointLight> PointLights {};
 
     GLuint GBufferFramebufferId {};
