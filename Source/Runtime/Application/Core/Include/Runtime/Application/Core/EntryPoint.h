@@ -25,7 +25,6 @@ namespace krendrr::Runtime::Application::Core \
 { \
     Application* ConstructApplicationInstance(const StartupArgs& Args) \
     { \
-        static ApplicationType Instance {Args}; \
-        return &Instance; \
+        return new ApplicationType {Args}; \
     } \
 } \
