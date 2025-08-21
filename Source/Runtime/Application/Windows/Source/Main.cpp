@@ -3,6 +3,7 @@
 #include "Runtime/Application/Core/Application.h"
 #include "Runtime/Application/Core/EntryPoint.h"
 #include "Runtime/Application/Core/StartupArgs.h"
+#include "SDL3/SDL_events.h"
 
 int main(int Argc, char** Argv)
 {
@@ -16,6 +17,12 @@ int main(int Argc, char** Argv)
     bool bHasTickFailed {};
     while (!bHasTickFailed && !Application->HasRequestedShutdown())
     {
+
+        SDL_Event Event {};
+        while (SDL_PollEvent(&Event)) {
+
+        }
+
         bHasTickFailed = !Application->Tick();
     }
 
