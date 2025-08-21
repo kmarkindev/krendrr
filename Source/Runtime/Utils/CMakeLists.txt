@@ -1,1 +1,0 @@
-add_krendrr_target(STATIC Utils TARGET_NAME)
