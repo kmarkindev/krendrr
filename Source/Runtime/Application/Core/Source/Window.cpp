@@ -1,5 +1,5 @@
 #include "Runtime/Application/Core/Window.h"
-#include "Runtime/Application/Core/WindowAllocator.h"
+#include "Runtime/Application/Core/Internal/WindowAllocator.h"
 
 namespace krendrr::Runtime::Application::Core
 {

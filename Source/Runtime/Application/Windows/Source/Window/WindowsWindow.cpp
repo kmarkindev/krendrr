@@ -1,5 +1,5 @@
 #include "Runtime/Application/Windows/WindowsWindow.h"
-#include "Runtime/Application/Core/WindowAllocator.h"
+#include "Runtime/Application/Core/Internal/WindowAllocator.h"
 #include "SDL3/SDL_stdinc.h"
 
 IMPLEMENT_WINDOW_ALLOCATOR(krendrr::Runtime::Application::Windows::WindowsWindow)
