@@ -27,6 +27,8 @@ namespace krendrr::Runtime::Application::Windows
             SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_INPUT_FOCUS
         );
 
+        SDL_SetPointerProperty(SDL_GetWindowProperties(Window), SLD_WINDOW_OBJECT_PROPERTY, this);
+
         if (Window == nullptr)
         {
             // TODO: add error log

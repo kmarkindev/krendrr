@@ -9,13 +9,15 @@ namespace krendrr::Runtime::Application::Windows
     {
     public:
 
+        constexpr static const char* SLD_WINDOW_OBJECT_PROPERTY = "window_object";
+
         explicit WindowsWindow(Core::Application* Application);
 
         bool Initialize(const InitializeParams& Params) override;
 
         bool Close() override;
 
-        bool IsValid() const override;
+        [[nodiscard]] bool IsValid() const override;
 
         ~WindowsWindow() override;
 

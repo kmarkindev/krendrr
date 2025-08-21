@@ -4,7 +4,6 @@ namespace krendrr::Runtime::Application::Core
 {
     Application::Application(const StartupArgs& Args)
     {
-
     }
 
     bool Application::Tick()
@@ -30,6 +29,23 @@ namespace krendrr::Runtime::Application::Core
     bool Application::HasRequestedShutdown() const
     {
         return bHasRequestShutdown;
+    }
+
+    void Application::HandleKeyEvent(const KeyEvent& Event)
+    {
+    }
+
+    void Application::HandleMouseMoveEvent(const MouseMoveEvent& Event)
+    {
+    }
+
+    void Application::HandleMouseWheelEvent(const MouseWheelEvent& Event)
+    {
+    }
+
+    void Application::HandleQuitEvent(const QuitEvent& Event)
+    {
+        RequestShutdown();
     }
 }
 

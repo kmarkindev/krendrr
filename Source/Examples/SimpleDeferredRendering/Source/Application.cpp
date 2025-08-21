@@ -1,8 +1,9 @@
 #include "Application.h"
-
+#include <iostream>
 #include <memory>
 #include "Runtime/Application/Core/EntryPoint.h"
 #include "Runtime/Application/Core/Window.h"
+#include "Runtime/Application/Core/Events/KeyEvent.h"
 
 IMPLEMENT_ENTRY_POINT(krendrr::Examples::SimpleDeferredRendering::Application)
 

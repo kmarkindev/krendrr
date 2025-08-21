@@ -1,7 +1,11 @@
 #pragma once
+#include "Events/QuitEvent.h"
 
 namespace krendrr::Runtime::Application::Core
 {
+    class KeyEvent;
+    class MouseMoveEvent;
+    class MouseWheelEvent;
     class StartupArgs;
 
     /**
@@ -51,6 +55,14 @@ namespace krendrr::Runtime::Application::Core
         void RequestShutdown();
 
         [[nodiscard]] bool HasRequestedShutdown() const;
+
+        virtual void HandleKeyEvent(const KeyEvent& Event);
+
+        virtual void HandleMouseMoveEvent(const MouseMoveEvent& Event);
+
+        virtual void HandleMouseWheelEvent(const MouseWheelEvent& Event);
+
+        virtual void HandleQuitEvent(const QuitEvent& Event);
 
         virtual ~Application() = default;
 
