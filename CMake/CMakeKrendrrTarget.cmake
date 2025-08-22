@@ -76,6 +76,17 @@ function(add_krendrr_target TARGET_TYPE TARGET_OUTPUT_NAME OUT_TARGET_NAME)
         add_library(${DOTTED_TARGET_NAME} ALIAS ${UNDERSCORE_TARGET_NAME})
     endif ()
 
+    # Create target's directories if missing
+    # (it helps to quickly create more targets by regenerating CMake)
+
+    file(RELATIVE_PATH TARGET_FOLDER_RELATIVE_PATH ${CMAKE_SOURCE_DIR}/Source ${CMAKE_CURRENT_SOURCE_DIR})
+
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/Source)
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/Include/${TARGET_FOLDER_RELATIVE_PATH})
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/Content)
+
+    # Setup target's sources, includes and content
+
     target_all_sources(${UNDERSCORE_TARGET_NAME})
 
     target_include_directories(${UNDERSCORE_TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/Include)
