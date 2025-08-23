@@ -45,7 +45,12 @@ namespace krendrr::Runtime::Application::Core
          * Checks if this object holds valid window.
          * It returns false after window was Closed or if this object was not initialized.
          */
-        virtual bool IsValid() const = 0;
+        [[nodiscard]] virtual bool IsValid() const = 0;
+
+        /**
+         * Creates (if was not created) and bind OpenGL context to this window
+         */
+        virtual bool CreateAndBindGlContext() = 0;
 
     private:
 

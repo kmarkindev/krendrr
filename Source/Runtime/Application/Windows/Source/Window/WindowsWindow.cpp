@@ -1,6 +1,7 @@
 #include "Runtime/Application/Windows/WindowsWindow.h"
 #include "Runtime/Application/Core/Internal/WindowAllocator.h"
 #include "SDL3/SDL_stdinc.h"
+#include <glad/gl.h>
 
 IMPLEMENT_WINDOW_ALLOCATOR(krendrr::Runtime::Application::Windows::WindowsWindow)
 
@@ -59,6 +60,36 @@ namespace krendrr::Runtime::Application::Windows
     bool WindowsWindow::IsValid() const
     {
         return Window != nullptr;
+    }
+
+    bool WindowsWindow::CreateAndBindGlContext()
+    {
+        static SDL_GLContext Context {};
+
+        if (!Context)
+        {
+            Context = SDL_GL_CreateContext(Window);
+
+            if (!Context)
+            {
+                // TODO: log error
+                return false;
+            }
+
+            if (gladLoadGL(SDL_GL_GetProcAddress) == 0)
+            {
+                // TODO: log error ("Failed to initialize OpenGL context")
+                return false;
+            }
+
+            // TODO: log success
+
+            return true;
+        }
+
+        // TODO: log success
+
+        return SDL_GL_MakeCurrent(Window, Context);
     }
 
     WindowsWindow::~WindowsWindow()

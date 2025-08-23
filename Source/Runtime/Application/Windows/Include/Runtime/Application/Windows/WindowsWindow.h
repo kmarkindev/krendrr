@@ -19,6 +19,8 @@ namespace krendrr::Runtime::Application::Windows
 
         [[nodiscard]] bool IsValid() const override;
 
+        [[nodiscard]] bool CreateAndBindGlContext() override;
+
         ~WindowsWindow() override;
 
     private:

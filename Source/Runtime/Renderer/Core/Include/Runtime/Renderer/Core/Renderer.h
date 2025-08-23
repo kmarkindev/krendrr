@@ -1,7 +1,12 @@
 #pragma once
 
+#include <span>
+
 namespace krendrr::Runtime::Renderer::Core
 {
+    class SceneView;
+    class Scene;
+
     /**
      * Renderer implements the way we render render-scene into scene view,
      * e.g. deferred, forward, forward+, etc. This is implementation of our rendering pipeline.
@@ -16,13 +21,14 @@ namespace krendrr::Runtime::Renderer::Core
     {
     public:
 
-        virtual void Initialize() = 0;
+        virtual void Initialize(Scene* Scene) = 0;
 
-        virtual void Render() = 0;
+        virtual void Render(const std::span<SceneView>& SceneViews) = 0;
 
         virtual void Shutdown() = 0;
 
         virtual ~Renderer() = default;
+
     };
 }
 

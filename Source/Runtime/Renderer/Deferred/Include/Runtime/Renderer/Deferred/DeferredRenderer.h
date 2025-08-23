@@ -4,9 +4,15 @@
 
 namespace krendrr::Runtime::Renderer::Deferred
 {
-    class DeferredRenderer : public Core::Renderer
+    class DeferredRenderer final : public Core::Renderer
     {
+    public:
 
+        void Initialize(Core::Scene* Scene) override;
+
+        void Render(const std::span<Core::SceneView>& SceneViews) override;
+
+        void Shutdown() override;
     };
 }
 

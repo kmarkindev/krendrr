@@ -1,8 +1,8 @@
 #pragma once
 
 #include <memory>
-
 #include "Runtime/Application/Core/Application.h"
+#include "Runtime/Renderer/Deferred/DeferredRenderer.h"
 
 namespace krendrr::Runtime::Application::Core
 {
@@ -26,6 +26,8 @@ namespace krendrr::Examples::SimpleDeferredRendering
     private:
 
         std::unique_ptr<Runtime::Application::Core::Window> Window {};
+        std::unique_ptr<Runtime::Renderer::Core::Scene> Scene {};
+        std::unique_ptr<Runtime::Renderer::Core::Renderer> Renderer {};
 
     };
 }
