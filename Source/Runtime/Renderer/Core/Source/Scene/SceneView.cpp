@@ -11,13 +11,8 @@ namespace krendrr::Runtime::Renderer::Core
         }
 
         Framebuffer = NewFramebuffer;
-        Viewport = NewViewport;
-
-        if (Viewport.z - Viewport.x <= 0 || Viewport.w - Viewport.y <= 0)
-        {
-            // TODO: log error bad viewport
+        if (!SetViewport(NewViewport))
             return false;
-        }
 
         Position = Params.Position;
         Rotation = Params.Rotation;
@@ -136,6 +131,34 @@ namespace krendrr::Runtime::Renderer::Core
     glm::vec3 SceneView::GetPosition() const
     {
         return Position;
+    }
+
+    glm::quat SceneView::GetRotation() const
+    {
+        return Rotation;
+    }
+
+    void SceneView::SetPosition(const glm::vec3& NewPosition)
+    {
+        Position = NewPosition;
+    }
+
+    bool SceneView::SetViewport(const glm::ivec4& NewViewport)
+    {
+        if (NewViewport.z - NewViewport.x <= 0 || NewViewport.w - NewViewport.y <= 0)
+        {
+            // TODO: log error bad viewport
+            return false;
+        }
+
+        Viewport = NewViewport;
+
+        return true;
+    }
+
+    void SceneView::SetRotation(const glm::quat& NewRotation)
+    {
+        Rotation = NewRotation;
     }
 
     bool SceneView::CheckValid() const

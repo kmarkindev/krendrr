@@ -6,7 +6,7 @@ namespace krendrr::Runtime::Application::Core
     {
     }
 
-    bool Application::Tick()
+    bool Application::Tick(float DeltaTime)
     {
         return true;
     }

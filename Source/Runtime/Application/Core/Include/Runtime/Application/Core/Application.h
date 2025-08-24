@@ -30,7 +30,7 @@ namespace krendrr::Runtime::Application::Core
          *
          * Returning false means there was an error, and we need to shut down
          */
-        virtual bool Tick();
+        virtual bool Tick(float DeltaTime);
 
         /**
          * Called one time by platform specific code before any Tick calls

@@ -1,5 +1,4 @@
-#include "Application.h"
-
+#include "Examples/SimpleDeferredRendering/Application.h"
 #include <array>
 #include <iostream>
 #include <memory>
@@ -125,25 +124,27 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize()
         return false;
     }
 
-    return true;
-}
-
-bool krendrr::Examples::SimpleDeferredRendering::Application::Tick()
-{
-    glm::ivec2 WindowSize = Window->GetSize();
-
-    // Reinit it so we can keep it up with window size
-    Runtime::Renderer::Core::SceneView SceneView {};
-    const bool bSceneViewInit = SceneView.Initialize(0, {0, 0, WindowSize.x, WindowSize.y}, {
-        .Position = {-234.753769, 132.926086, 199.352264},
-        .Rotation = {0.937867283, {-0.00230924808, -0.345554471, -0.0317467079}},
-    });
-
-    if (!bSceneViewInit)
+    if (!InitializeSceneViewAndCamera())
     {
         // TODO: add error log
         return false;
     }
+
+    return true;
+}
+
+bool krendrr::Examples::SimpleDeferredRendering::Application::Tick(float DeltaTime)
+{
+    const glm::ivec2 WindowSize = Window->GetSize();
+    if (!SceneView.SetViewport({
+        0,
+        0,
+        WindowSize.x,
+        WindowSize.y
+    }))
+        return false;
+
+    Camera.Update(DeltaTime);
 
     std::array Views = {
         SceneView
@@ -162,6 +163,42 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Tick()
 bool krendrr::Examples::SimpleDeferredRendering::Application::Shutdown()
 {
     Renderer->Shutdown();
+
+    return true;
+}
+
+void krendrr::Examples::SimpleDeferredRendering::Application::HandleKeyEvent(const Runtime::Application::Core::KeyEvent& Event)
+{
+    Camera.ReceiveKeyInput(Event);
+}
+
+void krendrr::Examples::SimpleDeferredRendering::Application::HandleMouseMoveEvent(const Runtime::Application::Core::MouseMoveEvent& Event)
+{
+    Camera.ReceiveMouseMoveInput(Event);
+}
+
+void krendrr::Examples::SimpleDeferredRendering::Application::HandleMouseWheelEvent(const Runtime::Application::Core::MouseWheelEvent& Event)
+{
+    Camera.ReceiveMouseWheelInput(Event);
+}
+
+bool krendrr::Examples::SimpleDeferredRendering::Application::InitializeSceneViewAndCamera()
+{
+    glm::ivec2 WindowSize = Window->GetSize();
+
+    // Reinit it so we can keep it up with window size
+    const bool bSceneViewInit = SceneView.Initialize(0, {0, 0, WindowSize.x, WindowSize.y}, {
+        .Position = {-234.753769, 132.926086, 199.352264},
+        .Rotation = { 0.939, { 0.015, -0.342, -0.041}},
+    });
+
+    if (!bSceneViewInit)
+    {
+        // TODO: add error log
+        return false;
+    }
+
+    Camera.SetSceneView(&SceneView);
 
     return true;
 }

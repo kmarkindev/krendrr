@@ -2,6 +2,7 @@
 #include "Runtime/Application/Core/Internal/WindowAllocator.h"
 #include "SDL3/SDL_stdinc.h"
 #include <glad/gl.h>
+#include "SDL3/SDL_mouse.h"
 
 IMPLEMENT_WINDOW_ALLOCATOR(krendrr::Runtime::Application::Windows::WindowsWindow)
 
@@ -35,6 +36,9 @@ namespace krendrr::Runtime::Application::Windows
             // TODO: add error log
             return false;
         }
+
+        SDL_HideCursor();
+        SDL_SetWindowRelativeMouseMode(Window, true);
 
         // TODO: add success log
 

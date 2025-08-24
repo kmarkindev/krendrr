@@ -2,6 +2,7 @@
 
 #include <memory>
 #include "Runtime/Application/Core/Application.h"
+#include "Runtime/Camera/Camera.h"
 #include "Runtime/Renderer/Core/Scene/SceneView.h"
 #include "Runtime/Renderer/Deferred/DeferredRenderer.h"
 
@@ -18,17 +19,28 @@ namespace krendrr::Examples::SimpleDeferredRendering
 
         explicit Application(const Runtime::Application::Core::StartupArgs& Args);
 
-        bool Tick() override;
+        bool Tick(float DeltaTime) override;
 
         bool Initialize() override;
 
         bool Shutdown() override;
+
+        void HandleKeyEvent(const Runtime::Application::Core::KeyEvent& Event) override;
+
+        void HandleMouseMoveEvent(const Runtime::Application::Core::MouseMoveEvent& Event) override;
+
+        void HandleMouseWheelEvent(const Runtime::Application::Core::MouseWheelEvent& Event) override;
 
     private:
 
         std::unique_ptr<Runtime::Application::Core::Window> Window {};
         std::shared_ptr<Runtime::Renderer::Core::Scene> Scene {};
         std::unique_ptr<Runtime::Renderer::Core::Renderer> Renderer {};
+
+        Runtime::Renderer::Core::SceneView SceneView {};
+        Runtime::Camera::Camera Camera {};
+
+        bool InitializeSceneViewAndCamera();
 
     };
 }

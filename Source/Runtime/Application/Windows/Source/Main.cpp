@@ -1,3 +1,4 @@
+#include <chrono>
 #include <memory>
 #include <string>
 
@@ -50,6 +51,9 @@ int main(int Argc, char** Argv)
     if (!Application->Initialize())
         return -1;
 
+    std::chrono::steady_clock::time_point LastRecordedTime = std::chrono::steady_clock::now();
+    float DeltaTime = 0.0;
+
     bool bHasTickFailed {};
     while (!bHasTickFailed && !Application->HasRequestedShutdown())
     {
@@ -101,12 +105,12 @@ int main(int Argc, char** Argv)
                     krendrr::Runtime::Application::Core::MouseMoveEvent MouseMoveEvent {};
                     MouseMoveEvent.Window = TryGetEventWindow(SdlEvent);
                     MouseMoveEvent.Position = {
-                        SdlEvent.motion.xrel,
-                        SdlEvent.motion.yrel
+                        SdlEvent.motion.x,
+                        SdlEvent.motion.y
                     };
                     MouseMoveEvent.Delta = {
-                        SdlEvent.wheel.x,
-                        SdlEvent.wheel.y
+                        SdlEvent.motion.xrel,
+                        SdlEvent.motion.yrel
                     };
 
                     Application->HandleMouseMoveEvent(MouseMoveEvent);
@@ -132,7 +136,12 @@ int main(int Argc, char** Argv)
             }
         }
 
-        bHasTickFailed = !Application->Tick();
+        bHasTickFailed = !Application->Tick(DeltaTime);
+
+        std::chrono::steady_clock::time_point NewRecordedTime = std::chrono::steady_clock::now();
+        auto Difference = std::chrono::duration_cast<std::chrono::duration<float, std::chrono::seconds::period>>(NewRecordedTime - LastRecordedTime);
+        DeltaTime = Difference.count();
+        LastRecordedTime = NewRecordedTime;
     }
 
     if (!Application->Shutdown())

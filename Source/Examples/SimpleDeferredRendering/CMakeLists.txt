@@ -6,4 +6,5 @@ target_link_libraries(${TARGET_NAME} PRIVATE
     krendrr::thirdparty::opengl
     krendrr::thirdparty::glm
     krendrr::runtime::modelloader
+    krendrr::runtime::camera
 )
