@@ -87,9 +87,15 @@ namespace krendrr::Runtime::Application::Windows
             return true;
         }
 
+        if (!SDL_GL_MakeCurrent(Window, Context))
+        {
+            // TODO: log error
+            return false;
+        }
+
         // TODO: log success
 
-        return SDL_GL_MakeCurrent(Window, Context);
+        return true;
     }
 
     WindowsWindow::~WindowsWindow()
