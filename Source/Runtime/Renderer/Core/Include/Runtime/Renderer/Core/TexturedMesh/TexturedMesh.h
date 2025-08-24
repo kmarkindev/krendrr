@@ -55,7 +55,7 @@ namespace krendrr::Runtime::Renderer::Core
 
         glm::vec3 Position {};
         glm::quat Rotation {};
-        glm::vec3 Scale {};
+        glm::vec3 Scale {1.f, 1.f, 1.f};
 
         std::shared_ptr<Mesh> Mesh {};
         std::map<std::string, std::shared_ptr<Texture>, std::less<>> Textures {};

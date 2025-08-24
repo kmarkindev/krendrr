@@ -1,9 +1,12 @@
 #include "Application.h"
+
+#include <array>
 #include <iostream>
 #include <memory>
 #include <glad/gl.h>
 #include "Runtime/Application/Core/EntryPoint.h"
 #include "Runtime/Application/Core/Window.h"
+#include "Runtime/ModelLoader/Loader.h"
 #include "Runtime/Renderer/Core/Scene/Scene.h"
 
 IMPLEMENT_ENTRY_POINT(krendrr::Examples::SimpleDeferredRendering::Application)
@@ -96,6 +99,16 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize()
 
     Scene = std::make_unique<Runtime::Renderer::Core::Scene>();
 
+    std::vector<std::shared_ptr<Runtime::Renderer::Core::TexturedMesh>> TexturedMeshes = Runtime::ModelLoader::LoadModel(
+        "../Content/krendrr_examples_simpledeferredrendering/FuturisticRoom/source/CyberPunkRoom.fbx",
+        {}
+    );
+
+    for (const auto& TexturedMesh : TexturedMeshes)
+    {
+         Scene->InsertTexturedMesh(TexturedMesh);
+    }
+
     Renderer = std::make_unique<Runtime::Renderer::Deferred::DeferredRenderer>();
     Renderer->Initialize(Scene.get());
 
@@ -104,10 +117,22 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize()
 
 bool krendrr::Examples::SimpleDeferredRendering::Application::Tick()
 {
+    glm::ivec2 WindowSize = Window->GetSize();
+
+    // Reinit it so we can keep it up with window size
+    SceneView.Initialize(0, {0, 0, WindowSize.x, WindowSize.y}, {});
+
+    std::array Views = {
+        SceneView
+    };
+    Renderer->Render(Views);
+
     return true;
 }
 
 bool krendrr::Examples::SimpleDeferredRendering::Application::Shutdown()
 {
+    Renderer->Shutdown();
+
     return true;
 }

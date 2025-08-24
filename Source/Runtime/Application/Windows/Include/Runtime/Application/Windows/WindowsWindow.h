@@ -23,6 +23,8 @@ namespace krendrr::Runtime::Application::Windows
 
         ~WindowsWindow() override;
 
+        [[nodiscard]] glm::ivec2 GetSize() const override;
+
     private:
 
         SDL_Window* Window {};

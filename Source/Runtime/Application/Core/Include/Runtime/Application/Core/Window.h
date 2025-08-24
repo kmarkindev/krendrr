@@ -52,6 +52,8 @@ namespace krendrr::Runtime::Application::Core
          */
         virtual bool CreateAndBindGlContext() = 0;
 
+        [[nodiscard]] virtual glm::ivec2 GetSize() const = 0;
+
     private:
 
         Application* ParentApplication {};

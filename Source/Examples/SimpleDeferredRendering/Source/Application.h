@@ -2,6 +2,7 @@
 
 #include <memory>
 #include "Runtime/Application/Core/Application.h"
+#include "Runtime/Renderer/Core/Scene/SceneView.h"
 #include "Runtime/Renderer/Deferred/DeferredRenderer.h"
 
 namespace krendrr::Runtime::Application::Core
@@ -28,6 +29,7 @@ namespace krendrr::Examples::SimpleDeferredRendering
         std::unique_ptr<Runtime::Application::Core::Window> Window {};
         std::unique_ptr<Runtime::Renderer::Core::Scene> Scene {};
         std::unique_ptr<Runtime::Renderer::Core::Renderer> Renderer {};
+        Runtime::Renderer::Core::SceneView SceneView {};
 
     };
 }

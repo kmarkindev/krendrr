@@ -16,6 +16,22 @@ namespace krendrr::Runtime::Renderer::Core
         return NewMesh;
     }
 
+    bool Scene::InsertTexturedMesh(const std::shared_ptr<TexturedMesh>& NewMesh)
+    {
+        auto Iter = std::ranges::find(TexturedMeshes, NewMesh);
+        if (Iter == TexturedMeshes.end())
+        {
+            // TODO: log mesh already inserted
+            return false;
+        }
+
+        TexturedMeshes.push_back(NewMesh);
+
+        // TODO: log success
+
+        return true;
+    }
+
     bool Scene::RemoveTexturedMesh(const std::shared_ptr<TexturedMesh>& MeshToRemove)
     {
         auto Iter = std::ranges::find(TexturedMeshes, MeshToRemove);

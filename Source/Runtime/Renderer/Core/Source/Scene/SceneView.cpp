@@ -86,6 +86,7 @@ namespace krendrr::Runtime::Renderer::Core
         switch (ProjectionType)
         {
             case ProjectionType::Orthographic:
+            {
                 return glm::ortho(
                     OrthographicBounds.x,
                     OrthographicBounds.y,
@@ -94,14 +95,17 @@ namespace krendrr::Runtime::Renderer::Core
                     NearPlane,
                     FarPlane
                 );
+            }
             case ProjectionType::Perspective:
-
+            {
                 float AspectRatio = static_cast<float>(Viewport.z - Viewport.x) / static_cast<float>(Viewport.w - Viewport.y);
-
                 return glm::perspective(FovVertical, AspectRatio, NearPlane, FarPlane);
+            }
             default:
+            {
                 assert(false);
                 return glm::mat4{1.0f};
+            }
         }
     }
 

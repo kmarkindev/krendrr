@@ -99,4 +99,12 @@ namespace krendrr::Runtime::Application::Windows
         // It is ok to call virtual here, we are final class
         Close();
     }
+
+    glm::ivec2 WindowsWindow::GetSize() const
+    {
+        glm::ivec2 Size {};
+        SDL_GetWindowSize(Window, &Size.x, &Size.y);
+
+        return Size;
+    }
 }

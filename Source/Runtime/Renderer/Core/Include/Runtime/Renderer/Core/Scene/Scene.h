@@ -21,6 +21,7 @@ namespace krendrr::Runtime::Renderer::Core
     public:
 
         std::shared_ptr<TexturedMesh> SpawnTexturedMesh();
+        bool InsertTexturedMesh(const std::shared_ptr<TexturedMesh>& NewMesh);
         bool RemoveTexturedMesh(const std::shared_ptr<TexturedMesh>& MeshToRemove);
         [[nodiscard]] std::span<const std::shared_ptr<TexturedMesh>> GetTexturedMeshes() const;
 

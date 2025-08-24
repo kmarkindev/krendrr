@@ -20,7 +20,7 @@ namespace krendrr::Runtime::Renderer::Core
         {
             GLint Stride {};
 
-            std::span<BufferLayoutAttribute> Attributes {};
+            std::span<const BufferLayoutAttribute> Attributes {};
         };
 
         Mesh();
