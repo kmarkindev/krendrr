@@ -25,6 +25,8 @@ namespace krendrr::Runtime::Application::Windows
 
         [[nodiscard]] glm::ivec2 GetSize() const override;
 
+        void Swap() override;
+
     private:
 
         SDL_Window* Window {};

@@ -15,5 +15,21 @@ namespace krendrr::Runtime::ModelLoader
         std::string_view NormalTextureName {"normal"};
     };
 
-    std::vector<std::shared_ptr<Renderer::Core::TexturedMesh>> LoadModel(const std::string_view& ModelFileName, const LoadParams& Params);
+    struct LoadResult
+    {
+        bool bSuccess {};
+        std::vector<std::shared_ptr<Renderer::Core::TexturedMesh>> TexturedMeshes {};
+
+        LoadResult()
+            : bSuccess(false), TexturedMeshes{}
+        {
+        }
+
+        [[nodiscard]] bool HasLoadedAtLeastOne() const
+        {
+            return bSuccess && !TexturedMeshes.empty();
+        }
+    };
+
+    LoadResult LoadModel(const std::string_view& ModelFileName, const LoadParams& Params = {});
 }

@@ -23,32 +23,25 @@ namespace krendrr::Runtime::Renderer::Core
 
         [[nodiscard]] bool IsValid() const;
 
-        void AssignMesh(std::shared_ptr<Mesh> NewMesh);
-
         void AssignTexture(std::string Name, std::shared_ptr<Texture> NewTexture);
-
         [[nodiscard]] std::shared_ptr<Texture> GetTexture(const std::string_view& Name) const;
+        [[nodiscard]] bool HasTexture(const std::string_view& Name) const;
 
+        void AssignMesh(std::shared_ptr<Mesh> NewMesh);
         [[nodiscard]] std::shared_ptr<Mesh> GetMesh() const;
-
         [[nodiscard]] const glm::vec3& GetMeshColor() const;
-
         void SetMeshColor(const glm::vec3& NewMeshColor);
 
         [[nodiscard]] bool CanCastShadow() const;
-
         void SetCanCastShadow(bool bNewCanCastShadow);
 
         [[nodiscard]] const glm::vec3& GetPosition() const;
-
         void SetPosition(const glm::vec3& NewPosition);
 
         [[nodiscard]] const glm::quat& GetRotation() const;
-
         void SetRotation(const glm::quat& NewRotation);
 
         [[nodiscard]] const glm::vec3& GetScale() const;
-
         void SetScale(const glm::vec3& NewScale);
 
     private:

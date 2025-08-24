@@ -34,7 +34,7 @@ namespace krendrr::Runtime::Renderer::Core
             };
 
             float NearPlane {0.01f};
-            float FarPlane {100'000.0f};
+            float FarPlane {1000.0f};
         };
 
         bool Initialize(GLuint NewFramebuffer, const glm::ivec4& NewViewport, const InitParams& Params);
@@ -44,16 +44,13 @@ namespace krendrr::Runtime::Renderer::Core
         [[nodiscard]] GLuint GetFramebuffer() const;
 
         [[nodiscard]] glm::ivec4 GetViewport() const;
-
+        [[nodiscard]] glm::ivec2 GetViewportSize() const;
         [[nodiscard]] glm::mat4 GetViewMatrix() const;
-
         [[nodiscard]] glm::mat4 GetProjectionMatrix() const;
-
         [[nodiscard]] float GetNearPlane() const;
-
         [[nodiscard]] float GetFarPlane() const;
-
         [[nodiscard]] float GetFovVertical() const;
+        [[nodiscard]] glm::vec3 GetPosition() const;
 
     private:
 

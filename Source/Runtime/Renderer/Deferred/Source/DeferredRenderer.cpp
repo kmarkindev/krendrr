@@ -1,13 +1,551 @@
 #include "Runtime/Renderer/Deferred/DeferredRenderer.h"
+#include <array>
+#include "Runtime/ModelLoader/Loader.h"
+#include "Runtime/Renderer/Core/Lights/PointLight.h"
+#include "Runtime/Renderer/Core/Scene/Scene.h"
+#include "Runtime/Renderer/Core/Scene/SceneView.h"
+#include "Runtime/Renderer/Core/TexturedMesh/Texture.h"
 
-void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::Initialize(Core::Scene* Scene)
+bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::Initialize(std::shared_ptr<Core::Scene> NewScene)
 {
+    Scene = std::move(NewScene);
+
+    std::array ShadersToLink = {
+        Core::Shader::ShaderToLink{
+            .Shader = GeometryPassShader,
+            .VertexShader = "../Content/krendrr_runtime_renderer_deferred/Shaders/GeometryPass/geometry_pass.vert",
+            .FragmentShader = "../Content/krendrr_runtime_renderer_deferred/Shaders/GeometryPass/geometry_pass.frag"
+        },
+        Core::Shader::ShaderToLink{
+            .Shader = AmbientDirectionalLightPassShader,
+            .VertexShader = "../Content/krendrr_runtime_renderer_deferred/Shaders/LightPass/Quad/light_pass_quad.vert",
+            .FragmentShader = "../Content/krendrr_runtime_renderer_deferred/Shaders/LightPass/Quad/light_pass_ambient_directional.frag"
+        },
+        Core::Shader::ShaderToLink{
+            .Shader = PointLightShadowShader,
+            .VertexShader = "../Content/krendrr_runtime_renderer_deferred/Shaders/ShadowPass/PointLight/point_light_shadow.vert",
+            .FragmentShader = "../Content/krendrr_runtime_renderer_deferred/Shaders/ShadowPass/PointLight/point_light_shadow.frag"
+        },
+        Core::Shader::ShaderToLink{
+            .Shader = PointLightColorShader,
+            .VertexShader = "../Content/krendrr_runtime_renderer_deferred/Shaders/LightPass/Sphere/light_pass_point_light_sphere.vert",
+            .FragmentShader = "../Content/krendrr_runtime_renderer_deferred/Shaders/LightPass/Sphere/light_pass_sphere.frag"
+        },
+        Core::Shader::ShaderToLink{
+            .Shader = PostProcessShader,
+            .VertexShader = "../Content/krendrr_runtime_renderer_deferred/Shaders/post_process.vert",
+            .FragmentShader = "../Content/krendrr_runtime_renderer_deferred/Shaders/post_process.frag"
+        }
+    };
+    if (!Core::Shader::AttachLinkAll(ShadersToLink))
+    {
+        // TODO: add error log
+        return false;
+    }
+
+    if (!InitializeFullscreenQuadMesh())
+    {
+        // TODO: add error log
+        return false;
+    }
+
+    if (!InitializePointLightUnitSphere())
+    {
+        // TODO: add error log
+        return false;
+    }
+
+    // TODO: log success
+
+    return true;
 }
 
-void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::Render(const std::span<Core::SceneView>& SceneViews)
+bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::Render(const std::span<Core::SceneView>& SceneViews)
 {
+    for (const Core::SceneView& SceneView: SceneViews)
+    {
+        int Width {};
+        int Height {};
+
+        {
+            glm::ivec4 Viewport = SceneView.GetViewport();
+            glViewport(Viewport.x, Viewport.y, Viewport.z, Viewport.w);
+
+            if(!InitializeGBufferForView(SceneView))
+            {
+                // TODO: add error log
+                return false;
+            }
+
+            if(!InitializeLightPassBufferForView(SceneView))
+            {
+                // TODO: add error log
+                return false;
+            }
+
+            glm::ivec2 ViewportSize = SceneView.GetViewportSize();
+            Width = ViewportSize.x;
+            Height = ViewportSize.y;
+        }
+
+        // Geometry Pass
+
+        glBindFramebuffer(GL_FRAMEBUFFER, GBufferFramebufferId);
+
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_BACK);
+
+        glDisable(GL_BLEND);
+
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LESS);
+        glDepthMask(GL_TRUE);
+
+        glDisable(GL_STENCIL_TEST);
+
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        glClearColor(0.f, 0.f, 0.f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+        const glm::mat4 ViewMatrix = SceneView.GetViewMatrix();
+        const glm::mat4 ProjMatrix = SceneView.GetProjectionMatrix();
+
+        for (auto Meshes = Scene->GetTexturedMeshes(); const auto& TexturedMesh : Meshes)
+        {
+            if(TexturedMesh->HasTexture(DIFFUSE_TEXTURE_NAME))
+                TexturedMesh->GetTexture(DIFFUSE_TEXTURE_NAME)->ActivateTexture(0);
+            if(TexturedMesh->HasTexture(METALLIC_TEXTURE_NAME))
+                TexturedMesh->GetTexture(METALLIC_TEXTURE_NAME)->ActivateTexture(1);
+            if(TexturedMesh->HasTexture(NORMAL_TEXTURE_NAME))
+                TexturedMesh->GetTexture(NORMAL_TEXTURE_NAME)->ActivateTexture(2);
+            if(TexturedMesh->HasTexture(ROUGHNESS_TEXTURE_NAME))
+                TexturedMesh->GetTexture(ROUGHNESS_TEXTURE_NAME)->ActivateTexture(3);
+
+            GeometryPassShader.Use();
+            GeometryPassShader.SetInt("BaseColorTexture", 0);
+            GeometryPassShader.SetInt("MetallicTexture", 1);
+            GeometryPassShader.SetInt("NormalTexture", 2);
+            GeometryPassShader.SetInt("RoughnessTexture", 3);
+
+            glm::mat4 ModelMatrix = glm::mat4(1.0f);
+            glm::mat4 MVPMatrix = ProjMatrix * ViewMatrix * ModelMatrix;
+            glm::mat3 NormalMatrix = glm::transpose(glm::inverse(glm::mat3(ModelMatrix)));
+
+            GeometryPassShader.Use();
+            GeometryPassShader.SetMatrix4("MVPMatrix", MVPMatrix);
+            GeometryPassShader.SetMatrix4("ModelMatrix", ModelMatrix);
+            GeometryPassShader.SetMatrix3("NormalMatrix", NormalMatrix);
+
+            TexturedMesh->GetMesh()->BindVAO();
+            glDrawElements(
+                GL_TRIANGLES,
+                TexturedMesh->GetMesh()->GetPrimitivesCount(),
+                GL_UNSIGNED_INT,
+                reinterpret_cast<void*>(TexturedMesh->GetMesh()->GetPrimitivesOffset())
+            );
+            glBindVertexArray(0);
+
+            glBindTextureUnit(0, 0);
+            glBindTextureUnit(1, 0);
+            glBindTextureUnit(2, 0);
+            glBindTextureUnit(3, 0);
+        }
+
+        // Lighting Pass
+
+        // Copy Depth from geometry pass
+        glBlitNamedFramebuffer(GBufferFramebufferId, LightPassFramebufferId,
+            0, 0, Width, Height, 0, 0, Width, Height, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, LightPassFramebufferId);
+
+        glDisable(GL_DEPTH_TEST);
+
+        glClearColor(0.f, 0.f, 0.f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        glBindTextureUnit(0, GBufferColorTextureId);
+        glBindTextureUnit(1, GBufferPositionTextureId);
+        glBindTextureUnit(2, GBufferNormalTextureId);
+        glBindTextureUnit(3, GBufferMetallicTextureId);
+
+        // Render Ambient and Directional light
+
+        AmbientDirectionalLightPassShader.Use();
+        AmbientDirectionalLightPassShader.SetInt("GBufferColorTexture", 0);
+        AmbientDirectionalLightPassShader.SetInt("GBufferWorldPositionTexture", 1);
+        AmbientDirectionalLightPassShader.SetInt("GBufferWorldNormalTexture", 2);
+        AmbientDirectionalLightPassShader.SetInt("GBufferMetallicTexture", 3);
+        AmbientDirectionalLightPassShader.SetVec2("ScreenSize", {Width, Height});
+        AmbientDirectionalLightPassShader.SetVec3("CameraPos", SceneView.GetPosition());
+
+        FullscreenQuadMesh.BindVAO();
+        glDrawArrays(GL_TRIANGLES, 0, FullscreenQuadMesh.GetPrimitivesCount());
+
+        // Render other lights using Light Volumes
+
+        // Render point lights
+
+        for (const auto& PointLight : Scene->GetPointLights())
+        {
+            // Render Omnidirectional Shadow Map
+            // TODO: we are not using layered rendering here. Need to benchmark it before implementing
+
+            GLuint PointLightShadowCubeMap {};
+            glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &PointLightShadowCubeMap);
+
+            constexpr int SHADOW_MAP_SIZE = 1024;
+
+            const float PointLightFarDistance = PointLight->GetDistance() + 1.f;
+
+            glTextureStorage2D(PointLightShadowCubeMap, 1, GL_R16, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+
+            // Use linear to make shadows less pixelated
+            glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+            const std::array ViewMatrices = {
+                glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{1, 0, 0}, {0, -1, 0}),
+                glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{-1, 0, 0}, {0, -1, 0}),
+                glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{0, 1, 0}, {0, 0, 1}),
+                glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{0, -1, 0}, {0, 0, -1}),
+                glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{0, 0, 1}, {0, -1, 0}),
+                glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{0, 0, -1}, {0, -1, 0}),
+            };
+
+            const glm::mat4 ProjectionMatrix = glm::perspective(
+                glm::radians(90.f),
+                1.0f,
+                0.01f,
+                PointLightFarDistance
+            );
+
+            glEnable(GL_DEPTH_TEST);
+            glDepthMask(GL_TRUE);
+
+            glDisable(GL_BLEND);
+            glDisable(GL_STENCIL_TEST);
+
+            glEnable(GL_CULL_FACE);
+            glCullFace(GL_FRONT);
+
+            GLuint ShadowMapFramebuffer {};
+            glCreateFramebuffers(1, &ShadowMapFramebuffer);
+
+            glViewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+
+            for (int i = 0; i < 6; ++i)
+            {
+                GLuint ShadowMapDepthBuffer {};
+                glCreateRenderbuffers(1, &ShadowMapDepthBuffer);
+                glNamedRenderbufferStorage(ShadowMapDepthBuffer, GL_DEPTH24_STENCIL8, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+
+                glNamedFramebufferRenderbuffer(ShadowMapFramebuffer, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, ShadowMapDepthBuffer);
+                glNamedFramebufferTextureLayer(ShadowMapFramebuffer, GL_COLOR_ATTACHMENT0, PointLightShadowCubeMap, 0, i);
+
+                glBindFramebuffer(GL_FRAMEBUFFER, ShadowMapFramebuffer);
+
+                glm::mat4 ViewProjMatrix = ProjectionMatrix * ViewMatrices[i];
+
+                glClearColor(1, 1, 1, 1);
+                glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+
+                for (auto Meshes = Scene->GetTexturedMeshes(); const auto& TexturedMesh : Meshes)
+                {
+                    glm::mat4 ModelMatrix = glm::mat4(1.0f);
+                    glm::mat4 MVPMatrix = ViewProjMatrix * ModelMatrix;
+
+                    PointLightShadowShader.Use();
+
+                    PointLightShadowShader.SetMatrix4("ModelMatrix", ModelMatrix);
+                    PointLightShadowShader.SetMatrix4("MVPMatrix", MVPMatrix);
+                    PointLightShadowShader.SetVec3("LightPosition", PointLight->GetPosition());
+                    PointLightShadowShader.SetFloat("FarDistance", PointLightFarDistance);
+
+                    TexturedMesh->GetMesh()->BindVAO();
+                    glDrawElements(GL_TRIANGLES, TexturedMesh->GetMesh()->GetPrimitivesCount(), GL_UNSIGNED_INT, reinterpret_cast<void*>(TexturedMesh->GetMesh()->GetPrimitivesOffset()));
+                    glBindVertexArray(0);
+                }
+
+                glDeleteRenderbuffers(1, &ShadowMapDepthBuffer);
+            }
+
+            glDeleteFramebuffers(1, &ShadowMapFramebuffer);
+
+            // First setup sphere position and shader
+
+            glBindFramebuffer(GL_FRAMEBUFFER, LightPassFramebufferId);
+
+            glViewport(0, 0, Width, Height);
+
+            glEnable(GL_BLEND);
+            glBlendFuncSeparate(GL_ONE, GL_ONE, GL_ONE, GL_ONE);
+            glBlendEquationSeparate(GL_FUNC_ADD, GL_MAX); // resulting alpha is max(one, one) = one.
+
+            PointLightColorShader.Use();
+
+            // No need for distance calculations since we have it as a configuration value in point light
+            const float AffectedDistance = PointLight->GetDistance();
+
+            glm::mat4 ModelMatrix = glm::mat4(1.f);
+            ModelMatrix = glm::translate(ModelMatrix, PointLight->GetPosition());
+            ModelMatrix = glm::scale(ModelMatrix, {AffectedDistance, AffectedDistance, AffectedDistance});
+
+            glm::mat4 MVPMatrix = ProjMatrix * ViewMatrix * ModelMatrix;
+
+            PointLightColorShader.SetMatrix4("MVPMatrix", MVPMatrix);
+
+            PointLightColorShader.SetInt("GBufferColorTexture", 0);
+            PointLightColorShader.SetInt("GBufferWorldPositionTexture", 1);
+            PointLightColorShader.SetInt("GBufferWorldNormalTexture", 2);
+            PointLightColorShader.SetInt("GBufferMetallicTexture", 3);
+            PointLightColorShader.SetInt("PointLightShadowCubeMap", 4);
+            PointLightColorShader.SetVec2("ScreenSize", {Width, Height});
+            PointLightColorShader.SetVec3("CameraPos", SceneView.GetPosition());
+            PointLightColorShader.SetFloat("PointLightFarPlane", PointLightFarDistance);
+
+            PointLightColorShader.SetVec3("PointLightPosition", PointLight->GetPosition());
+            PointLightColorShader.SetVec3("PointLightDiffuseColor", PointLight->GetColor());
+            PointLightColorShader.SetVec3("PointLightSpecularColor", PointLight->GetColor());
+            PointLightColorShader.SetFloat("PointLightAttenuationLinear", PointLight->GetAttenuationLinear());
+            PointLightColorShader.SetFloat("PointLightAttenuationQuad", PointLight->GetAttenuationQuad());
+            PointLightColorShader.SetFloat("PointLightAttenuationConstant", PointLight->GetAttenuationConstant());
+
+            // Now render ONLY to stencil
+
+            glEnable(GL_STENCIL_TEST);
+            glEnable(GL_DEPTH_TEST);
+            glDepthMask(GL_FALSE);
+            glStencilMask(0xFF);
+            glDisable(GL_CULL_FACE);
+            glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+
+            glStencilFunc(GL_ALWAYS, 0, 0xFF);
+            glStencilOpSeparate(GL_FRONT, GL_KEEP, GL_DECR_WRAP, GL_KEEP);
+            glStencilOpSeparate(GL_BACK, GL_KEEP, GL_INCR_WRAP, GL_KEEP);
+
+            glClear(GL_STENCIL_BUFFER_BIT);
+
+            const auto& SphereMesh = PointLightUnitSphere->GetMesh();
+            SphereMesh->BindVAO();
+            if (SphereMesh->IsUsingIndices())
+            {
+                glDrawElements(GL_TRIANGLES, SphereMesh->GetPrimitivesCount(), GL_UNSIGNED_INT, reinterpret_cast<void*>(SphereMesh->GetPrimitivesOffset()));
+            }
+            else
+            {
+                glDrawArrays(GL_TRIANGLES, SphereMesh->GetPrimitivesOffset(), SphereMesh->GetPrimitivesCount());
+            }
+
+            // And finally render point light with stencil masking
+
+            glEnable(GL_CULL_FACE);
+            glCullFace(GL_FRONT);
+
+            glDisable(GL_DEPTH_TEST);
+
+            glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
+            glStencilMask(0x00);
+            glStencilFunc(GL_EQUAL, 0x01, 0xFF);
+            glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+
+            SphereMesh->BindVAO();
+
+            glBindTextureUnit(0, GBufferColorTextureId);
+            glBindTextureUnit(1, GBufferPositionTextureId);
+            glBindTextureUnit(2, GBufferNormalTextureId);
+            glBindTextureUnit(3, GBufferMetallicTextureId);
+            glBindTextureUnit(4, PointLightShadowCubeMap);
+
+            if (SphereMesh->IsUsingIndices())
+            {
+                glDrawElements(GL_TRIANGLES, SphereMesh->GetPrimitivesCount(), GL_UNSIGNED_INT, reinterpret_cast<void*>(SphereMesh->GetPrimitivesOffset()));
+            }
+            else
+            {
+                glDrawArrays(GL_TRIANGLES, SphereMesh->GetPrimitivesOffset(), SphereMesh->GetPrimitivesCount());
+            }
+
+            glBindTextureUnit(4, 0);
+            glDeleteTextures(1, &PointLightShadowCubeMap);
+        }
+
+        // Post Processing Pass
+
+        glDisable(GL_CULL_FACE);
+        glDisable(GL_BLEND);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
+        glDisable(GL_DEPTH_TEST);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, SceneView.GetFramebuffer());
+
+        glClearColor(0.f, 0.f, 0.f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        PostProcessShader.Use();
+
+        glBindTextureUnit(0, LightPassColorTextureId);
+        PostProcessShader.SetInt("FinalRenderTexture", 0);
+        PostProcessShader.SetVec2("ScreenSize", {Width, Height});
+
+        FullscreenQuadMesh.BindVAO();
+        glDrawArrays(GL_TRIANGLES, 0, FullscreenQuadMesh.GetPrimitivesCount());
+    }
+
+    return true;
 }
 
-void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::Shutdown()
+bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::Shutdown()
 {
+    return true;
+}
+
+bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializePointLightUnitSphere()
+{
+    ModelLoader::LoadResult UnitSphereLoadResult = ModelLoader::LoadModel(
+        "../Content/krendrr_runtime_renderer_deferred/UnitIcoSphere.obj"
+    );
+
+    if (!UnitSphereLoadResult.HasLoadedAtLeastOne())
+    {
+        // TODO: log error can't load unit sphere model
+        return false;
+    }
+
+    PointLightUnitSphere = UnitSphereLoadResult.TexturedMeshes[0];
+
+    return true;
+}
+
+bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeFullscreenQuadMesh()
+{
+    constexpr float QuadMesh[] = {
+        -1.f, 1.f,
+        -1.f, -1.f,
+        1.f, -1.f,
+        1.f, 1.f,
+        -1.f, 1.f,
+        1.f, -1.f
+    };
+    constexpr static std::array LayoutAttributes = {
+        Core::Mesh::BufferLayoutAttribute {
+            .Offset = 0,
+            .Type = GL_FLOAT,
+            .Count = 2
+        }
+    };
+    constexpr static Core::Mesh::BufferLayout Layout = {
+        .Stride = 2 * sizeof(float),
+        .Attributes = LayoutAttributes
+    };
+    return FullscreenQuadMesh.Load(Layout, Core::Mesh::ContainerToBytes(QuadMesh));
+}
+
+bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeGBufferForView(const Core::SceneView& View)
+{
+    // If we need to reinitialize GBuffer, first we should remove the old one
+    if(GBufferFramebufferId > 0)
+    {
+        glDeleteTextures(1, &GBufferColorTextureId);
+        glDeleteTextures(1, &GBufferPositionTextureId);
+        glDeleteTextures(1, &GBufferNormalTextureId);
+        glDeleteTextures(1, &GBufferMetallicTextureId);
+        glDeleteRenderbuffers(1, &GBufferDepthStencilRenderBufferId);
+        glDeleteFramebuffers(1, &GBufferFramebufferId);
+    }
+
+    glm::ivec2 ViewportSize = View.GetViewportSize();
+
+    glCreateFramebuffers(1, &GBufferFramebufferId);
+
+    glCreateTextures(GL_TEXTURE_2D, 1, &GBufferColorTextureId);
+    glTextureStorage2D(GBufferColorTextureId, 1, GL_RGBA8, ViewportSize.x, ViewportSize.y);
+    glTextureParameteri(GBufferColorTextureId, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTextureParameteri(GBufferColorTextureId, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    glCreateTextures(GL_TEXTURE_2D, 1, &GBufferPositionTextureId);
+    glTextureStorage2D(GBufferPositionTextureId, 1, GL_RGBA32F, ViewportSize.x, ViewportSize.y);
+    glTextureParameteri(GBufferPositionTextureId, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTextureParameteri(GBufferPositionTextureId, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    glCreateTextures(GL_TEXTURE_2D, 1, &GBufferNormalTextureId);
+    glTextureStorage2D(GBufferNormalTextureId, 1, GL_RGBA32F, ViewportSize.x, ViewportSize.y);
+    glTextureParameteri(GBufferNormalTextureId, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTextureParameteri(GBufferNormalTextureId, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    glCreateTextures(GL_TEXTURE_2D, 1, &GBufferMetallicTextureId);
+    glTextureStorage2D(GBufferMetallicTextureId, 1, GL_RGBA8, ViewportSize.x, ViewportSize.y);
+    glTextureParameteri(GBufferMetallicTextureId, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTextureParameteri(GBufferMetallicTextureId, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    glCreateRenderbuffers(1, &GBufferDepthStencilRenderBufferId);
+    glNamedRenderbufferStorage(GBufferDepthStencilRenderBufferId, GL_DEPTH24_STENCIL8, ViewportSize.x, ViewportSize.y);
+
+    glNamedFramebufferRenderbuffer(GBufferFramebufferId, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, GBufferDepthStencilRenderBufferId);
+    glNamedFramebufferTexture(GBufferFramebufferId, GL_COLOR_ATTACHMENT0, GBufferColorTextureId, 0);
+    glNamedFramebufferTexture(GBufferFramebufferId, GL_COLOR_ATTACHMENT1, GBufferPositionTextureId, 0);
+    glNamedFramebufferTexture(GBufferFramebufferId, GL_COLOR_ATTACHMENT2, GBufferNormalTextureId, 0);
+    glNamedFramebufferTexture(GBufferFramebufferId, GL_COLOR_ATTACHMENT3, GBufferMetallicTextureId, 0);
+
+    if(glCheckNamedFramebufferStatus(GBufferFramebufferId, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+    {
+        glDeleteTextures(1, &GBufferColorTextureId);
+        glDeleteTextures(1, &GBufferPositionTextureId);
+        glDeleteTextures(1, &GBufferNormalTextureId);
+        glDeleteTextures(1, &GBufferMetallicTextureId);
+        glDeleteRenderbuffers(1, &GBufferDepthStencilRenderBufferId);
+        glDeleteFramebuffers(1, &GBufferFramebufferId);
+
+        // TODO: log error "GBuffer framebuffer is not complete"
+        return false;
+    }
+
+    GLuint AttachmentsToEnable[4] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3};
+    glNamedFramebufferDrawBuffers(GBufferFramebufferId, 4, AttachmentsToEnable);
+
+    return true;
+}
+
+bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeLightPassBufferForView(const Core::SceneView& View)
+{
+    // If we need to reinitialize GBuffer, first we should remove the old one
+    if(LightPassFramebufferId > 0)
+    {
+        glDeleteTextures(1, &LightPassColorTextureId);
+        glDeleteRenderbuffers(1, &LightPassDepthStencilRenderBufferId);
+        glDeleteFramebuffers(1, &LightPassFramebufferId);
+    }
+
+    glm::ivec2 ViewportSize = View.GetViewportSize();
+
+    glCreateFramebuffers(1, &LightPassFramebufferId);
+
+    glCreateRenderbuffers(1, &LightPassDepthStencilRenderBufferId);
+    glNamedRenderbufferStorage(LightPassDepthStencilRenderBufferId, GL_DEPTH24_STENCIL8, ViewportSize.x, ViewportSize.y);
+
+    glCreateTextures(GL_TEXTURE_2D, 1, &LightPassColorTextureId);
+    // Use GL_RGBA16F so we can use HDR colors for this buffer
+    glTextureStorage2D(LightPassColorTextureId, 1, GL_RGBA16F, ViewportSize.x, ViewportSize.y);
+    glTextureParameteri(LightPassColorTextureId, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTextureParameteri(LightPassColorTextureId, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    glNamedFramebufferRenderbuffer(LightPassFramebufferId, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, LightPassDepthStencilRenderBufferId);
+    glNamedFramebufferTexture(LightPassFramebufferId, GL_COLOR_ATTACHMENT0, LightPassColorTextureId, 0);
+
+    if(glCheckNamedFramebufferStatus(GBufferFramebufferId, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+    {
+        glDeleteTextures(1, &LightPassColorTextureId);
+        glDeleteRenderbuffers(1, &LightPassDepthStencilRenderBufferId);
+        glDeleteFramebuffers(1, &LightPassFramebufferId);
+
+        // TODO: log error "Light pass framebuffer is not complete"
+        return false;
+    }
+
+    return true;
 }

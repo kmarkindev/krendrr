@@ -7,6 +7,7 @@
 #include "Runtime/Application/Core/EntryPoint.h"
 #include "Runtime/Application/Core/Window.h"
 #include "Runtime/ModelLoader/Loader.h"
+#include "Runtime/Renderer/Core/Lights/PointLight.h"
 #include "Runtime/Renderer/Core/Scene/Scene.h"
 
 IMPLEMENT_ENTRY_POINT(krendrr::Examples::SimpleDeferredRendering::Application)
@@ -99,18 +100,30 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize()
 
     Scene = std::make_unique<Runtime::Renderer::Core::Scene>();
 
-    std::vector<std::shared_ptr<Runtime::Renderer::Core::TexturedMesh>> TexturedMeshes = Runtime::ModelLoader::LoadModel(
-        "../Content/krendrr_examples_simpledeferredrendering/FuturisticRoom/source/CyberPunkRoom.fbx",
-        {}
+    Runtime::ModelLoader::LoadResult MeshesLoadResult = Runtime::ModelLoader::LoadModel(
+        "../Content/krendrr_examples_simpledeferredrendering/FuturisticRoom/source/CyberPunkRoom.fbx"
     );
 
-    for (const auto& TexturedMesh : TexturedMeshes)
+    if (!MeshesLoadResult.HasLoadedAtLeastOne())
     {
-         Scene->InsertTexturedMesh(TexturedMesh);
+        // TODO: log error
+        return false;
     }
 
+    for (const auto& TexturedMesh : MeshesLoadResult.TexturedMeshes)
+    {
+        Scene->InsertTexturedMesh(TexturedMesh);
+    }
+
+    auto PointLight = Scene->SpawnPointLight();
+    PointLight->SetPosition({-350, 130, -170});
+
     Renderer = std::make_unique<Runtime::Renderer::Deferred::DeferredRenderer>();
-    Renderer->Initialize(Scene.get());
+    if (!Renderer->Initialize(Scene))
+    {
+        // TODO: log error
+        return false;
+    }
 
     return true;
 }
@@ -120,12 +133,28 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Tick()
     glm::ivec2 WindowSize = Window->GetSize();
 
     // Reinit it so we can keep it up with window size
-    SceneView.Initialize(0, {0, 0, WindowSize.x, WindowSize.y}, {});
+    Runtime::Renderer::Core::SceneView SceneView {};
+    const bool bSceneViewInit = SceneView.Initialize(0, {0, 0, WindowSize.x, WindowSize.y}, {
+        .Position = {-234.753769, 132.926086, 199.352264},
+        .Rotation = {0.937867283, {-0.00230924808, -0.345554471, -0.0317467079}},
+    });
+
+    if (!bSceneViewInit)
+    {
+        // TODO: add error log
+        return false;
+    }
 
     std::array Views = {
         SceneView
     };
-    Renderer->Render(Views);
+    if (!Renderer->Render(Views))
+    {
+        // TODO: add error log
+        return false;
+    }
+
+    Window->Swap();
 
     return true;
 }

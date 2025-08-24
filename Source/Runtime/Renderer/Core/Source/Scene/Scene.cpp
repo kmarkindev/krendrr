@@ -19,7 +19,7 @@ namespace krendrr::Runtime::Renderer::Core
     bool Scene::InsertTexturedMesh(const std::shared_ptr<TexturedMesh>& NewMesh)
     {
         auto Iter = std::ranges::find(TexturedMeshes, NewMesh);
-        if (Iter == TexturedMeshes.end())
+        if (Iter != TexturedMeshes.end())
         {
             // TODO: log mesh already inserted
             return false;

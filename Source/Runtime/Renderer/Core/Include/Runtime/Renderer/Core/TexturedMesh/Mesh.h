@@ -34,6 +34,15 @@ namespace krendrr::Runtime::Renderer::Core
 
         bool BindVAO() const;
 
+        template<typename T>
+        static std::span<const std::byte> ContainerToBytes(const T& Container)
+        {
+            return std::span<const std::byte>(
+                reinterpret_cast<const std::byte*>(&*std::begin(Container)), // use &* to support both pointer and iterator values
+                std::size(Container) * sizeof(Container[0])
+            );
+        }
+
         bool Load(const BufferLayout& Layout, const std::span<const std::byte>& VertexData);
 
         bool LoadIndexed(const BufferLayout& Layout, const std::span<const std::byte>& VertexData, const std::span<const std::uint32_t>& IndexData);

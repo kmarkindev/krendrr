@@ -35,8 +35,11 @@ bool Texture::IsLoaded() const
 
 bool Texture::Load(const std::string_view& TextureFileName, const TextureLoadParams& Params)
 {
-    if(!CheckLoaded())
+    if(IsLoaded())
+    {
+        // TODO: log error already loaded
         return false;
+    }
 
     glCreateTextures(GL_TEXTURE_2D, 1, &TextureId);
 

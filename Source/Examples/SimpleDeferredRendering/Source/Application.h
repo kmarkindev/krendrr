@@ -27,9 +27,8 @@ namespace krendrr::Examples::SimpleDeferredRendering
     private:
 
         std::unique_ptr<Runtime::Application::Core::Window> Window {};
-        std::unique_ptr<Runtime::Renderer::Core::Scene> Scene {};
+        std::shared_ptr<Runtime::Renderer::Core::Scene> Scene {};
         std::unique_ptr<Runtime::Renderer::Core::Renderer> Renderer {};
-        Runtime::Renderer::Core::SceneView SceneView {};
 
     };
 }

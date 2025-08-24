@@ -67,6 +67,14 @@ namespace krendrr::Runtime::Renderer::Core
         return Viewport;
     }
 
+    glm::ivec2 SceneView::GetViewportSize() const
+    {
+        return {
+            Viewport.z - Viewport.x,
+            Viewport.w - Viewport.y
+        };
+    }
+
     glm::mat4 SceneView::GetViewMatrix() const
     {
         if (!CheckValid())
@@ -98,8 +106,9 @@ namespace krendrr::Runtime::Renderer::Core
             }
             case ProjectionType::Perspective:
             {
-                float AspectRatio = static_cast<float>(Viewport.z - Viewport.x) / static_cast<float>(Viewport.w - Viewport.y);
-                return glm::perspective(FovVertical, AspectRatio, NearPlane, FarPlane);
+                glm::ivec2 ViewportSize = GetViewportSize();
+                float AspectRatio = static_cast<float>(ViewportSize.x) / static_cast<float>(ViewportSize.y);
+                return glm::perspective(glm::radians(FovVertical), AspectRatio, NearPlane, FarPlane);
             }
             default:
             {
@@ -122,6 +131,11 @@ namespace krendrr::Runtime::Renderer::Core
     float SceneView::GetFovVertical() const
     {
         return FovVertical;
+    }
+
+    glm::vec3 SceneView::GetPosition() const
+    {
+        return Position;
     }
 
     bool SceneView::CheckValid() const

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <complex.h>
 #include <span>
 
 namespace krendrr::Runtime::Renderer::Core
@@ -21,11 +22,11 @@ namespace krendrr::Runtime::Renderer::Core
     {
     public:
 
-        virtual void Initialize(Scene* Scene) = 0;
+        virtual bool Initialize(std::shared_ptr<Core::Scene> NewScene) = 0;
 
-        virtual void Render(const std::span<SceneView>& SceneViews) = 0;
+        virtual bool Render(const std::span<SceneView>& SceneViews) = 0;
 
-        virtual void Shutdown() = 0;
+        virtual bool Shutdown() = 0;
 
         virtual ~Renderer() = default;
 

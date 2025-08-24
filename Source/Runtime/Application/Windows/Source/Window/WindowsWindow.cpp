@@ -107,4 +107,9 @@ namespace krendrr::Runtime::Application::Windows
 
         return Size;
     }
+
+    void WindowsWindow::Swap()
+    {
+        SDL_GL_SwapWindow(Window);
+    }
 }

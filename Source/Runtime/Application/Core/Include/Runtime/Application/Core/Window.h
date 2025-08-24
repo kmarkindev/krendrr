@@ -54,6 +54,8 @@ namespace krendrr::Runtime::Application::Core
 
         [[nodiscard]] virtual glm::ivec2 GetSize() const = 0;
 
+        virtual void Swap() = 0;
+
     private:
 
         Application* ParentApplication {};

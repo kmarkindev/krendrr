@@ -13,9 +13,9 @@
 
 namespace krendrr::Runtime::ModelLoader
 {
-    std::vector<std::shared_ptr<Renderer::Core::TexturedMesh>> LoadModel(const std::string_view& ModelFileName, const LoadParams& Params)
+    LoadResult LoadModel(const std::string_view& ModelFileName, const LoadParams& Params)
     {
-        std::vector<std::shared_ptr<Renderer::Core::TexturedMesh>> Result {};
+        LoadResult Result {};
 
         Assimp::Importer Importer {};
 
@@ -34,7 +34,10 @@ namespace krendrr::Runtime::ModelLoader
         );
 
         if(!Scene || Scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !Scene->mRootNode)
-            throw std::runtime_error("Failed to load model. File is invalid.");
+        {
+            // TODO: log error. throw std::runtime_error("Failed to load model. File is invalid.");
+            return {};
+        }
 
         std::string_view ModelDirectory {};
         {
@@ -180,18 +183,20 @@ namespace krendrr::Runtime::ModelLoader
                     static_cast<double>(rand()) / (RAND_MAX + 1.0)
                 });
 
-                std::span<const std::byte> VerticesData {reinterpret_cast<std::byte*>(Vertices.data()), Vertices.size() * sizeof(Vertex)};
-
                 std::shared_ptr<Renderer::Core::Mesh> NewMesh = std::make_shared<Renderer::Core::Mesh>();
-                NewMesh->LoadIndexed(MeshLayout, VerticesData, Indices);
+                if (!NewMesh->LoadIndexed(MeshLayout, Renderer::Core::Mesh::ContainerToBytes(Vertices), Indices))
+                {
+                    // TODO: log error
+                    return {};
+                }
 
                 NewTexturedMesh->AssignMesh(NewMesh);
 
-                Result.push_back(NewTexturedMesh);
+                Result.TexturedMeshes.push_back(NewTexturedMesh);
 
                 aiMaterial* Material = Scene->mMaterials[Mesh->mMaterialIndex];
 
-                auto LoadTexture = [&](aiTextureType Type, Renderer::Core::TexturedMesh& TargetMesh, const std::string_view& TextureName, GLint Format)
+                auto LoadTexture = [&](aiTextureType Type, Renderer::Core::TexturedMesh& TargetMesh, const std::string_view& TextureName, GLint Format) -> bool
                 {
                     if(Material->GetTextureCount(Type) > 0)
                     {
@@ -208,29 +213,59 @@ namespace krendrr::Runtime::ModelLoader
                         if(LoadedTextureIter != LoadedTextures.end())
                         {
                             Texture = LoadedTextureIter->second;
-
                         }
                         else
                         {
                             Texture = std::make_shared<Renderer::Core::Texture>();
-                            Texture->Load(TexturePath, {
+                            const bool bLoadResult = Texture->Load(TexturePath, {
                                 .ApiFormat = Format,
                                 .bFlipTexture = true,
                             });
+
+                            if (!bLoadResult)
+                            {
+                                // TODO: log error
+                                return false;
+                            }
+
                             LoadedTextures.insert({TexturePath, Texture});
                         }
 
                         TargetMesh.AssignTexture(std::string{TextureName}, Texture);
                     }
+
+                    // It is OK if there are no textures.
+                    // But it is not if there are, but we can't load them.
+                    return true;
                 };
 
-                LoadTexture(aiTextureType_DIFFUSE, *NewTexturedMesh, Params.DiffuseTextureName, GL_SRGB8_ALPHA8);
-                LoadTexture(aiTextureType_METALNESS, *NewTexturedMesh, Params.MetallicTextureName, GL_R8);
-                LoadTexture(aiTextureType_SHININESS, *NewTexturedMesh, Params.RoughnessTextureName, GL_R8);
-                LoadTexture(aiTextureType_NORMALS, *NewTexturedMesh, Params.NormalTextureName, GL_RGB8);
+                if (!LoadTexture(aiTextureType_DIFFUSE, *NewTexturedMesh, Params.DiffuseTextureName, GL_SRGB8_ALPHA8))
+                {
+                    // TODO: log error
+                    return {};
+                }
+
+                if (!LoadTexture(aiTextureType_METALNESS, *NewTexturedMesh, Params.MetallicTextureName, GL_R8))
+                {
+                    // TODO: log error
+                    return {};
+                }
+
+                if (!LoadTexture(aiTextureType_SHININESS, *NewTexturedMesh, Params.RoughnessTextureName, GL_R8))
+                {
+                    // TODO: log error
+                    return {};
+                }
+
+                if (!LoadTexture(aiTextureType_NORMALS, *NewTexturedMesh, Params.NormalTextureName, GL_RGB8))
+                {
+                    // TODO: log error
+                    return {};
+                }
             }
         }
 
+        Result.bSuccess = true;
         return Result;
     }
 }

@@ -27,6 +27,11 @@ namespace krendrr::Runtime::Renderer::Core
         return Iter->second;
     }
 
+    bool TexturedMesh::HasTexture(const std::string_view& Name) const
+    {
+        return Textures.contains(Name);
+    }
+
     std::shared_ptr<Mesh> TexturedMesh::GetMesh() const
     {
         return Mesh;

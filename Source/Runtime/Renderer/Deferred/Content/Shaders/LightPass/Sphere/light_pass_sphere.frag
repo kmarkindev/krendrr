@@ -13,7 +13,6 @@ uniform float PointLightFarPlane;
 uniform vec3 PointLightPosition;
 uniform vec3 PointLightDiffuseColor;
 uniform vec3 PointLightSpecularColor;
-uniform float PointLightIntensity;
 uniform float PointLightAttenuationLinear;
 uniform float PointLightAttenuationQuad;
 uniform float PointLightAttenuationConstant;
@@ -32,17 +31,15 @@ void main()
     float PointLightDistance = length(PointLightPosition - WorldPosition);
     float Attenuation = 1.0 / (PointLightAttenuationConstant + PointLightAttenuationLinear * PointLightDistance + PointLightAttenuationQuad * (PointLightDistance * PointLightDistance));
 
-    float TotalColorScale = PointLightIntensity * Attenuation;
-
     // diffuse
 
     float DiffuseScale = max(0.0, dot(-LightDir, WorldNormal));
 
-    vec3 ResultDiffuseColor = max(PointLightDiffuseColor * DiffuseScale * TotalColorScale, 0.0);
+    vec3 ResultDiffuseColor = max(PointLightDiffuseColor * DiffuseScale * Attenuation, 0.0);
 
     // specular
 
-    vec3 ResultSpecularColor = vec3(0, 0, 0); //vec4(PointLightSpecularColor * TotalColorScale, 1);
+    vec3 ResultSpecularColor = vec3(0, 0, 0); //vec4(PointLightSpecularColor * Attenuation, 1);
 
     // combine
 
