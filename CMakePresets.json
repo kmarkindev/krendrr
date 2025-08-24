@@ -38,7 +38,7 @@
             "generator": "Visual Studio 17 2022",
             "cacheVariables": {
                 "CMAKE_CXX_COMPILER": "cl",
-                "CMAKE_CC_COMPILER": "cl",
+                "CMAKE_C_COMPILER": "cl",
                 "CMAKE_GENERATOR_TOOLSET": "v143,host=x64",
                 "CMAKE_GENERATOR_PLATFORM": "x64,version=10.0"
             }

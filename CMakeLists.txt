@@ -11,7 +11,8 @@ set(CMAKE_CXX_EXTENSIONS False)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/CMake)
 include(FetchContent)
-include(ContentHelpers)
-include(CMakeHelpers)
+include(CMakeKrendrrHelpers)
+include(CMakeKrendrrContent)
+include(CMakeKrendrrTarget)
 
 add_subdirectory(Source)

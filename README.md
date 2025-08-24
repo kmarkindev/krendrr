@@ -21,4 +21,5 @@ CMake presets:
 - krendrr target name always includes path to the target in Source folder
 - Third party targets should not be linked into krendrr targets directly. 
 Instead, a library target with krendrr_ prefix should be created and then used for linking 
+- Prefer using add_krendrr_library instead of creating targets manually
 
