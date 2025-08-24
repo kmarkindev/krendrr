@@ -187,10 +187,7 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::InitializeSceneVie
     glm::ivec2 WindowSize = Window->GetSize();
 
     // Reinit it so we can keep it up with window size
-    const bool bSceneViewInit = SceneView.Initialize(0, {0, 0, WindowSize.x, WindowSize.y}, {
-        .Position = {-234.753769, 132.926086, 199.352264},
-        .Rotation = { 0.939, { 0.015, -0.342, -0.041}},
-    });
+    const bool bSceneViewInit = SceneView.Initialize(0, {0, 0, WindowSize.x, WindowSize.y});
 
     if (!bSceneViewInit)
     {
@@ -199,6 +196,8 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::InitializeSceneVie
     }
 
     Camera.SetSceneView(&SceneView);
+    Camera.SetCameraPosition({-234.753769, 132.926086, 199.352264});
+    Camera.SetCameraRotation({5, 40});
 
     return true;
 }

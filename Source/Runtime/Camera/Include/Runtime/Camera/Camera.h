@@ -31,15 +31,24 @@ namespace krendrr::Runtime::Camera
 
         void Update(float DeltaTime);
 
+        void SetCameraPosition(glm::vec3 NewPosition);
+
+        /**
+         * X - Pitch, Y - Yaw
+         */
+        void SetCameraRotation(glm::vec2 NewRotation);
+
+
     private:
 
         glm::vec3 InputMoveDirection {};
         glm::vec2 InputMouseMove {};
-        float InputRoll {};
+
+        float CurrentYaw {};
+        float CurrentPitch {};
 
         float CameraMoveSpeed = 100.f;
         float CameraRotationScale = 0.35f;
-        float CameraRollSpeed = 45.f;
 
         float ScrollMagnifier = 15.f;
         float MinMoveSpeed = 10.f;

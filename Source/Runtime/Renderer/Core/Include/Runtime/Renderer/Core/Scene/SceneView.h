@@ -37,7 +37,7 @@ namespace krendrr::Runtime::Renderer::Core
             float FarPlane {100'000.0f};
         };
 
-        bool Initialize(GLuint NewFramebuffer, const glm::ivec4& NewViewport, const InitParams& Params);
+        bool Initialize(GLuint NewFramebuffer, const glm::ivec4& NewViewport, const InitParams& Params = {});
 
         [[nodiscard]] bool IsValid() const;
 
