@@ -96,11 +96,13 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::GeometryPass(const 
 
     for (auto Meshes = Scene->GetTexturedMeshes(); const auto& TexturedMesh : Meshes)
     {
+        const bool bHasNormalMap = TexturedMesh->HasTexture(NORMAL_TEXTURE_NAME);
+
         if(TexturedMesh->HasTexture(DIFFUSE_TEXTURE_NAME))
             TexturedMesh->GetTexture(DIFFUSE_TEXTURE_NAME)->ActivateTexture(0);
         if(TexturedMesh->HasTexture(METALLIC_TEXTURE_NAME))
             TexturedMesh->GetTexture(METALLIC_TEXTURE_NAME)->ActivateTexture(1);
-        if(TexturedMesh->HasTexture(NORMAL_TEXTURE_NAME))
+        if(bHasNormalMap)
             TexturedMesh->GetTexture(NORMAL_TEXTURE_NAME)->ActivateTexture(2);
         if(TexturedMesh->HasTexture(ROUGHNESS_TEXTURE_NAME))
             TexturedMesh->GetTexture(ROUGHNESS_TEXTURE_NAME)->ActivateTexture(3);
@@ -118,7 +120,7 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::GeometryPass(const 
         glm::mat4 MVPMatrix = ProjMatrix * ViewMatrix * ModelMatrix;
         glm::mat3 NormalMatrix = glm::transpose(glm::inverse(glm::mat3(ModelMatrix)));
 
-        GeometryPassShader.Use();
+        GeometryPassShader.SetBool("HasNormalMap", bHasNormalMap);
         GeometryPassShader.SetMatrix4("MVPMatrix", MVPMatrix);
         GeometryPassShader.SetMatrix4("ModelMatrix", ModelMatrix);
         GeometryPassShader.SetMatrix3("NormalMatrix", NormalMatrix);
@@ -364,6 +366,7 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PointLightVolumesPa
         glEnable(GL_CULL_FACE);
         glCullFace(GL_FRONT);
 
+        glEnable(GL_STENCIL_TEST);
         glStencilMask(0x00);
         glStencilFunc(GL_EQUAL, 0x01, 0xFF);
 
@@ -373,6 +376,7 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PointLightVolumesPa
         glBindTextureUnit(LastUnbindId += 1, 0);
         glDeleteTextures(1, &PointLightShadowCubeMap);
 
+        glDisable(GL_STENCIL_TEST);
         glStencilMask(0xFF);
         glStencilFunc(GL_ALWAYS, 0, 0xFF);
         glDisable(GL_CULL_FACE);

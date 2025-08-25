@@ -12,6 +12,8 @@ in vec2 oUv;
 in mat3 oTBNMatrix;
 in vec3 oNormal;
 
+uniform bool HasNormalMap;
+
 uniform sampler2D BaseColorTexture;
 uniform sampler2D MetallicTexture;
 uniform sampler2D NormalTexture;
@@ -29,11 +31,20 @@ void main()
     FragEmissive = texture(EmissiveTexture, oUv);
     FragEmissive.a = length(FragEmissive.rgb) == 0.f ? 0.f : 1.f;
 
-    vec3 SampledNormal = texture(NormalTexture, oUv).rgb;
-    SampledNormal = normalize(SampledNormal * 2.0 - 1.0);
-    FragWorldNormal = oTBNMatrix * SampledNormal;
+    if(HasNormalMap)
+    {
+        vec3 SampledNormal = texture(NormalTexture, oUv).rgb;
+        SampledNormal = vec3(SampledNormal.x, SampledNormal.y, SampledNormal.z);
 
-    // Convert from DirectX normal map to OpenGl normal map (left handed system to right handed)
-    // We convert Z, since Y and Z were swapped during normals and tangents loading
-    FragWorldNormal.z = -FragWorldNormal.z;
+        SampledNormal = normalize(SampledNormal * 2.0 - 1.0);
+        FragWorldNormal = oTBNMatrix * SampledNormal;
+
+        // Convert from DirectX normal map to OpenGl normal map (left handed system to right handed)
+        // We convert Z, since Y and Z were swapped during normals and tangents loading
+        FragWorldNormal.z = -FragWorldNormal.z;
+    }
+    else
+    {
+        FragWorldNormal = oNormal;
+    }
 }

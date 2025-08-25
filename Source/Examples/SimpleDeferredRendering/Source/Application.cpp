@@ -200,7 +200,7 @@ void krendrr::Examples::SimpleDeferredRendering::Application::SetupFuturisticSce
 
 void krendrr::Examples::SimpleDeferredRendering::Application::SetupSponzaScene()
 {
-    Camera.SetCameraPosition({0, 200, 0});
+    Camera.SetCameraPosition({0, 250, 0});
     Camera.SetCameraRotation({0, 0});
 
     Scene->ToggleAmbientLight(true);

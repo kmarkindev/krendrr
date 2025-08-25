@@ -39,7 +39,7 @@ void main()
 
     // specular
 
-    vec3 ResultSpecularColor = vec3(0, 0, 0); //vec4(PointLightSpecularColor * Attenuation, 1);
+    vec3 ResultSpecularColor = vec3(0, 0, 0);
 
     // combine
 
@@ -48,7 +48,8 @@ void main()
     FragColor = vec4(BaseColor * (ResultDiffuseColor + ResultSpecularColor), 1);
 
     // apply shadow
-    float ShadowValue = ShadowMapDepthDistance <= PointLightDistance ? 1.f : 0.f;
+    float ShadowBias = max(0.05 * (1.0 - dot(WorldNormal, LightDir)), 0.005);
+    float ShadowValue = ShadowMapDepthDistance - ShadowBias <= PointLightDistance ? 1.f : 0.f;
 
     // TODO: add PFC for shadow
 

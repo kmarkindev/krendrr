@@ -139,13 +139,10 @@ namespace krendrr::Runtime::ModelLoader
 
                     if(Mesh->HasNormals())
                     {
-                        // For some reason (probably it's just how FBX format stores it), Z is up and Y is forward,
-                        // so we need to swap them to get proper vertex normals.
-                        // PS: we use Z as forward and Y as up.
                         Normal = {
                             Mesh->mNormals[vertIndex].x,
-                            Mesh->mNormals[vertIndex].z,
                             Mesh->mNormals[vertIndex].y,
+                            Mesh->mNormals[vertIndex].z,
                         };
                     }
 
@@ -157,11 +154,10 @@ namespace krendrr::Runtime::ModelLoader
                         };
                     }
 
-                    // Same as for normals, we need to swap tangent axes
                     Tangent = {
                         Mesh->mTangents[vertIndex].x,
+                        Mesh->mTangents[vertIndex].y,
                         Mesh->mTangents[vertIndex].z,
-                        Mesh->mTangents[vertIndex].y
                     };
                 }
 
