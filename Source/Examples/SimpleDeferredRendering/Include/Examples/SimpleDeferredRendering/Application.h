@@ -33,6 +33,11 @@ namespace krendrr::Examples::SimpleDeferredRendering
 
     private:
 
+        bool bLoadFuturistic {false};
+
+        void SetupFuturisticScene();
+        void SetupSponzaScene();
+
         std::unique_ptr<Runtime::Application::Core::Window> Window {};
         std::shared_ptr<Runtime::Renderer::Core::Scene> Scene {};
         std::unique_ptr<Runtime::Renderer::Core::Renderer> Renderer {};

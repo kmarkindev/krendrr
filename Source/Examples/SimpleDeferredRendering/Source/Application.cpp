@@ -4,6 +4,7 @@
 #include <memory>
 #include <glad/gl.h>
 #include "Runtime/Application/Core/EntryPoint.h"
+#include "Runtime/Application/Core/StartupArgs.h"
 #include "Runtime/Application/Core/Window.h"
 #include "Runtime/ModelLoader/Loader.h"
 #include "Runtime/Renderer/Core/Lights/PointLight.h"
@@ -14,7 +15,7 @@ IMPLEMENT_ENTRY_POINT(krendrr::Examples::SimpleDeferredRendering::Application)
 krendrr::Examples::SimpleDeferredRendering::Application::Application(const Runtime::Application::Core::StartupArgs& Args)
     : Runtime::Application::Core::Application(Args)
 {
-
+    bLoadFuturistic = Args.GetStartupArgs().size() > 1;
 }
 
 static void OpenGlDebugCallback(GLenum Source, GLenum Type, GLuint Id, GLenum Severity, GLsizei Length, GLchar const* Message, void const* UserParam)
@@ -100,7 +101,9 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize()
     Scene = std::make_unique<Runtime::Renderer::Core::Scene>();
 
     Runtime::ModelLoader::LoadResult MeshesLoadResult = Runtime::ModelLoader::LoadModel(
-        "../Content/krendrr_examples_simpledeferredrendering/FuturisticRoom/source/CyberPunkRoom.fbx"
+        bLoadFuturistic
+            ?  "../Content/krendrr_examples_simpledeferredrendering/FuturisticRoom/source/CyberPunkRoom.fbx"
+            : "../Content/krendrr_examples_simpledeferredrendering/Sponza/sponza.obj"
     );
 
     if (!MeshesLoadResult.HasLoadedAtLeastOne())
@@ -114,21 +117,21 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize()
         Scene->InsertTexturedMesh(TexturedMesh);
     }
 
-    Scene->ToggleAmbientLight(true);
+    if (!InitializeSceneViewAndCamera())
+    {
+        // TODO: add error log
+        return false;
+    }
 
-    auto PointLight = Scene->SpawnPointLight();
-    PointLight->SetPosition({-350, 130, -170});
+    if (bLoadFuturistic)
+        SetupFuturisticScene();
+    else
+        SetupSponzaScene();
 
     Renderer = std::make_unique<Runtime::Renderer::Deferred::DeferredRenderer>();
     if (!Renderer->Initialize(Scene))
     {
         // TODO: log error
-        return false;
-    }
-
-    if (!InitializeSceneViewAndCamera())
-    {
-        // TODO: add error log
         return false;
     }
 
@@ -184,6 +187,28 @@ void krendrr::Examples::SimpleDeferredRendering::Application::HandleMouseWheelEv
     Camera.ReceiveMouseWheelInput(Event);
 }
 
+void krendrr::Examples::SimpleDeferredRendering::Application::SetupFuturisticScene()
+{
+    Camera.SetCameraPosition({-234.753769, 132.926086, 199.352264});
+    Camera.SetCameraRotation({5, 40});
+
+    Scene->ToggleAmbientLight(true);
+
+    auto PointLight = Scene->SpawnPointLight();
+    PointLight->SetPosition({-350, 130, -170});
+}
+
+void krendrr::Examples::SimpleDeferredRendering::Application::SetupSponzaScene()
+{
+    Camera.SetCameraPosition({0, 200, 0});
+    Camera.SetCameraRotation({0, 0});
+
+    Scene->ToggleAmbientLight(true);
+
+    auto PointLight = Scene->SpawnPointLight();
+    PointLight->SetPosition({0, 250, 0});
+}
+
 bool krendrr::Examples::SimpleDeferredRendering::Application::InitializeSceneViewAndCamera()
 {
     glm::ivec2 WindowSize = Window->GetSize();
@@ -198,8 +223,6 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::InitializeSceneVie
     }
 
     Camera.SetSceneView(&SceneView);
-    Camera.SetCameraPosition({-234.753769, 132.926086, 199.352264});
-    Camera.SetCameraRotation({5, 40});
 
     return true;
 }
