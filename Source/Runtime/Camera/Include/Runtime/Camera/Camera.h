@@ -1,5 +1,7 @@
 #pragma once
 
+#include <set>
+#include <string_view>
 #include "glm/vec2.hpp"
 #include "glm/vec3.hpp"
 
@@ -38,10 +40,10 @@ namespace krendrr::Runtime::Camera
          */
         void SetCameraRotation(glm::vec2 NewRotation);
 
-
     private:
 
-        glm::vec3 InputMoveDirection {};
+        std::set<std::string_view> PressedButtons {};
+
         glm::vec2 InputMouseMove {};
 
         float CurrentYaw {};

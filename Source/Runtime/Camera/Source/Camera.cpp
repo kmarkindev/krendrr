@@ -1,4 +1,7 @@
 #include "Runtime/Camera/Camera.h"
+
+#include <array>
+
 #include "glm/common.hpp"
 #include "glm/ext/quaternion_trigonometric.hpp"
 #include "glm/gtc/quaternion.hpp"
@@ -20,22 +23,26 @@ namespace krendrr::Runtime::Camera
         if (!ControlledSceneView)
             return;
 
-        const float KeyStateScale = KeyEvent.State == Application::Core::KeyEvent::KeyState::Pressed ? 1.f : -1.f;
+        const bool bRemoveButton = KeyEvent.State == Application::Core::KeyEvent::KeyState::Released;
+        constexpr static std::array PossibleButtons = {
+            "Space",
+            "Left Shift",
+            "W",
+            "A",
+            "S",
+            "D"
+        };
 
-        if (KeyEvent.Key == "Space")
-            InputMoveDirection.y += KeyStateScale;
-        else if (KeyEvent.Key == "Left Shift")
-            InputMoveDirection.y += -KeyStateScale;
-        else if (KeyEvent.Key == "W")
-            InputMoveDirection.z += KeyStateScale;
-        else if (KeyEvent.Key == "A")
-            InputMoveDirection.x += -KeyStateScale;
-        else if (KeyEvent.Key == "S")
-            InputMoveDirection.z += -KeyStateScale;
-        else if (KeyEvent.Key == "D")
-            InputMoveDirection.x += KeyStateScale;
+        auto Iter = std::ranges::find(PossibleButtons, KeyEvent.Key);
+        if (Iter != PossibleButtons.end())
+        {
+            // PS. We use string literals from array so it is safe to store pressed buttons as string_view
 
-        InputMoveDirection = glm::clamp(InputMoveDirection, {-1, -1, -1}, {1, 1, 1});
+            if (bRemoveButton)
+                PressedButtons.erase(*Iter);
+            else
+                PressedButtons.insert(*Iter);
+        }
     }
 
     void Camera::ReceiveMouseMoveInput(const Application::Core::MouseMoveEvent& MouseEvent)
@@ -58,6 +65,23 @@ namespace krendrr::Runtime::Camera
     {
         if (!ControlledSceneView)
             return;
+
+        // Gather input direction
+
+        glm::vec3 InputMoveDirection {};
+
+        if (PressedButtons.contains("Space"))
+            InputMoveDirection.y += 1.f;
+        if (PressedButtons.contains("Left Shift"))
+            InputMoveDirection.y += -1.f;
+        if (PressedButtons.contains("W"))
+            InputMoveDirection.z += 1.f;
+        if (PressedButtons.contains("A"))
+            InputMoveDirection.x += -1.f;
+        if (PressedButtons.contains("S"))
+            InputMoveDirection.z += -1.f;
+        if (PressedButtons.contains("D"))
+            InputMoveDirection.x += 1.f;
 
         // Rotate
 
