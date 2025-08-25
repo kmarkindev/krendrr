@@ -15,7 +15,7 @@ IMPLEMENT_ENTRY_POINT(krendrr::Examples::SimpleDeferredRendering::Application)
 krendrr::Examples::SimpleDeferredRendering::Application::Application(const Runtime::Application::Core::StartupArgs& Args)
     : Runtime::Application::Core::Application(Args)
 {
-    bLoadFuturistic = Args.GetStartupArgs().size() > 1;
+    bLoadFuturistic = Args.GetStartupArgs().size() > 1 && Args.GetStartupArgs()[1] == "futuristic";
 }
 
 static void OpenGlDebugCallback(GLenum Source, GLenum Type, GLuint Id, GLenum Severity, GLsizei Length, GLchar const* Message, void const* UserParam)

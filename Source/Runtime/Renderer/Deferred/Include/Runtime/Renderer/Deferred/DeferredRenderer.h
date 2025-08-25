@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <memory>
 
 #include "Runtime/Renderer/Core/Renderer.h"
@@ -40,6 +41,11 @@ namespace krendrr::Runtime::Renderer::Deferred
         GLuint GBufferRoughnessTextureId {};
         GLuint GBufferEmissiveTextureId {};
         GLuint GBufferDepthStencilRenderBufferId {};
+        glm::ivec2 GBufferSize {-1, -1};
+
+        bool InitializeGBufferForView(const Core::SceneView& SceneView);
+        bool UpdateGBufferForView(const Core::SceneView& SceneView);
+        void DestroyGBuffer();
 
         std::shared_ptr<Core::TexturedMesh> PointLightUnitSphere {};
         Core::Shader PointLightShadowShader {};
@@ -50,15 +56,14 @@ namespace krendrr::Runtime::Renderer::Deferred
         GLuint LightPassFramebufferId {};
         GLuint LightPassColorTextureId {};
         GLuint LightPassDepthStencilRenderBufferId {};
+        glm::ivec2 LightPassBufferSize {-1, -1};
+
+        bool InitializeLightPassBufferForView(const Core::SceneView& SceneView);
 
         Core::Mesh FullscreenQuadMesh {};
         bool InitializeFullscreenQuadMesh();
 
         Core::Shader PostProcessShader {};
-
-        bool InitializeGBufferForView(const Core::SceneView& SceneView);
-        bool InitializeLightPassBufferForView(const Core::SceneView& SceneView);
-        bool UpdateGBufferForView(const Core::SceneView& SceneView);
 
         // Returns last used texture unit. +1 and start binding your textures if needed.
         int BindGBufferTextures(Core::Shader& ShaderToBind);
@@ -71,6 +76,13 @@ namespace krendrr::Runtime::Renderer::Deferred
 
         void AmbientDirectionalLightPass(const Core::SceneView& SceneView);
 
+        constexpr inline static int POINT_LIGHT_SHADOW_MAP_SIZE = 2048;
+        GLuint PointLightShadowCubeMap {};
+        std::array<GLuint, 6> ShadowMapFramebuffers {};
+        std::array<GLuint, 6> ShadowMapDepthRenderBuffers {};
+
+        void InitializePointLightShadowBuffers();
+        void DestroyPointLightShadowBuffers();
         void PointLightVolumesPass(const Core::SceneView& SceneView);
 
         void PostProcessingPass(const Core::SceneView& SceneView);

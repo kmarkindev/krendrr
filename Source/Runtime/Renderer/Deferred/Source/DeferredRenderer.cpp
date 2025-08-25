@@ -55,6 +55,8 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::Initialize(std::sha
         return false;
     }
 
+    InitializePointLightShadowBuffers();
+
     // TODO: log success
 
     return true;
@@ -208,34 +210,53 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::AmbientDirectionalL
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializePointLightShadowBuffers()
+{
+    glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &PointLightShadowCubeMap);
+
+    glTextureStorage2D(PointLightShadowCubeMap, 1, GL_R16, POINT_LIGHT_SHADOW_MAP_SIZE, POINT_LIGHT_SHADOW_MAP_SIZE);
+
+    // Use linear to make shadows less pixelated
+    glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    for (int i = 0; i < 6; ++i)
+    {
+        GLuint& ShadowMapFramebuffer = ShadowMapFramebuffers[i];
+        GLuint& ShadowMapDepthBuffer = ShadowMapDepthRenderBuffers[i];
+
+        glCreateFramebuffers(1, &ShadowMapFramebuffer);
+
+        glCreateRenderbuffers(1, &ShadowMapDepthBuffer);
+        glNamedRenderbufferStorage(ShadowMapDepthBuffer, GL_DEPTH24_STENCIL8, POINT_LIGHT_SHADOW_MAP_SIZE, POINT_LIGHT_SHADOW_MAP_SIZE);
+
+        glNamedFramebufferRenderbuffer(ShadowMapFramebuffer, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, ShadowMapDepthBuffer);
+        glNamedFramebufferTextureLayer(ShadowMapFramebuffer, GL_COLOR_ATTACHMENT0, PointLightShadowCubeMap, 0, i);
+    }
+}
+
+void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::DestroyPointLightShadowBuffers()
+{
+    glDeleteFramebuffers(6, ShadowMapFramebuffers.data());
+    glDeleteRenderbuffers(6, ShadowMapDepthRenderBuffers.data());
+    glDeleteTextures(1, &PointLightShadowCubeMap);
+}
+
 void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PointLightVolumesPass(const Core::SceneView& SceneView)
 {
+    // TODO: we are not using layered rendering here. Need to benchmark it before implementing
+
     const glm::mat4 SceneViewProjMatrix = SceneView.GetProjectionMatrix();
     const glm::mat4 SceneViewViewMatrix = SceneView.GetViewMatrix();
     const glm::ivec2 SceneViewSize = SceneView.GetViewportSize();
 
     for (const auto& PointLight : Scene->GetPointLights())
     {
-        // TODO: we are not using layered rendering here. Need to benchmark it before implementing
-
-        // TODO: Do not create shadow map textures and framebuffer every frame
-
-        GLuint PointLightShadowCubeMap {};
-        glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &PointLightShadowCubeMap);
-
-        constexpr int SHADOW_MAP_SIZE = 2048;
-
         // +1 to make sure it's not zero and >= than near plane
         const float PointLightFarDistance = PointLight->GetDistance() + 1.f;
-
-        glTextureStorage2D(PointLightShadowCubeMap, 1, GL_R16, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
-
-        // Use linear to make shadows less pixelated
-        glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
         const std::array ShadowViewMatrices = {
             glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{1, 0, 0}, {0, -1, 0}),
@@ -257,20 +278,12 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PointLightVolumesPa
         glEnable(GL_CULL_FACE);
         glCullFace(GL_FRONT);
 
-        GLuint ShadowMapFramebuffer {};
-        glCreateFramebuffers(1, &ShadowMapFramebuffer);
-
-        glViewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+        glViewport(0, 0, POINT_LIGHT_SHADOW_MAP_SIZE, POINT_LIGHT_SHADOW_MAP_SIZE);
         glClearColor(1, 1, 1, 1);
 
         for (int i = 0; i < 6; ++i)
         {
-            GLuint ShadowMapDepthBuffer {};
-            glCreateRenderbuffers(1, &ShadowMapDepthBuffer);
-            glNamedRenderbufferStorage(ShadowMapDepthBuffer, GL_DEPTH24_STENCIL8, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
-
-            glNamedFramebufferRenderbuffer(ShadowMapFramebuffer, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, ShadowMapDepthBuffer);
-            glNamedFramebufferTextureLayer(ShadowMapFramebuffer, GL_COLOR_ATTACHMENT0, PointLightShadowCubeMap, 0, i);
+            GLuint& ShadowMapFramebuffer = ShadowMapFramebuffers[i];
 
             glBindFramebuffer(GL_FRAMEBUFFER, ShadowMapFramebuffer);
 
@@ -295,17 +308,14 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PointLightVolumesPa
 
                 TexturedMesh->GetMesh()->BindVAOAndDraw();
             }
-
-            glDeleteRenderbuffers(1, &ShadowMapDepthBuffer);
         }
 
         glClearColor(0.f, 0.f, 0.f, 0.f);
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
         glCullFace(GL_BACK);
-        glViewport(0, 0, SceneViewSize.x, SceneViewSize.y);
-
-        glDeleteFramebuffers(1, &ShadowMapFramebuffer);
+        glm::ivec4 SceneViewport = SceneView.GetViewport();
+        glViewport(SceneViewport.x, SceneViewport.y, SceneViewport.z, SceneViewport.w);
 
         // First setup sphere position and shader
 
@@ -375,7 +385,6 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PointLightVolumesPa
 
         int LastUnbindId = UnbindGBufferTextures();
         glBindTextureUnit(LastUnbindId += 1, 0);
-        glDeleteTextures(1, &PointLightShadowCubeMap);
 
         glDisable(GL_STENCIL_TEST);
         glStencilMask(0xFF);
@@ -385,6 +394,7 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PointLightVolumesPa
         glCullFace(GL_BACK);
         glBlendFuncSeparate(GL_ONE, GL_ZERO, GL_ONE, GL_ZERO);
         glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 }
 
@@ -410,6 +420,9 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PostProcessingPass(
 
 bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::Shutdown()
 {
+    DestroyPointLightShadowBuffers();
+    DestroyGBuffer();
+
     return true;
 }
 
@@ -456,20 +469,19 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeFullscree
 
 bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeGBufferForView(const Core::SceneView& SceneView)
 {
+    glm::ivec2 ViewportSize = SceneView.GetViewportSize();
+
+    // No need to recreate GBuffer with same size
+    if (GBufferSize == ViewportSize)
+        return true;
+
     // If we need to reinitialize GBuffer, first we should remove the old one
     if(GBufferFramebufferId > 0)
     {
-        glDeleteTextures(1, &GBufferColorTextureId);
-        glDeleteTextures(1, &GBufferPositionTextureId);
-        glDeleteTextures(1, &GBufferNormalTextureId);
-        glDeleteTextures(1, &GBufferMetallicTextureId);
-        glDeleteTextures(1, &GBufferRoughnessTextureId);
-        glDeleteTextures(1, &GBufferEmissiveTextureId);
-        glDeleteRenderbuffers(1, &GBufferDepthStencilRenderBufferId);
-        glDeleteFramebuffers(1, &GBufferFramebufferId);
+        DestroyGBuffer();
     }
 
-    glm::ivec2 ViewportSize = SceneView.GetViewportSize();
+    GBufferSize = ViewportSize;
 
     glCreateFramebuffers(1, &GBufferFramebufferId);
 
@@ -516,14 +528,7 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeGBufferFo
 
     if(glCheckNamedFramebufferStatus(GBufferFramebufferId, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
     {
-        glDeleteTextures(1, &GBufferColorTextureId);
-        glDeleteTextures(1, &GBufferPositionTextureId);
-        glDeleteTextures(1, &GBufferNormalTextureId);
-        glDeleteTextures(1, &GBufferMetallicTextureId);
-        glDeleteTextures(1, &GBufferRoughnessTextureId);
-        glDeleteTextures(1, &GBufferEmissiveTextureId);
-        glDeleteRenderbuffers(1, &GBufferDepthStencilRenderBufferId);
-        glDeleteFramebuffers(1, &GBufferFramebufferId);
+        DestroyGBuffer();
 
         // TODO: log error "GBuffer framebuffer is not complete"
         return false;
@@ -542,17 +547,38 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeGBufferFo
     return true;
 }
 
+void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::DestroyGBuffer()
+{
+    glDeleteTextures(1, &GBufferColorTextureId);
+    glDeleteTextures(1, &GBufferPositionTextureId);
+    glDeleteTextures(1, &GBufferNormalTextureId);
+    glDeleteTextures(1, &GBufferMetallicTextureId);
+    glDeleteTextures(1, &GBufferRoughnessTextureId);
+    glDeleteTextures(1, &GBufferEmissiveTextureId);
+    glDeleteRenderbuffers(1, &GBufferDepthStencilRenderBufferId);
+    glDeleteFramebuffers(1, &GBufferFramebufferId);
+    GBufferSize = {-1, -1};
+    GBufferFramebufferId = 0;
+}
+
 bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeLightPassBufferForView(const Core::SceneView& SceneView)
 {
+    glm::ivec2 ViewportSize = SceneView.GetViewportSize();
+
+    if (ViewportSize == LightPassBufferSize)
+        return true;
+
     // If we need to reinitialize GBuffer, first we should remove the old one
     if(LightPassFramebufferId > 0)
     {
         glDeleteTextures(1, &LightPassColorTextureId);
         glDeleteRenderbuffers(1, &LightPassDepthStencilRenderBufferId);
         glDeleteFramebuffers(1, &LightPassFramebufferId);
+        LightPassBufferSize = {-1, -1};
+        LightPassFramebufferId = 0;
     }
 
-    glm::ivec2 ViewportSize = SceneView.GetViewportSize();
+    LightPassBufferSize = ViewportSize;
 
     glCreateFramebuffers(1, &LightPassFramebufferId);
 
@@ -573,6 +599,8 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeLightPass
         glDeleteTextures(1, &LightPassColorTextureId);
         glDeleteRenderbuffers(1, &LightPassDepthStencilRenderBufferId);
         glDeleteFramebuffers(1, &LightPassFramebufferId);
+        LightPassBufferSize = {-1, -1};
+        LightPassFramebufferId = 0;
 
         // TODO: log error "Light pass framebuffer is not complete"
         return false;
