@@ -2,13 +2,16 @@
 
 out vec4 FragColor;
 
+uniform sampler2D GBufferEmissiveTextureId;
 uniform sampler2D FinalRenderTexture;
 uniform vec2 ScreenSize;
 
 void main()
 {
     vec2 Uv = gl_FragCoord.xy / ScreenSize;
-    vec3 HdrColor = texture(FinalRenderTexture, Uv).rgb;
+
+    vec4 EmissiveColor = texture(GBufferEmissiveTextureId, Uv);
+    vec3 HdrColor = EmissiveColor.a > 0.f ? EmissiveColor.rgb : texture(FinalRenderTexture, Uv).rgb;
 
     // Reinhard tone mapping
     HdrColor = HdrColor / (HdrColor + vec3(1.0));

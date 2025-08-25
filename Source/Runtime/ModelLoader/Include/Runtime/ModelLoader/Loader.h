@@ -13,6 +13,7 @@ namespace krendrr::Runtime::ModelLoader
         std::string_view MetallicTextureName {"metallic"};
         std::string_view RoughnessTextureName {"roughness"};
         std::string_view NormalTextureName {"normal"};
+        std::string_view EmissiveTextureName {"emissive"};
     };
 
     struct LoadResult

@@ -262,6 +262,12 @@ namespace krendrr::Runtime::ModelLoader
                     // TODO: log error
                     return {};
                 }
+
+                if (!LoadTexture(aiTextureType_EMISSIVE, *NewTexturedMesh, Params.EmissiveTextureName, GL_SRGB8_ALPHA8))
+                {
+                    // TODO: log error
+                    return {};
+                }
             }
         }
 

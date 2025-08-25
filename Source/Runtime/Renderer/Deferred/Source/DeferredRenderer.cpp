@@ -104,12 +104,15 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::GeometryPass(const 
             TexturedMesh->GetTexture(NORMAL_TEXTURE_NAME)->ActivateTexture(2);
         if(TexturedMesh->HasTexture(ROUGHNESS_TEXTURE_NAME))
             TexturedMesh->GetTexture(ROUGHNESS_TEXTURE_NAME)->ActivateTexture(3);
+        if (TexturedMesh->HasTexture(EMISSIVE_TEXTURE_NAME))
+            TexturedMesh->GetTexture(EMISSIVE_TEXTURE_NAME)->ActivateTexture(4);
 
         GeometryPassShader.Use();
         GeometryPassShader.SetInt("BaseColorTexture", 0);
         GeometryPassShader.SetInt("MetallicTexture", 1);
         GeometryPassShader.SetInt("NormalTexture", 2);
         GeometryPassShader.SetInt("RoughnessTexture", 3);
+        GeometryPassShader.SetInt("EmissiveTexture", 4);
 
         glm::mat4 ModelMatrix = TexturedMesh->GetModelMatrix();
         glm::mat4 MVPMatrix = ProjMatrix * ViewMatrix * ModelMatrix;
@@ -126,6 +129,7 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::GeometryPass(const 
         glBindTextureUnit(1, 0);
         glBindTextureUnit(2, 0);
         glBindTextureUnit(3, 0);
+        glBindTextureUnit(4, 0);
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -359,12 +363,15 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PostProcessingPass(
     glClear(GL_COLOR_BUFFER_BIT);
 
     PostProcessShader.Use();
-    glBindTextureUnit(0, LightPassColorTextureId);
-    PostProcessShader.SetInt("FinalRenderTexture", 0);
+    int LastBindId = BindGBufferTextures(PostProcessShader);
+    glBindTextureUnit(LastBindId += 1, LightPassColorTextureId);
+    PostProcessShader.SetInt("FinalRenderTexture", LastBindId);
     PostProcessShader.SetVec2("ScreenSize", {ViewSize.x, ViewSize.y});
 
     FullscreenQuadMesh.BindVAOAndDraw();
 
+    int LastUnbindId = UnbindGBufferTextures();
+    PostProcessShader.SetInt("FinalRenderTexture", LastUnbindId += 1);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
@@ -423,6 +430,8 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeGBufferFo
         glDeleteTextures(1, &GBufferPositionTextureId);
         glDeleteTextures(1, &GBufferNormalTextureId);
         glDeleteTextures(1, &GBufferMetallicTextureId);
+        glDeleteTextures(1, &GBufferRoughnessTextureId);
+        glDeleteTextures(1, &GBufferEmissiveTextureId);
         glDeleteRenderbuffers(1, &GBufferDepthStencilRenderBufferId);
         glDeleteFramebuffers(1, &GBufferFramebufferId);
     }
@@ -437,19 +446,29 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeGBufferFo
     glTextureParameteri(GBufferColorTextureId, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     glCreateTextures(GL_TEXTURE_2D, 1, &GBufferPositionTextureId);
-    glTextureStorage2D(GBufferPositionTextureId, 1, GL_RGBA32F, ViewportSize.x, ViewportSize.y);
+    glTextureStorage2D(GBufferPositionTextureId, 1, GL_RGB32F, ViewportSize.x, ViewportSize.y);
     glTextureParameteri(GBufferPositionTextureId, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTextureParameteri(GBufferPositionTextureId, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     glCreateTextures(GL_TEXTURE_2D, 1, &GBufferNormalTextureId);
-    glTextureStorage2D(GBufferNormalTextureId, 1, GL_RGBA32F, ViewportSize.x, ViewportSize.y);
+    glTextureStorage2D(GBufferNormalTextureId, 1, GL_RGB32F, ViewportSize.x, ViewportSize.y);
     glTextureParameteri(GBufferNormalTextureId, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTextureParameteri(GBufferNormalTextureId, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     glCreateTextures(GL_TEXTURE_2D, 1, &GBufferMetallicTextureId);
-    glTextureStorage2D(GBufferMetallicTextureId, 1, GL_RGBA8, ViewportSize.x, ViewportSize.y);
+    glTextureStorage2D(GBufferMetallicTextureId, 1, GL_R8, ViewportSize.x, ViewportSize.y);
     glTextureParameteri(GBufferMetallicTextureId, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTextureParameteri(GBufferMetallicTextureId, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    glCreateTextures(GL_TEXTURE_2D, 1, &GBufferRoughnessTextureId);
+    glTextureStorage2D(GBufferRoughnessTextureId, 1, GL_R8, ViewportSize.x, ViewportSize.y);
+    glTextureParameteri(GBufferRoughnessTextureId, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTextureParameteri(GBufferRoughnessTextureId, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    glCreateTextures(GL_TEXTURE_2D, 1, &GBufferEmissiveTextureId);
+    glTextureStorage2D(GBufferEmissiveTextureId, 1, GL_RGBA8, ViewportSize.x, ViewportSize.y);
+    glTextureParameteri(GBufferEmissiveTextureId, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTextureParameteri(GBufferEmissiveTextureId, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     glCreateRenderbuffers(1, &GBufferDepthStencilRenderBufferId);
     glNamedRenderbufferStorage(GBufferDepthStencilRenderBufferId, GL_DEPTH24_STENCIL8, ViewportSize.x, ViewportSize.y);
@@ -459,6 +478,8 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeGBufferFo
     glNamedFramebufferTexture(GBufferFramebufferId, GL_COLOR_ATTACHMENT1, GBufferPositionTextureId, 0);
     glNamedFramebufferTexture(GBufferFramebufferId, GL_COLOR_ATTACHMENT2, GBufferNormalTextureId, 0);
     glNamedFramebufferTexture(GBufferFramebufferId, GL_COLOR_ATTACHMENT3, GBufferMetallicTextureId, 0);
+    glNamedFramebufferTexture(GBufferFramebufferId, GL_COLOR_ATTACHMENT4, GBufferRoughnessTextureId, 0);
+    glNamedFramebufferTexture(GBufferFramebufferId, GL_COLOR_ATTACHMENT5, GBufferEmissiveTextureId, 0);
 
     if(glCheckNamedFramebufferStatus(GBufferFramebufferId, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
     {
@@ -466,6 +487,8 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeGBufferFo
         glDeleteTextures(1, &GBufferPositionTextureId);
         glDeleteTextures(1, &GBufferNormalTextureId);
         glDeleteTextures(1, &GBufferMetallicTextureId);
+        glDeleteTextures(1, &GBufferRoughnessTextureId);
+        glDeleteTextures(1, &GBufferEmissiveTextureId);
         glDeleteRenderbuffers(1, &GBufferDepthStencilRenderBufferId);
         glDeleteFramebuffers(1, &GBufferFramebufferId);
 
@@ -473,8 +496,15 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeGBufferFo
         return false;
     }
 
-    GLuint AttachmentsToEnable[4] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3};
-    glNamedFramebufferDrawBuffers(GBufferFramebufferId, 4, AttachmentsToEnable);
+    GLuint AttachmentsToEnable[6] = {
+        GL_COLOR_ATTACHMENT0,
+        GL_COLOR_ATTACHMENT1,
+        GL_COLOR_ATTACHMENT2,
+        GL_COLOR_ATTACHMENT3,
+        GL_COLOR_ATTACHMENT4,
+        GL_COLOR_ATTACHMENT5
+    };
+    glNamedFramebufferDrawBuffers(GBufferFramebufferId, 6, AttachmentsToEnable);
 
     return true;
 }
@@ -544,13 +574,17 @@ int krendrr::Runtime::Renderer::Deferred::DeferredRenderer::BindGBufferTextures(
     glBindTextureUnit(1, GBufferPositionTextureId);
     glBindTextureUnit(2, GBufferNormalTextureId);
     glBindTextureUnit(3, GBufferMetallicTextureId);
+    glBindTextureUnit(4, GBufferRoughnessTextureId);
+    glBindTextureUnit(5, GBufferEmissiveTextureId);
 
     ShaderToBind.SetInt("GBufferColorTexture", 0);
     ShaderToBind.SetInt("GBufferWorldPositionTexture", 1);
     ShaderToBind.SetInt("GBufferWorldNormalTexture", 2);
     ShaderToBind.SetInt("GBufferMetallicTexture", 3);
+    ShaderToBind.SetInt("GBufferRoughnessTextureId", 4);
+    ShaderToBind.SetInt("GBufferEmissiveTextureId", 5);
 
-    return 3;
+    return 5;
 }
 
 int krendrr::Runtime::Renderer::Deferred::DeferredRenderer::UnbindGBufferTextures()
@@ -559,6 +593,8 @@ int krendrr::Runtime::Renderer::Deferred::DeferredRenderer::UnbindGBufferTexture
     glBindTextureUnit(1, 0);
     glBindTextureUnit(2, 0);
     glBindTextureUnit(3, 0);
+    glBindTextureUnit(4, 0);
+    glBindTextureUnit(5, 0);
 
-    return 0;
+    return 5;
 }

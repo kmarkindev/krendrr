@@ -17,6 +17,7 @@ namespace krendrr::Runtime::Renderer::Deferred
         constexpr inline static const char* METALLIC_TEXTURE_NAME = "metallic";
         constexpr inline static const char* ROUGHNESS_TEXTURE_NAME = "roughness";
         constexpr inline static const char* NORMAL_TEXTURE_NAME = "normal";
+        constexpr inline static const char* EMISSIVE_TEXTURE_NAME = "emissive";
 
         bool Initialize(std::shared_ptr<Core::Scene> NewScene) override;
 
@@ -36,6 +37,8 @@ namespace krendrr::Runtime::Renderer::Deferred
         GLuint GBufferPositionTextureId {};
         GLuint GBufferNormalTextureId {};
         GLuint GBufferMetallicTextureId {};
+        GLuint GBufferRoughnessTextureId {};
+        GLuint GBufferEmissiveTextureId {};
         GLuint GBufferDepthStencilRenderBufferId {};
 
         std::shared_ptr<Core::TexturedMesh> PointLightUnitSphere {};
