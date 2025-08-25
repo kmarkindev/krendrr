@@ -192,7 +192,7 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PointLightVolumesPa
         GLuint PointLightShadowCubeMap {};
         glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &PointLightShadowCubeMap);
 
-        constexpr int SHADOW_MAP_SIZE = 1024;
+        constexpr int SHADOW_MAP_SIZE = 2048;
 
         const float PointLightFarDistance = PointLight->GetDistance() + 1.f;
 
