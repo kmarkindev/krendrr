@@ -103,7 +103,10 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize()
     Runtime::ModelLoader::LoadResult MeshesLoadResult = Runtime::ModelLoader::LoadModel(
         bLoadFuturistic
             ?  "../Content/krendrr_examples_simpledeferredrendering/FuturisticRoom/source/CyberPunkRoom.fbx"
-            : "../Content/krendrr_examples_simpledeferredrendering/Sponza/sponza.obj"
+            : "../Content/krendrr_examples_simpledeferredrendering/Sponza/sponza.obj",
+        {
+            .bFlipNormals = bLoadFuturistic
+        }
     );
 
     if (!MeshesLoadResult.HasLoadedAtLeastOne())

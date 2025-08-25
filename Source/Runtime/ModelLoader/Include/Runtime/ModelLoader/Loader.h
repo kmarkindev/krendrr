@@ -9,6 +9,13 @@ namespace krendrr::Runtime::ModelLoader
     struct LoadParams
     {
         bool bFlipUVs = false;
+
+        /**
+         * There are two options: Y - up OR Z - up.
+         * We are using Y as up, so if model has Z as up, we need to flip normals and tangents.
+         */
+        bool bFlipNormals = false;
+
         std::string_view DiffuseTextureName {"diffuse"};
         std::string_view MetallicTextureName {"metallic"};
         std::string_view RoughnessTextureName {"roughness"};

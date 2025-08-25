@@ -144,6 +144,9 @@ namespace krendrr::Runtime::ModelLoader
                             Mesh->mNormals[vertIndex].y,
                             Mesh->mNormals[vertIndex].z,
                         };
+
+                        if (Params.bFlipNormals)
+                            std::swap(Normal.y, Normal.z);
                     }
 
                     if(Mesh->HasTextureCoords(0))
@@ -159,6 +162,9 @@ namespace krendrr::Runtime::ModelLoader
                         Mesh->mTangents[vertIndex].y,
                         Mesh->mTangents[vertIndex].z,
                     };
+
+                    if (Params.bFlipNormals)
+                        std::swap(Tangent.y, Tangent.z);
                 }
 
                 for(unsigned faceIndex = 0; faceIndex < Mesh->mNumFaces; faceIndex++)
