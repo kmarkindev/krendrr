@@ -29,9 +29,9 @@ namespace krendrr::Runtime::Renderer::Core
 
         glm::vec3 Color {1.f, 1.f, 1.f};
 
-        float Distance {600.f};
-        float AttenuationLinear {0.007f};
-        float AttenuationQuad {0.0002f};
+        float Distance {500.f};
+        float AttenuationLinear {0.002f};
+        float AttenuationQuad {0.0001f};
         float AttenuationConstant {1.f};
     };
 }

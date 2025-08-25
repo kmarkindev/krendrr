@@ -85,8 +85,9 @@ namespace krendrr::Runtime::Camera
 
         // Rotate
 
-        CurrentPitch += InputMouseMove.y * CameraRotationScale;
-        CurrentYaw += InputMouseMove.x * CameraRotationScale;
+        // Multiply by DeltaTime so FPS drops don't affect mouse sensitivity
+        CurrentPitch += InputMouseMove.y * CameraRotationScale * DeltaTime * 100;
+        CurrentYaw += InputMouseMove.x * CameraRotationScale * DeltaTime * 100;
 
         CurrentPitch = glm::clamp(CurrentPitch, -80.f, 80.f);
 

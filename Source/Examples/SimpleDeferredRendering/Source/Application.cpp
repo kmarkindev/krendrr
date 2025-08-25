@@ -208,8 +208,18 @@ void krendrr::Examples::SimpleDeferredRendering::Application::SetupSponzaScene()
 
     Scene->ToggleAmbientLight(true);
 
-    auto PointLight = Scene->SpawnPointLight();
-    PointLight->SetPosition({0, 250, 0});
+    auto AmbientLight = Scene->GetAmbientLightData();
+    AmbientLight.Intensity = 0.00125f;
+
+    Scene->SetAmbientLightData(AmbientLight);
+
+    auto PointLight1 = Scene->SpawnPointLight();
+    PointLight1->SetPosition({1000, 250, 0});
+    PointLight1->SetColor({1.f, 0.3f, 0.3f});
+
+    auto PointLight2 = Scene->SpawnPointLight();
+    PointLight2->SetPosition({-1100, 250, 0});
+    PointLight2->SetColor({0.3f, 1.0f, 0.3f});
 }
 
 bool krendrr::Examples::SimpleDeferredRendering::Application::InitializeSceneViewAndCamera()

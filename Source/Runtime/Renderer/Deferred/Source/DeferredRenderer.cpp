@@ -225,6 +225,7 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PointLightVolumesPa
 
         constexpr int SHADOW_MAP_SIZE = 2048;
 
+        // +1 to make sure it's not zero and >= than near plane
         const float PointLightFarDistance = PointLight->GetDistance() + 1.f;
 
         glTextureStorage2D(PointLightShadowCubeMap, 1, GL_R16, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
