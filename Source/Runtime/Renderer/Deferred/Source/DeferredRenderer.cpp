@@ -167,12 +167,37 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::SetupGBufferForLigh
 
 void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::AmbientDirectionalLightPass(const Core::SceneView& SceneView)
 {
+    const bool bHasAmbient = Scene->HasAmbientLight();
+    const bool bHasDirectional = Scene->HasDirectionalLight();
+
+    if (!bHasAmbient && !bHasDirectional)
+        return;
+
+    const auto& AmbientData = Scene->GetAmbientLightData();
+    const auto& DirectionalData = Scene->GetDirectionalLightData();
+
     const glm::ivec2 SceneViewSize = SceneView.GetViewportSize();
 
     glBindFramebuffer(GL_FRAMEBUFFER, LightPassFramebufferId);
 
     AmbientDirectionalLightPassShader.Use();
     BindGBufferTextures(AmbientDirectionalLightPassShader);
+
+    AmbientDirectionalLightPassShader.SetBool("HasAmbient", bHasAmbient);
+    if (bHasAmbient)
+    {
+        AmbientDirectionalLightPassShader.SetFloat("AmbientIntensity", AmbientData.Intensity);
+        AmbientDirectionalLightPassShader.SetVec3("AmbientColor", AmbientData.Color);
+    }
+
+    AmbientDirectionalLightPassShader.SetBool("HasDirectional", bHasDirectional);
+    if (bHasDirectional)
+    {
+        AmbientDirectionalLightPassShader.SetFloat("DirectionalIntensity", DirectionalData.Intensity);
+        AmbientDirectionalLightPassShader.SetVec3("DirectionalColor", DirectionalData.Color);
+        AmbientDirectionalLightPassShader.SetVec3("DirectionalDir", DirectionalData.Direction);
+    }
+
     AmbientDirectionalLightPassShader.SetVec2("ScreenSize", {SceneViewSize.x, SceneViewSize.y});
     AmbientDirectionalLightPassShader.SetVec3("CameraPos", SceneView.GetPosition());
 

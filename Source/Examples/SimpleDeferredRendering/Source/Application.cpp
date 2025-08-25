@@ -114,6 +114,8 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize()
         Scene->InsertTexturedMesh(TexturedMesh);
     }
 
+    Scene->ToggleAmbientLight(true);
+
     auto PointLight = Scene->SpawnPointLight();
     PointLight->SetPosition({-350, 130, -170});
 

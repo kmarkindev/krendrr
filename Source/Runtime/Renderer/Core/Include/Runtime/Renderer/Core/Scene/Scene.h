@@ -33,6 +33,7 @@ namespace krendrr::Runtime::Renderer::Core
         {
             glm::vec3 Direction {-0.2f, -1.f, -0.3f};
             glm::vec3 Color {1.f, 1.f, 1.f};
+            float Intensity {0.15f};
         };
 
         [[nodiscard]] bool HasDirectionalLight() const;
@@ -43,6 +44,7 @@ namespace krendrr::Runtime::Renderer::Core
         struct AmbientLightData
         {
             glm::vec3 Color {1.f, 1.f, 1.f};
+            float Intensity {0.005f};
         };
 
         [[nodiscard]] bool HasAmbientLight() const;
