@@ -53,8 +53,25 @@ namespace krendrr::Runtime::Renderer::Deferred
 
         Core::Shader PostProcessShader {};
 
-        bool InitializeGBufferForView(const Core::SceneView& View);
-        bool InitializeLightPassBufferForView(const Core::SceneView& View);
+        bool InitializeGBufferForView(const Core::SceneView& SceneView);
+        bool InitializeLightPassBufferForView(const Core::SceneView& SceneView);
+        bool UpdateGBufferForView(const Core::SceneView& SceneView);
+
+        // Returns last used texture unit. +1 and start binding your textures if needed.
+        int BindGBufferTextures(Core::Shader& ShaderToBind);
+        // Returns last used texture unit. +1 and start unbinding your textures if needed.
+        int UnbindGBufferTextures();
+
+        void GeometryPass(const Core::SceneView& SceneView);
+
+        void SetupGBufferForLightPass(const Core::SceneView& SceneView);
+
+        void AmbientDirectionalLightPass(const Core::SceneView& SceneView);
+
+        void PointLightVolumesPass(const Core::SceneView& SceneView);
+
+        void PostProcessingPass(const Core::SceneView& SceneView);
+
     };
 }
 

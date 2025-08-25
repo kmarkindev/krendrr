@@ -64,340 +64,308 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::Render(const std::s
 {
     for (const Core::SceneView& SceneView: SceneViews)
     {
-        int Width {};
-        int Height {};
+        if (!UpdateGBufferForView(SceneView))
+            return false;
 
-        {
-            glm::ivec4 Viewport = SceneView.GetViewport();
-            glViewport(Viewport.x, Viewport.y, Viewport.z, Viewport.w);
+        GeometryPass(SceneView);
 
-            if(!InitializeGBufferForView(SceneView))
-            {
-                // TODO: add error log
-                return false;
-            }
+        SetupGBufferForLightPass(SceneView);
 
-            if(!InitializeLightPassBufferForView(SceneView))
-            {
-                // TODO: add error log
-                return false;
-            }
+        AmbientDirectionalLightPass(SceneView);
 
-            glm::ivec2 ViewportSize = SceneView.GetViewportSize();
-            Width = ViewportSize.x;
-            Height = ViewportSize.y;
-        }
+        PointLightVolumesPass(SceneView);
 
-        // Geometry Pass
-
-        glBindFramebuffer(GL_FRAMEBUFFER, GBufferFramebufferId);
-
-        glEnable(GL_CULL_FACE);
-        glCullFace(GL_BACK);
-
-        glDisable(GL_BLEND);
-
-        glEnable(GL_DEPTH_TEST);
-        glDepthFunc(GL_LESS);
-        glDepthMask(GL_TRUE);
-
-        glDisable(GL_STENCIL_TEST);
-
-        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-        glClearColor(0.f, 0.f, 0.f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-
-        const glm::mat4 ViewMatrix = SceneView.GetViewMatrix();
-        const glm::mat4 ProjMatrix = SceneView.GetProjectionMatrix();
-
-        for (auto Meshes = Scene->GetTexturedMeshes(); const auto& TexturedMesh : Meshes)
-        {
-            if(TexturedMesh->HasTexture(DIFFUSE_TEXTURE_NAME))
-                TexturedMesh->GetTexture(DIFFUSE_TEXTURE_NAME)->ActivateTexture(0);
-            if(TexturedMesh->HasTexture(METALLIC_TEXTURE_NAME))
-                TexturedMesh->GetTexture(METALLIC_TEXTURE_NAME)->ActivateTexture(1);
-            if(TexturedMesh->HasTexture(NORMAL_TEXTURE_NAME))
-                TexturedMesh->GetTexture(NORMAL_TEXTURE_NAME)->ActivateTexture(2);
-            if(TexturedMesh->HasTexture(ROUGHNESS_TEXTURE_NAME))
-                TexturedMesh->GetTexture(ROUGHNESS_TEXTURE_NAME)->ActivateTexture(3);
-
-            GeometryPassShader.Use();
-            GeometryPassShader.SetInt("BaseColorTexture", 0);
-            GeometryPassShader.SetInt("MetallicTexture", 1);
-            GeometryPassShader.SetInt("NormalTexture", 2);
-            GeometryPassShader.SetInt("RoughnessTexture", 3);
-
-            glm::mat4 ModelMatrix = glm::mat4(1.0f);
-            glm::mat4 MVPMatrix = ProjMatrix * ViewMatrix * ModelMatrix;
-            glm::mat3 NormalMatrix = glm::transpose(glm::inverse(glm::mat3(ModelMatrix)));
-
-            GeometryPassShader.Use();
-            GeometryPassShader.SetMatrix4("MVPMatrix", MVPMatrix);
-            GeometryPassShader.SetMatrix4("ModelMatrix", ModelMatrix);
-            GeometryPassShader.SetMatrix3("NormalMatrix", NormalMatrix);
-
-            TexturedMesh->GetMesh()->BindVAO();
-            glDrawElements(
-                GL_TRIANGLES,
-                TexturedMesh->GetMesh()->GetPrimitivesCount(),
-                GL_UNSIGNED_INT,
-                reinterpret_cast<void*>(TexturedMesh->GetMesh()->GetPrimitivesOffset())
-            );
-            glBindVertexArray(0);
-
-            glBindTextureUnit(0, 0);
-            glBindTextureUnit(1, 0);
-            glBindTextureUnit(2, 0);
-            glBindTextureUnit(3, 0);
-        }
-
-        // Lighting Pass
-
-        // Copy Depth from geometry pass
-        glBlitNamedFramebuffer(GBufferFramebufferId, LightPassFramebufferId,
-            0, 0, Width, Height, 0, 0, Width, Height, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
-
-        glBindFramebuffer(GL_FRAMEBUFFER, LightPassFramebufferId);
-
-        glDisable(GL_DEPTH_TEST);
-
-        glClearColor(0.f, 0.f, 0.f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        glBindTextureUnit(0, GBufferColorTextureId);
-        glBindTextureUnit(1, GBufferPositionTextureId);
-        glBindTextureUnit(2, GBufferNormalTextureId);
-        glBindTextureUnit(3, GBufferMetallicTextureId);
-
-        // Render Ambient and Directional light
-
-        AmbientDirectionalLightPassShader.Use();
-        AmbientDirectionalLightPassShader.SetInt("GBufferColorTexture", 0);
-        AmbientDirectionalLightPassShader.SetInt("GBufferWorldPositionTexture", 1);
-        AmbientDirectionalLightPassShader.SetInt("GBufferWorldNormalTexture", 2);
-        AmbientDirectionalLightPassShader.SetInt("GBufferMetallicTexture", 3);
-        AmbientDirectionalLightPassShader.SetVec2("ScreenSize", {Width, Height});
-        AmbientDirectionalLightPassShader.SetVec3("CameraPos", SceneView.GetPosition());
-
-        FullscreenQuadMesh.BindVAO();
-        glDrawArrays(GL_TRIANGLES, 0, FullscreenQuadMesh.GetPrimitivesCount());
-
-        // Render other lights using Light Volumes
-
-        // Render point lights
-
-        for (const auto& PointLight : Scene->GetPointLights())
-        {
-            // Render Omnidirectional Shadow Map
-            // TODO: we are not using layered rendering here. Need to benchmark it before implementing
-
-            GLuint PointLightShadowCubeMap {};
-            glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &PointLightShadowCubeMap);
-
-            constexpr int SHADOW_MAP_SIZE = 1024;
-
-            const float PointLightFarDistance = PointLight->GetDistance() + 1.f;
-
-            glTextureStorage2D(PointLightShadowCubeMap, 1, GL_R16, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
-
-            // Use linear to make shadows less pixelated
-            glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-
-            const std::array ViewMatrices = {
-                glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{1, 0, 0}, {0, -1, 0}),
-                glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{-1, 0, 0}, {0, -1, 0}),
-                glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{0, 1, 0}, {0, 0, 1}),
-                glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{0, -1, 0}, {0, 0, -1}),
-                glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{0, 0, 1}, {0, -1, 0}),
-                glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{0, 0, -1}, {0, -1, 0}),
-            };
-
-            const glm::mat4 ProjectionMatrix = glm::perspective(
-                glm::radians(90.f),
-                1.0f,
-                0.01f,
-                PointLightFarDistance
-            );
-
-            glEnable(GL_DEPTH_TEST);
-            glDepthMask(GL_TRUE);
-
-            glDisable(GL_BLEND);
-            glDisable(GL_STENCIL_TEST);
-
-            glEnable(GL_CULL_FACE);
-            glCullFace(GL_FRONT);
-
-            GLuint ShadowMapFramebuffer {};
-            glCreateFramebuffers(1, &ShadowMapFramebuffer);
-
-            glViewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
-
-            for (int i = 0; i < 6; ++i)
-            {
-                GLuint ShadowMapDepthBuffer {};
-                glCreateRenderbuffers(1, &ShadowMapDepthBuffer);
-                glNamedRenderbufferStorage(ShadowMapDepthBuffer, GL_DEPTH24_STENCIL8, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
-
-                glNamedFramebufferRenderbuffer(ShadowMapFramebuffer, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, ShadowMapDepthBuffer);
-                glNamedFramebufferTextureLayer(ShadowMapFramebuffer, GL_COLOR_ATTACHMENT0, PointLightShadowCubeMap, 0, i);
-
-                glBindFramebuffer(GL_FRAMEBUFFER, ShadowMapFramebuffer);
-
-                glm::mat4 ViewProjMatrix = ProjectionMatrix * ViewMatrices[i];
-
-                glClearColor(1, 1, 1, 1);
-                glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-
-                for (auto Meshes = Scene->GetTexturedMeshes(); const auto& TexturedMesh : Meshes)
-                {
-                    glm::mat4 ModelMatrix = glm::mat4(1.0f);
-                    glm::mat4 MVPMatrix = ViewProjMatrix * ModelMatrix;
-
-                    PointLightShadowShader.Use();
-
-                    PointLightShadowShader.SetMatrix4("ModelMatrix", ModelMatrix);
-                    PointLightShadowShader.SetMatrix4("MVPMatrix", MVPMatrix);
-                    PointLightShadowShader.SetVec3("LightPosition", PointLight->GetPosition());
-                    PointLightShadowShader.SetFloat("FarDistance", PointLightFarDistance);
-
-                    TexturedMesh->GetMesh()->BindVAO();
-                    glDrawElements(GL_TRIANGLES, TexturedMesh->GetMesh()->GetPrimitivesCount(), GL_UNSIGNED_INT, reinterpret_cast<void*>(TexturedMesh->GetMesh()->GetPrimitivesOffset()));
-                    glBindVertexArray(0);
-                }
-
-                glDeleteRenderbuffers(1, &ShadowMapDepthBuffer);
-            }
-
-            glDeleteFramebuffers(1, &ShadowMapFramebuffer);
-
-            // First setup sphere position and shader
-
-            glBindFramebuffer(GL_FRAMEBUFFER, LightPassFramebufferId);
-
-            glViewport(0, 0, Width, Height);
-
-            glEnable(GL_BLEND);
-            glBlendFuncSeparate(GL_ONE, GL_ONE, GL_ONE, GL_ONE);
-            glBlendEquationSeparate(GL_FUNC_ADD, GL_MAX); // resulting alpha is max(one, one) = one.
-
-            PointLightColorShader.Use();
-
-            // No need for distance calculations since we have it as a configuration value in point light
-            const float AffectedDistance = PointLight->GetDistance();
-
-            glm::mat4 ModelMatrix = glm::mat4(1.f);
-            ModelMatrix = glm::translate(ModelMatrix, PointLight->GetPosition());
-            ModelMatrix = glm::scale(ModelMatrix, {AffectedDistance, AffectedDistance, AffectedDistance});
-
-            glm::mat4 MVPMatrix = ProjMatrix * ViewMatrix * ModelMatrix;
-
-            PointLightColorShader.SetMatrix4("MVPMatrix", MVPMatrix);
-
-            PointLightColorShader.SetInt("GBufferColorTexture", 0);
-            PointLightColorShader.SetInt("GBufferWorldPositionTexture", 1);
-            PointLightColorShader.SetInt("GBufferWorldNormalTexture", 2);
-            PointLightColorShader.SetInt("GBufferMetallicTexture", 3);
-            PointLightColorShader.SetInt("PointLightShadowCubeMap", 4);
-            PointLightColorShader.SetVec2("ScreenSize", {Width, Height});
-            PointLightColorShader.SetVec3("CameraPos", SceneView.GetPosition());
-            PointLightColorShader.SetFloat("PointLightFarPlane", PointLightFarDistance);
-
-            PointLightColorShader.SetVec3("PointLightPosition", PointLight->GetPosition());
-            PointLightColorShader.SetVec3("PointLightDiffuseColor", PointLight->GetColor());
-            PointLightColorShader.SetVec3("PointLightSpecularColor", PointLight->GetColor());
-            PointLightColorShader.SetFloat("PointLightAttenuationLinear", PointLight->GetAttenuationLinear());
-            PointLightColorShader.SetFloat("PointLightAttenuationQuad", PointLight->GetAttenuationQuad());
-            PointLightColorShader.SetFloat("PointLightAttenuationConstant", PointLight->GetAttenuationConstant());
-
-            // Now render ONLY to stencil
-
-            glEnable(GL_STENCIL_TEST);
-            glEnable(GL_DEPTH_TEST);
-            glDepthMask(GL_FALSE);
-            glStencilMask(0xFF);
-            glDisable(GL_CULL_FACE);
-            glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-
-            glStencilFunc(GL_ALWAYS, 0, 0xFF);
-            glStencilOpSeparate(GL_FRONT, GL_KEEP, GL_DECR_WRAP, GL_KEEP);
-            glStencilOpSeparate(GL_BACK, GL_KEEP, GL_INCR_WRAP, GL_KEEP);
-
-            glClear(GL_STENCIL_BUFFER_BIT);
-
-            const auto& SphereMesh = PointLightUnitSphere->GetMesh();
-            SphereMesh->BindVAO();
-            if (SphereMesh->IsUsingIndices())
-            {
-                glDrawElements(GL_TRIANGLES, SphereMesh->GetPrimitivesCount(), GL_UNSIGNED_INT, reinterpret_cast<void*>(SphereMesh->GetPrimitivesOffset()));
-            }
-            else
-            {
-                glDrawArrays(GL_TRIANGLES, SphereMesh->GetPrimitivesOffset(), SphereMesh->GetPrimitivesCount());
-            }
-
-            // And finally render point light with stencil masking
-
-            glEnable(GL_CULL_FACE);
-            glCullFace(GL_FRONT);
-
-            glDisable(GL_DEPTH_TEST);
-
-            glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-
-            glStencilMask(0x00);
-            glStencilFunc(GL_EQUAL, 0x01, 0xFF);
-            glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-
-            SphereMesh->BindVAO();
-
-            glBindTextureUnit(0, GBufferColorTextureId);
-            glBindTextureUnit(1, GBufferPositionTextureId);
-            glBindTextureUnit(2, GBufferNormalTextureId);
-            glBindTextureUnit(3, GBufferMetallicTextureId);
-            glBindTextureUnit(4, PointLightShadowCubeMap);
-
-            if (SphereMesh->IsUsingIndices())
-            {
-                glDrawElements(GL_TRIANGLES, SphereMesh->GetPrimitivesCount(), GL_UNSIGNED_INT, reinterpret_cast<void*>(SphereMesh->GetPrimitivesOffset()));
-            }
-            else
-            {
-                glDrawArrays(GL_TRIANGLES, SphereMesh->GetPrimitivesOffset(), SphereMesh->GetPrimitivesCount());
-            }
-
-            glBindTextureUnit(4, 0);
-            glDeleteTextures(1, &PointLightShadowCubeMap);
-        }
-
-        // Post Processing Pass
-
-        glDisable(GL_CULL_FACE);
-        glDisable(GL_BLEND);
-        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-
-        glDisable(GL_DEPTH_TEST);
-
-        glBindFramebuffer(GL_FRAMEBUFFER, SceneView.GetFramebuffer());
-
-        glClearColor(0.f, 0.f, 0.f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        PostProcessShader.Use();
-
-        glBindTextureUnit(0, LightPassColorTextureId);
-        PostProcessShader.SetInt("FinalRenderTexture", 0);
-        PostProcessShader.SetVec2("ScreenSize", {Width, Height});
-
-        FullscreenQuadMesh.BindVAO();
-        glDrawArrays(GL_TRIANGLES, 0, FullscreenQuadMesh.GetPrimitivesCount());
+        PostProcessingPass(SceneView);
     }
 
     return true;
+}
+
+void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::GeometryPass(const Core::SceneView& SceneView)
+{
+    glBindFramebuffer(GL_FRAMEBUFFER, GBufferFramebufferId);
+
+    glEnable(GL_CULL_FACE);
+    glEnable(GL_DEPTH_TEST);
+
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+    const glm::mat4 ViewMatrix = SceneView.GetViewMatrix();
+    const glm::mat4 ProjMatrix = SceneView.GetProjectionMatrix();
+
+    for (auto Meshes = Scene->GetTexturedMeshes(); const auto& TexturedMesh : Meshes)
+    {
+        if(TexturedMesh->HasTexture(DIFFUSE_TEXTURE_NAME))
+            TexturedMesh->GetTexture(DIFFUSE_TEXTURE_NAME)->ActivateTexture(0);
+        if(TexturedMesh->HasTexture(METALLIC_TEXTURE_NAME))
+            TexturedMesh->GetTexture(METALLIC_TEXTURE_NAME)->ActivateTexture(1);
+        if(TexturedMesh->HasTexture(NORMAL_TEXTURE_NAME))
+            TexturedMesh->GetTexture(NORMAL_TEXTURE_NAME)->ActivateTexture(2);
+        if(TexturedMesh->HasTexture(ROUGHNESS_TEXTURE_NAME))
+            TexturedMesh->GetTexture(ROUGHNESS_TEXTURE_NAME)->ActivateTexture(3);
+
+        GeometryPassShader.Use();
+        GeometryPassShader.SetInt("BaseColorTexture", 0);
+        GeometryPassShader.SetInt("MetallicTexture", 1);
+        GeometryPassShader.SetInt("NormalTexture", 2);
+        GeometryPassShader.SetInt("RoughnessTexture", 3);
+
+        glm::mat4 ModelMatrix = TexturedMesh->GetModelMatrix();
+        glm::mat4 MVPMatrix = ProjMatrix * ViewMatrix * ModelMatrix;
+        glm::mat3 NormalMatrix = glm::transpose(glm::inverse(glm::mat3(ModelMatrix)));
+
+        GeometryPassShader.Use();
+        GeometryPassShader.SetMatrix4("MVPMatrix", MVPMatrix);
+        GeometryPassShader.SetMatrix4("ModelMatrix", ModelMatrix);
+        GeometryPassShader.SetMatrix3("NormalMatrix", NormalMatrix);
+
+        TexturedMesh->GetMesh()->BindVAOAndDraw();
+
+        glBindTextureUnit(0, 0);
+        glBindTextureUnit(1, 0);
+        glBindTextureUnit(2, 0);
+        glBindTextureUnit(3, 0);
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_DEPTH_TEST);
+    glBindVertexArray(0);
+    glUseProgram(0);
+}
+
+void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::SetupGBufferForLightPass(const Core::SceneView& SceneView)
+{
+    const glm::ivec2 SceneViewSize = SceneView.GetViewportSize();
+
+    // Copy Depth from geometry pass
+    glBlitNamedFramebuffer(
+        GBufferFramebufferId,
+        LightPassFramebufferId,
+        0,
+        0,
+        SceneViewSize.x,
+        SceneViewSize.y,
+        0,
+        0,
+        SceneViewSize.x,
+        SceneViewSize.y,
+        GL_DEPTH_BUFFER_BIT,
+        GL_NEAREST
+    );
+
+    glBindFramebuffer(GL_FRAMEBUFFER, LightPassFramebufferId);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::AmbientDirectionalLightPass(const Core::SceneView& SceneView)
+{
+    const glm::ivec2 SceneViewSize = SceneView.GetViewportSize();
+
+    glBindFramebuffer(GL_FRAMEBUFFER, LightPassFramebufferId);
+
+    AmbientDirectionalLightPassShader.Use();
+    BindGBufferTextures(AmbientDirectionalLightPassShader);
+    AmbientDirectionalLightPassShader.SetVec2("ScreenSize", {SceneViewSize.x, SceneViewSize.y});
+    AmbientDirectionalLightPassShader.SetVec3("CameraPos", SceneView.GetPosition());
+
+    FullscreenQuadMesh.BindVAOAndDraw();
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PointLightVolumesPass(const Core::SceneView& SceneView)
+{
+    const glm::mat4 SceneViewProjMatrix = SceneView.GetProjectionMatrix();
+    const glm::mat4 SceneViewViewMatrix = SceneView.GetViewMatrix();
+    const glm::ivec2 SceneViewSize = SceneView.GetViewportSize();
+
+    for (const auto& PointLight : Scene->GetPointLights())
+    {
+        // TODO: we are not using layered rendering here. Need to benchmark it before implementing
+
+        // TODO: Do not create shadow map textures and framebuffer every frame
+
+        GLuint PointLightShadowCubeMap {};
+        glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &PointLightShadowCubeMap);
+
+        constexpr int SHADOW_MAP_SIZE = 1024;
+
+        const float PointLightFarDistance = PointLight->GetDistance() + 1.f;
+
+        glTextureStorage2D(PointLightShadowCubeMap, 1, GL_R16, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+
+        // Use linear to make shadows less pixelated
+        glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTextureParameteri(PointLightShadowCubeMap, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+        const std::array ShadowViewMatrices = {
+            glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{1, 0, 0}, {0, -1, 0}),
+            glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{-1, 0, 0}, {0, -1, 0}),
+            glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{0, 1, 0}, {0, 0, 1}),
+            glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{0, -1, 0}, {0, 0, -1}),
+            glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{0, 0, 1}, {0, -1, 0}),
+            glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{0, 0, -1}, {0, -1, 0}),
+        };
+
+        const glm::mat4 ShadowProjMatrix = glm::perspective(
+            glm::radians(90.f),
+            1.0f,
+            0.01f,
+            PointLightFarDistance
+        );
+
+        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_FRONT);
+
+        GLuint ShadowMapFramebuffer {};
+        glCreateFramebuffers(1, &ShadowMapFramebuffer);
+
+        glViewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+        glClearColor(1, 1, 1, 1);
+
+        for (int i = 0; i < 6; ++i)
+        {
+            GLuint ShadowMapDepthBuffer {};
+            glCreateRenderbuffers(1, &ShadowMapDepthBuffer);
+            glNamedRenderbufferStorage(ShadowMapDepthBuffer, GL_DEPTH24_STENCIL8, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+
+            glNamedFramebufferRenderbuffer(ShadowMapFramebuffer, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, ShadowMapDepthBuffer);
+            glNamedFramebufferTextureLayer(ShadowMapFramebuffer, GL_COLOR_ATTACHMENT0, PointLightShadowCubeMap, 0, i);
+
+            glBindFramebuffer(GL_FRAMEBUFFER, ShadowMapFramebuffer);
+
+            glm::mat4 ShadowViewProjMatrix = ShadowProjMatrix * ShadowViewMatrices[i];
+
+            glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+
+            for (auto Meshes = Scene->GetTexturedMeshes(); const auto& TexturedMesh : Meshes)
+            {
+                glm::mat4 ModelMatrix = TexturedMesh->GetModelMatrix();
+                glm::mat4 MVPMatrix = ShadowViewProjMatrix * ModelMatrix;
+
+                PointLightShadowShader.Use();
+
+                PointLightShadowShader.SetMatrix4("ModelMatrix", ModelMatrix);
+                PointLightShadowShader.SetMatrix4("MVPMatrix", MVPMatrix);
+                PointLightShadowShader.SetVec3("LightPosition", PointLight->GetPosition());
+                PointLightShadowShader.SetFloat("FarDistance", PointLightFarDistance);
+
+                TexturedMesh->GetMesh()->BindVAOAndDraw();
+            }
+
+            glDeleteRenderbuffers(1, &ShadowMapDepthBuffer);
+        }
+
+        glClearColor(0.f, 0.f, 0.f, 0.f);
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
+        glCullFace(GL_BACK);
+        glViewport(0, 0, SceneViewSize.x, SceneViewSize.y);
+
+        glDeleteFramebuffers(1, &ShadowMapFramebuffer);
+
+        // First setup sphere position and shader
+
+        glBindFramebuffer(GL_FRAMEBUFFER, LightPassFramebufferId);
+
+        PointLightColorShader.Use();
+
+        // No need for distance calculations since we have it as a configuration value in point light
+        const float AffectedDistance = PointLight->GetDistance();
+
+        glm::mat4 ModelMatrix = glm::mat4(1.f);
+        ModelMatrix = glm::translate(ModelMatrix, PointLight->GetPosition());
+        ModelMatrix = glm::scale(ModelMatrix, {AffectedDistance, AffectedDistance, AffectedDistance});
+
+        glm::mat4 MVPMatrix = SceneViewProjMatrix * SceneViewViewMatrix * ModelMatrix;
+
+        int LastTextureUnit = BindGBufferTextures(PointLightColorShader);
+        PointLightColorShader.SetMatrix4("MVPMatrix", MVPMatrix);
+        PointLightColorShader.SetInt("PointLightShadowCubeMap", LastTextureUnit += 1);
+        glBindTextureUnit(LastTextureUnit, PointLightShadowCubeMap);
+        PointLightColorShader.SetVec2("ScreenSize", {SceneViewSize.x, SceneViewSize.y});
+        PointLightColorShader.SetVec3("CameraPos", SceneView.GetPosition());
+        PointLightColorShader.SetFloat("PointLightFarPlane", PointLightFarDistance);
+        PointLightColorShader.SetVec3("PointLightPosition", PointLight->GetPosition());
+        PointLightColorShader.SetVec3("PointLightDiffuseColor", PointLight->GetColor());
+        PointLightColorShader.SetVec3("PointLightSpecularColor", PointLight->GetColor());
+        PointLightColorShader.SetFloat("PointLightAttenuationLinear", PointLight->GetAttenuationLinear());
+        PointLightColorShader.SetFloat("PointLightAttenuationQuad", PointLight->GetAttenuationQuad());
+        PointLightColorShader.SetFloat("PointLightAttenuationConstant", PointLight->GetAttenuationConstant());
+
+        // Now render ONLY to stencil
+
+        glEnable(GL_STENCIL_TEST);
+        glEnable(GL_DEPTH_TEST);
+        glDepthMask(GL_FALSE);
+        glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+
+        glStencilFunc(GL_ALWAYS, 0, 0xFF);
+        glStencilOpSeparate(GL_FRONT, GL_KEEP, GL_DECR_WRAP, GL_KEEP);
+        glStencilOpSeparate(GL_BACK, GL_KEEP, GL_INCR_WRAP, GL_KEEP);
+
+        glClear(GL_STENCIL_BUFFER_BIT);
+
+        const auto& SphereMesh = PointLightUnitSphere->GetMesh();
+        SphereMesh->BindVAOAndDraw();
+
+        glDisable(GL_STENCIL_TEST);
+        glDisable(GL_DEPTH_TEST);
+        glDepthMask(GL_TRUE);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+
+        // And finally render point light with stencil masking
+
+        glEnable(GL_BLEND);
+        glBlendFuncSeparate(GL_ONE, GL_ONE, GL_ONE, GL_ONE);
+        glBlendEquationSeparate(GL_FUNC_ADD, GL_MAX); // resulting alpha is max(one, one) = one.
+
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_FRONT);
+
+        glStencilMask(0x00);
+        glStencilFunc(GL_EQUAL, 0x01, 0xFF);
+
+        SphereMesh->BindVAOAndDraw();
+
+        int LastUnbindId = UnbindGBufferTextures();
+        glBindTextureUnit(LastUnbindId += 1, 0);
+        glDeleteTextures(1, &PointLightShadowCubeMap);
+
+        glStencilMask(0xFF);
+        glStencilFunc(GL_ALWAYS, 0, 0xFF);
+        glDisable(GL_CULL_FACE);
+        glDisable(GL_BLEND);
+        glCullFace(GL_BACK);
+        glBlendFuncSeparate(GL_ONE, GL_ZERO, GL_ONE, GL_ZERO);
+        glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
+    }
+}
+
+void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PostProcessingPass(const Core::SceneView& SceneView)
+{
+    const glm::ivec2 ViewSize = SceneView.GetViewportSize();
+
+    glBindFramebuffer(GL_FRAMEBUFFER, SceneView.GetFramebuffer());
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    PostProcessShader.Use();
+    glBindTextureUnit(0, LightPassColorTextureId);
+    PostProcessShader.SetInt("FinalRenderTexture", 0);
+    PostProcessShader.SetVec2("ScreenSize", {ViewSize.x, ViewSize.y});
+
+    FullscreenQuadMesh.BindVAOAndDraw();
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::Shutdown()
@@ -446,7 +414,7 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeFullscree
     return FullscreenQuadMesh.Load(Layout, Core::Mesh::ContainerToBytes(QuadMesh));
 }
 
-bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeGBufferForView(const Core::SceneView& View)
+bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeGBufferForView(const Core::SceneView& SceneView)
 {
     // If we need to reinitialize GBuffer, first we should remove the old one
     if(GBufferFramebufferId > 0)
@@ -459,7 +427,7 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeGBufferFo
         glDeleteFramebuffers(1, &GBufferFramebufferId);
     }
 
-    glm::ivec2 ViewportSize = View.GetViewportSize();
+    glm::ivec2 ViewportSize = SceneView.GetViewportSize();
 
     glCreateFramebuffers(1, &GBufferFramebufferId);
 
@@ -511,7 +479,7 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeGBufferFo
     return true;
 }
 
-bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeLightPassBufferForView(const Core::SceneView& View)
+bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeLightPassBufferForView(const Core::SceneView& SceneView)
 {
     // If we need to reinitialize GBuffer, first we should remove the old one
     if(LightPassFramebufferId > 0)
@@ -521,7 +489,7 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeLightPass
         glDeleteFramebuffers(1, &LightPassFramebufferId);
     }
 
-    glm::ivec2 ViewportSize = View.GetViewportSize();
+    glm::ivec2 ViewportSize = SceneView.GetViewportSize();
 
     glCreateFramebuffers(1, &LightPassFramebufferId);
 
@@ -548,4 +516,49 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeLightPass
     }
 
     return true;
+}
+
+bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::UpdateGBufferForView(const Core::SceneView& SceneView)
+{
+    glm::ivec4 Viewport = SceneView.GetViewport();
+    glViewport(Viewport.x, Viewport.y, Viewport.z, Viewport.w);
+
+    if(!InitializeGBufferForView(SceneView))
+    {
+        // TODO: add error log
+        return false;
+    }
+
+    if(!InitializeLightPassBufferForView(SceneView))
+    {
+        // TODO: add error log
+        return false;
+    }
+
+    return true;
+}
+
+int krendrr::Runtime::Renderer::Deferred::DeferredRenderer::BindGBufferTextures(Core::Shader& ShaderToBind)
+{
+    glBindTextureUnit(0, GBufferColorTextureId);
+    glBindTextureUnit(1, GBufferPositionTextureId);
+    glBindTextureUnit(2, GBufferNormalTextureId);
+    glBindTextureUnit(3, GBufferMetallicTextureId);
+
+    ShaderToBind.SetInt("GBufferColorTexture", 0);
+    ShaderToBind.SetInt("GBufferWorldPositionTexture", 1);
+    ShaderToBind.SetInt("GBufferWorldNormalTexture", 2);
+    ShaderToBind.SetInt("GBufferMetallicTexture", 3);
+
+    return 3;
+}
+
+int krendrr::Runtime::Renderer::Deferred::DeferredRenderer::UnbindGBufferTextures()
+{
+    glBindTextureUnit(0, 0);
+    glBindTextureUnit(1, 0);
+    glBindTextureUnit(2, 0);
+    glBindTextureUnit(3, 0);
+
+    return 0;
 }

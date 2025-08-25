@@ -1,5 +1,7 @@
 #include "Runtime/Renderer/Core/TexturedMesh/TexturedMesh.h"
 
+#include "glm/gtc/quaternion.hpp"
+
 namespace krendrr::Runtime::Renderer::Core
 {
     bool TexturedMesh::IsValid() const
@@ -85,5 +87,18 @@ namespace krendrr::Runtime::Renderer::Core
     void TexturedMesh::SetScale(const glm::vec3& NewScale)
     {
         Scale = NewScale;
+    }
+
+    glm::mat4 TexturedMesh::GetModelMatrix() const
+    {
+        glm::mat4 ModelMatrix = glm::mat4(1.0f);
+
+        // PS. Applied last -> first
+
+        ModelMatrix = glm::translate(ModelMatrix, Position);
+        ModelMatrix = glm::scale(ModelMatrix, Scale);
+        ModelMatrix = glm::mat4_cast(Rotation) * ModelMatrix;
+
+        return ModelMatrix;
     }
 }

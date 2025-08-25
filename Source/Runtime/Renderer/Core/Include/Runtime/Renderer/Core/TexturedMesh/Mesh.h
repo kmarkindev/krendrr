@@ -32,7 +32,7 @@ namespace krendrr::Runtime::Renderer::Core
 
         void MoveFrom(Mesh& Other) noexcept;
 
-        bool BindVAO() const;
+        bool BindVAOAndDraw(GLuint Type = GL_TRIANGLES) const;
 
         template<typename T>
         static std::span<const std::byte> ContainerToBytes(const T& Container)

@@ -39,12 +39,17 @@ namespace krendrr::Runtime::Renderer::Core
         PrimitivesOffset = Other.PrimitivesOffset;
     }
 
-    bool Mesh::BindVAO() const
+    bool Mesh::BindVAOAndDraw(GLuint Type) const
     {
         if (!CheckLoaded())
             return false;
 
         glBindVertexArray(VAO);
+
+        if (IsUsingIndices())
+            glDrawElements(Type, GetPrimitivesCount(), GL_UNSIGNED_INT, reinterpret_cast<void*>(GetPrimitivesOffset()));
+        else
+            glDrawArrays(Type, GetPrimitivesOffset(), GetPrimitivesCount());
 
         return true;
     }

@@ -44,6 +44,8 @@ namespace krendrr::Runtime::Renderer::Core
         [[nodiscard]] const glm::vec3& GetScale() const;
         void SetScale(const glm::vec3& NewScale);
 
+        [[nodiscard]] glm::mat4 GetModelMatrix() const;
+
     private:
 
         glm::vec3 Position {};
