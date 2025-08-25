@@ -252,6 +252,9 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PointLightVolumesPa
 
             for (auto Meshes = Scene->GetTexturedMeshes(); const auto& TexturedMesh : Meshes)
             {
+                if (!TexturedMesh->CanCastShadow())
+                    continue;
+
                 glm::mat4 ModelMatrix = TexturedMesh->GetModelMatrix();
                 glm::mat4 MVPMatrix = ShadowViewProjMatrix * ModelMatrix;
 

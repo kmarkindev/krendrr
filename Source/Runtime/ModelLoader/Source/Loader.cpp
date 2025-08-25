@@ -217,10 +217,21 @@ namespace krendrr::Runtime::ModelLoader
                         else
                         {
                             Texture = std::make_shared<Renderer::Core::Texture>();
-                            const bool bLoadResult = Texture->Load(TexturePath, {
+
+                            Renderer::Core::Texture::TextureLoadParams Params = {
                                 .ApiFormat = Format,
                                 .bFlipTexture = true,
-                            });
+                            };
+
+                            if (Type == aiTextureType_EMISSIVE)
+                            {
+                                // dont use mipmaps for emissive to prevent rendering them in places they should no be
+                                // may need to remove it, since it might have been bad low-res textures
+                                Params.MipMapsCount = 1;
+                                Params.TextureMinFilter = GL_LINEAR;
+                            }
+
+                            const bool bLoadResult = Texture->Load(TexturePath, Params);
 
                             if (!bLoadResult)
                             {
