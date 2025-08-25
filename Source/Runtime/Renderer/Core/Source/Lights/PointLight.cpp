@@ -56,4 +56,14 @@ namespace krendrr::Runtime::Renderer::Core
     {
         return AttenuationConstant;
     }
+
+    bool PointLight::CastsShadows() const
+    {
+        return bCastsShadows;
+    }
+
+    void PointLight::SetCastsShadows(bool NewCastsShadows)
+    {
+        bCastsShadows = NewCastsShadows;
+    }
 }

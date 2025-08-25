@@ -216,6 +216,7 @@ void krendrr::Examples::SimpleDeferredRendering::Application::SetupSponzaScene()
     auto PointLight1 = Scene->SpawnPointLight();
     PointLight1->SetPosition({1000, 250, 0});
     PointLight1->SetColor({1.f, 0.3f, 0.3f});
+    PointLight1->SetCastsShadows(false);
 
     auto PointLight2 = Scene->SpawnPointLight();
     PointLight2->SetPosition({-1100, 250, 0});

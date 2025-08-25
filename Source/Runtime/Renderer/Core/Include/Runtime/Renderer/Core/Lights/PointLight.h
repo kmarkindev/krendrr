@@ -23,11 +23,16 @@ namespace krendrr::Runtime::Renderer::Core
         void SetAttenuationQuad(float NewAttenuationQuad);
         [[nodiscard]] float GetAttenuationConstant() const;
 
+        [[nodiscard]] bool CastsShadows() const;
+        void SetCastsShadows(bool NewCastsShadows);
+
     private:
 
         glm::vec3 Position {};
 
         glm::vec3 Color {1.f, 1.f, 1.f};
+
+        bool bCastsShadows {true};
 
         float Distance {500.f};
         float AttenuationLinear {0.002f};

@@ -76,7 +76,7 @@ namespace krendrr::Runtime::Renderer::Deferred
 
         void AmbientDirectionalLightPass(const Core::SceneView& SceneView);
 
-        constexpr inline static int POINT_LIGHT_SHADOW_MAP_SIZE = 2048;
+        constexpr inline static int POINT_LIGHT_SHADOW_MAP_SIZE = 1024;
         GLuint PointLightShadowCubeMap {};
         std::array<GLuint, 6> ShadowMapFramebuffers {};
         std::array<GLuint, 6> ShadowMapDepthRenderBuffers {};
