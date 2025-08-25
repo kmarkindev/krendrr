@@ -33,7 +33,7 @@ namespace krendrr::Runtime::Renderer::Core
                 100.f,
             };
 
-            float NearPlane {0.01f};
+            float NearPlane {1.f};
             float FarPlane {100'000.0f};
         };
 

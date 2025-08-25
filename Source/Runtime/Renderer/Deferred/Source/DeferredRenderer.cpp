@@ -248,7 +248,7 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PointLightVolumesPa
         const glm::mat4 ShadowProjMatrix = glm::perspective(
             glm::radians(90.f),
             1.0f,
-            0.01f,
+            1.0f,
             PointLightFarDistance
         );
 
@@ -473,7 +473,7 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeGBufferFo
     glCreateFramebuffers(1, &GBufferFramebufferId);
 
     glCreateTextures(GL_TEXTURE_2D, 1, &GBufferColorTextureId);
-    glTextureStorage2D(GBufferColorTextureId, 1, GL_RGBA8, ViewportSize.x, ViewportSize.y);
+    glTextureStorage2D(GBufferColorTextureId, 1, GL_RGBA16F, ViewportSize.x, ViewportSize.y);
     glTextureParameteri(GBufferColorTextureId, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTextureParameteri(GBufferColorTextureId, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
@@ -488,17 +488,17 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeGBufferFo
     glTextureParameteri(GBufferNormalTextureId, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     glCreateTextures(GL_TEXTURE_2D, 1, &GBufferMetallicTextureId);
-    glTextureStorage2D(GBufferMetallicTextureId, 1, GL_R8, ViewportSize.x, ViewportSize.y);
+    glTextureStorage2D(GBufferMetallicTextureId, 1, GL_R16F, ViewportSize.x, ViewportSize.y);
     glTextureParameteri(GBufferMetallicTextureId, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTextureParameteri(GBufferMetallicTextureId, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     glCreateTextures(GL_TEXTURE_2D, 1, &GBufferRoughnessTextureId);
-    glTextureStorage2D(GBufferRoughnessTextureId, 1, GL_R8, ViewportSize.x, ViewportSize.y);
+    glTextureStorage2D(GBufferRoughnessTextureId, 1, GL_R16F, ViewportSize.x, ViewportSize.y);
     glTextureParameteri(GBufferRoughnessTextureId, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTextureParameteri(GBufferRoughnessTextureId, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     glCreateTextures(GL_TEXTURE_2D, 1, &GBufferEmissiveTextureId);
-    glTextureStorage2D(GBufferEmissiveTextureId, 1, GL_RGBA8, ViewportSize.x, ViewportSize.y);
+    glTextureStorage2D(GBufferEmissiveTextureId, 1, GL_RGBA16F, ViewportSize.x, ViewportSize.y);
     glTextureParameteri(GBufferEmissiveTextureId, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTextureParameteri(GBufferEmissiveTextureId, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
