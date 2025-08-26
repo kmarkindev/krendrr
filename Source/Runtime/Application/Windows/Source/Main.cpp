@@ -1,7 +1,7 @@
 #include <chrono>
 #include <memory>
 #include <string>
-
+#include "nvtx3/nvtx3.hpp"
 #include "Runtime/Application/Core/Application.h"
 #include "Runtime/Application/Core/EntryPoint.h"
 #include "Runtime/Application/Core/StartupArgs.h"
@@ -34,6 +34,8 @@ krendrr::Runtime::Application::Core::Window* TryGetEventWindow(const SDL_Event& 
 
 int main(int Argc, char** Argv)
 {
+    nvtx3::scoped_range WindowsMain {"Windows: Main()"};
+
     SDL_Init(SDL_INIT_VIDEO);
 
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
@@ -48,8 +50,11 @@ int main(int Argc, char** Argv)
 
     std::unique_ptr<krendrr::Runtime::Application::Core::Application> Application { krendrr::Runtime::Application::Core::ConstructApplicationInstance(StartupArgs) };
 
-    if (!Application->Initialize())
-        return -1;
+    {
+        nvtx3::scoped_range WindowsApplicationInitialization {"Windows: Application Initialization"};
+        if (!Application->Initialize())
+            return -1;
+    }
 
     std::chrono::steady_clock::time_point LastRecordedTime = std::chrono::steady_clock::now();
     float DeltaTime = 0.0;
@@ -57,86 +62,96 @@ int main(int Argc, char** Argv)
     bool bHasTickFailed {};
     while (!bHasTickFailed && !Application->HasRequestedShutdown())
     {
-        SDL_Event SdlEvent {};
-        while (SDL_PollEvent(&SdlEvent)) {
-            switch(SdlEvent.type) {
-                case SDL_EVENT_QUIT:
-                {
-                    krendrr::Runtime::Application::Core::QuitEvent QuitEvent {};
-                    QuitEvent.Window = TryGetEventWindow(SdlEvent);
+        nvtx3::scoped_range WindowsMainLoopIterationRange {"Windows: Main Loop Iteration"};
 
-                    Application->HandleQuitEvent(QuitEvent);
+        {
+            nvtx3::scoped_range WindowsEventsPollingRange {"Windows: Events Polling"};
 
-                    break;
+            SDL_Event SdlEvent {};
+            while (SDL_PollEvent(&SdlEvent)) {
+                switch(SdlEvent.type) {
+                    case SDL_EVENT_QUIT:
+                    {
+                        krendrr::Runtime::Application::Core::QuitEvent QuitEvent {};
+                        QuitEvent.Window = TryGetEventWindow(SdlEvent);
+
+                        Application->HandleQuitEvent(QuitEvent);
+
+                        break;
+                    }
+                    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+                    case SDL_EVENT_MOUSE_BUTTON_UP:
+                    {
+                        static const std::string KeyNamePrefix = "Mouse Button ";
+                        const std::string KeyName = KeyNamePrefix + std::to_string(SdlEvent.button.button);
+
+                        krendrr::Runtime::Application::Core::KeyEvent KeyDownEvent {};
+                        KeyDownEvent.Window = TryGetEventWindow(SdlEvent);
+                        KeyDownEvent.State = SdlEvent.button.down
+                            ? krendrr::Runtime::Application::Core::KeyEvent::KeyState::Pressed
+                            : krendrr::Runtime::Application::Core::KeyEvent::KeyState::Released;
+                        KeyDownEvent.Key = KeyName;
+
+                        Application->HandleKeyEvent(KeyDownEvent);
+
+                        break;
+                    }
+                    case SDL_EVENT_KEY_DOWN:
+                    case SDL_EVENT_KEY_UP:
+                    {
+                        krendrr::Runtime::Application::Core::KeyEvent KeyDownEvent {};
+                        KeyDownEvent.Window = TryGetEventWindow(SdlEvent);
+                        KeyDownEvent.State = SdlEvent.key.down
+                            ? krendrr::Runtime::Application::Core::KeyEvent::KeyState::Pressed
+                            : krendrr::Runtime::Application::Core::KeyEvent::KeyState::Released;
+                        KeyDownEvent.Key = SDL_GetKeyName(SdlEvent.key.key);;
+
+                        Application->HandleKeyEvent(KeyDownEvent);
+
+                        break;
+                    }
+                    case SDL_EVENT_MOUSE_MOTION:
+                    {
+                        krendrr::Runtime::Application::Core::MouseMoveEvent MouseMoveEvent {};
+                        MouseMoveEvent.Window = TryGetEventWindow(SdlEvent);
+                        MouseMoveEvent.Position = {
+                            SdlEvent.motion.x,
+                            SdlEvent.motion.y
+                        };
+                        MouseMoveEvent.Delta = {
+                            SdlEvent.motion.xrel,
+                            SdlEvent.motion.yrel
+                        };
+
+                        Application->HandleMouseMoveEvent(MouseMoveEvent);
+
+                        break;
+                    }
+                    case SDL_EVENT_MOUSE_WHEEL:
+                    {
+                        krendrr::Runtime::Application::Core::MouseWheelEvent MouseWheelEvent {};
+                        MouseWheelEvent.Window = TryGetEventWindow(SdlEvent);
+                        MouseWheelEvent.Delta = {
+                            SdlEvent.wheel.x,
+                            SdlEvent.wheel.y
+                        };
+
+                        Application->HandleMouseWheelEvent(MouseWheelEvent);
+
+                        break;
+
+                    }
+                    default:
+                        break;
                 }
-                case SDL_EVENT_MOUSE_BUTTON_DOWN:
-                case SDL_EVENT_MOUSE_BUTTON_UP:
-                {
-                    static const std::string KeyNamePrefix = "Mouse Button ";
-                    const std::string KeyName = KeyNamePrefix + std::to_string(SdlEvent.button.button);
-
-                    krendrr::Runtime::Application::Core::KeyEvent KeyDownEvent {};
-                    KeyDownEvent.Window = TryGetEventWindow(SdlEvent);
-                    KeyDownEvent.State = SdlEvent.button.down
-                        ? krendrr::Runtime::Application::Core::KeyEvent::KeyState::Pressed
-                        : krendrr::Runtime::Application::Core::KeyEvent::KeyState::Released;
-                    KeyDownEvent.Key = KeyName;
-
-                    Application->HandleKeyEvent(KeyDownEvent);
-
-                    break;
-                }
-                case SDL_EVENT_KEY_DOWN:
-                case SDL_EVENT_KEY_UP:
-                {
-                    krendrr::Runtime::Application::Core::KeyEvent KeyDownEvent {};
-                    KeyDownEvent.Window = TryGetEventWindow(SdlEvent);
-                    KeyDownEvent.State = SdlEvent.key.down
-                        ? krendrr::Runtime::Application::Core::KeyEvent::KeyState::Pressed
-                        : krendrr::Runtime::Application::Core::KeyEvent::KeyState::Released;
-                    KeyDownEvent.Key = SDL_GetKeyName(SdlEvent.key.key);;
-
-                    Application->HandleKeyEvent(KeyDownEvent);
-
-                    break;
-                }
-                case SDL_EVENT_MOUSE_MOTION:
-                {
-                    krendrr::Runtime::Application::Core::MouseMoveEvent MouseMoveEvent {};
-                    MouseMoveEvent.Window = TryGetEventWindow(SdlEvent);
-                    MouseMoveEvent.Position = {
-                        SdlEvent.motion.x,
-                        SdlEvent.motion.y
-                    };
-                    MouseMoveEvent.Delta = {
-                        SdlEvent.motion.xrel,
-                        SdlEvent.motion.yrel
-                    };
-
-                    Application->HandleMouseMoveEvent(MouseMoveEvent);
-
-                    break;
-                }
-                case SDL_EVENT_MOUSE_WHEEL:
-                {
-                    krendrr::Runtime::Application::Core::MouseWheelEvent MouseWheelEvent {};
-                    MouseWheelEvent.Window = TryGetEventWindow(SdlEvent);
-                    MouseWheelEvent.Delta = {
-                        SdlEvent.wheel.x,
-                        SdlEvent.wheel.y
-                    };
-
-                    Application->HandleMouseWheelEvent(MouseWheelEvent);
-
-                    break;
-
-                }
-                default:
-                    break;
             }
         }
 
-        bHasTickFailed = !Application->Tick(DeltaTime);
+        {
+            nvtx3::scoped_range WindowsApplicationTick {"Windows: Application Tick"};
+
+            bHasTickFailed = !Application->Tick(DeltaTime);
+        }
 
         std::chrono::steady_clock::time_point NewRecordedTime = std::chrono::steady_clock::now();
         auto Difference = std::chrono::duration_cast<std::chrono::duration<float, std::chrono::seconds::period>>(NewRecordedTime - LastRecordedTime);
@@ -144,8 +159,12 @@ int main(int Argc, char** Argv)
         LastRecordedTime = NewRecordedTime;
     }
 
-    if (!Application->Shutdown())
-        return -1;
+    {
+        nvtx3::scoped_range WindowsApplicationShutdown {"Windows: Application Shutdown"};
+
+        if (!Application->Shutdown())
+            return -1;
+    }
 
     return bHasTickFailed ? -1 : 0;
 }

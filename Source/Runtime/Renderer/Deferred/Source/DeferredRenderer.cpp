@@ -5,9 +5,12 @@
 #include "Runtime/Renderer/Core/Scene/Scene.h"
 #include "Runtime/Renderer/Core/Scene/SceneView.h"
 #include "Runtime/Renderer/Core/TexturedMesh/Texture.h"
+#include "nvtx3/nvtx3.hpp"
 
 bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::Initialize(std::shared_ptr<Core::Scene> NewScene)
 {
+    nvtx3::scoped_range InitRange {"Deferred Renderer: Initialize"};
+
     Scene = std::move(NewScene);
 
     std::array ShadersToLink = {
@@ -64,14 +67,18 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::Initialize(std::sha
 
 bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::Render(const std::span<Core::SceneView>& SceneViews)
 {
+    nvtx3::scoped_range RenderRange {"Deferred Renderer: Render"};
+
     for (const Core::SceneView& SceneView: SceneViews)
     {
+        nvtx3::scoped_range SceneViewRange {"SceneView Iteration"};
+
         if (!UpdateGBufferForView(SceneView))
             return false;
 
         GeometryPass(SceneView);
 
-        SetupGBufferForLightPass(SceneView);
+        SetupLightPassFromGBuffer(SceneView);
 
         AmbientDirectionalLightPass(SceneView);
 
@@ -85,6 +92,8 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::Render(const std::s
 
 void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::GeometryPass(const Core::SceneView& SceneView)
 {
+    nvtx3::scoped_range GeometryPassRange {"Geometry Pass"};
+
     glBindFramebuffer(GL_FRAMEBUFFER, GBufferFramebufferId);
 
     glEnable(GL_CULL_FACE);
@@ -136,6 +145,7 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::GeometryPass(const 
         glBindTextureUnit(4, 0);
     }
 
+    nvtx3::mark("Reset OpenGL state");
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glDisable(GL_CULL_FACE);
     glDisable(GL_DEPTH_TEST);
@@ -143,8 +153,10 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::GeometryPass(const 
     glUseProgram(0);
 }
 
-void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::SetupGBufferForLightPass(const Core::SceneView& SceneView)
+void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::SetupLightPassFromGBuffer(const Core::SceneView& SceneView)
 {
+    nvtx3::scoped_range LightPassSetupRange {"LightPass Setup"};
+
     const glm::ivec2 SceneViewSize = SceneView.GetViewportSize();
 
     // Copy Depth from geometry pass
@@ -171,6 +183,8 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::SetupGBufferForLigh
 
 void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::AmbientDirectionalLightPass(const Core::SceneView& SceneView)
 {
+    nvtx3::scoped_range AmbientDirectionalPassRange {"Ambient Directional Light Pass"};
+
     const bool bHasAmbient = Scene->HasAmbientLight();
     const bool bHasDirectional = Scene->HasDirectionalLight();
 
@@ -247,6 +261,8 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::DestroyPointLightSh
 
 void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PointLightVolumesPass(const Core::SceneView& SceneView)
 {
+    nvtx3::scoped_range PointLightPassRange {"Point Light Pass"};
+
     // TODO: we are not using layered rendering here. Need to benchmark it before implementing
 
     const glm::mat4 SceneViewProjMatrix = SceneView.GetProjectionMatrix();
@@ -255,6 +271,8 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PointLightVolumesPa
 
     for (const auto& PointLight : Scene->GetPointLights())
     {
+        nvtx3::scoped_range PointLightIterationRange {"Point Light Iteration"};
+
         // +1 to make sure it's not zero and >= than near plane
         const float PointLightFarDistance = PointLight->GetDistance() + 1.f;
 
@@ -281,35 +299,45 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PointLightVolumesPa
         glViewport(0, 0, POINT_LIGHT_SHADOW_MAP_SIZE, POINT_LIGHT_SHADOW_MAP_SIZE);
         glClearColor(1, 1, 1, 1);
 
-        for (int i = 0; i < 6; ++i)
         {
-            GLuint& ShadowMapFramebuffer = ShadowMapFramebuffers[i];
+            nvtx3::scoped_range PointLightShadowMapRenderRange {"Shadow Cube Map Render"};
 
-            glBindFramebuffer(GL_FRAMEBUFFER, ShadowMapFramebuffer);
-
-            glm::mat4 ShadowViewProjMatrix = ShadowProjMatrix * ShadowViewMatrices[i];
-
-            glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-
-            for (auto Meshes = Scene->GetTexturedMeshes(); const auto& TexturedMesh : Meshes)
+            for (int i = 0; i < 6; ++i)
             {
-                if (!TexturedMesh->CanCastShadow())
-                    continue;
+                nvtx3::scoped_range PointLightShadowMapFaceRenderRange {"Face Render"};
 
-                glm::mat4 ModelMatrix = TexturedMesh->GetModelMatrix();
-                glm::mat4 MVPMatrix = ShadowViewProjMatrix * ModelMatrix;
+                GLuint& ShadowMapFramebuffer = ShadowMapFramebuffers[i];
+
+                glBindFramebuffer(GL_FRAMEBUFFER, ShadowMapFramebuffer);
+
+                glm::mat4 ShadowViewProjMatrix = ShadowProjMatrix * ShadowViewMatrices[i];
+
+                glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 
                 PointLightShadowShader.Use();
-
-                PointLightShadowShader.SetMatrix4("ModelMatrix", ModelMatrix);
-                PointLightShadowShader.SetMatrix4("MVPMatrix", MVPMatrix);
                 PointLightShadowShader.SetVec3("LightPosition", PointLight->GetPosition());
                 PointLightShadowShader.SetFloat("FarDistance", PointLightFarDistance);
 
-                TexturedMesh->GetMesh()->BindVAOAndDraw();
+                for (auto Meshes = Scene->GetTexturedMeshes(); const auto& TexturedMesh : Meshes)
+                {
+                    if (!TexturedMesh->CanCastShadow())
+                        continue;
+
+                    nvtx3::scoped_range PointLightShadowMapFaceRenderMeshDrawRange {"Mesh Draw"};
+
+                    glm::mat4 ModelMatrix = TexturedMesh->GetModelMatrix();
+                    glm::mat4 MVPMatrix = ShadowViewProjMatrix * ModelMatrix;
+
+                    PointLightShadowShader.SetMatrix4("ModelMatrix", ModelMatrix);
+                    PointLightShadowShader.SetMatrix4("MVPMatrix", MVPMatrix);
+
+                    nvtx3::mark("Draw");
+                    TexturedMesh->GetMesh()->BindVAOAndDraw();
+                }
             }
         }
 
+        nvtx3::mark("Reset OpenGL state");
         glClearColor(0.f, 0.f, 0.f, 0.f);
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
@@ -321,85 +349,102 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PointLightVolumesPa
 
         glBindFramebuffer(GL_FRAMEBUFFER, LightPassFramebufferId);
 
-        PointLightColorShader.Use();
+        {
+            nvtx3::scoped_range PointLightPassPrepareStencilColorRenderRange {"Prepare Stencil/Color Render"};
 
-        // No need for distance calculations since we have it as a configuration value in point light
-        const float AffectedDistance = PointLight->GetDistance();
+            PointLightColorShader.Use();
 
-        glm::mat4 ModelMatrix = glm::mat4(1.f);
-        ModelMatrix = glm::translate(ModelMatrix, PointLight->GetPosition());
-        ModelMatrix = glm::scale(ModelMatrix, {AffectedDistance, AffectedDistance, AffectedDistance});
+            // No need for distance calculations since we have it as a configuration value in point light
+            const float AffectedDistance = PointLight->GetDistance();
 
-        glm::mat4 MVPMatrix = SceneViewProjMatrix * SceneViewViewMatrix * ModelMatrix;
+            glm::mat4 ModelMatrix = glm::mat4(1.f);
+            ModelMatrix = glm::translate(ModelMatrix, PointLight->GetPosition());
+            ModelMatrix = glm::scale(ModelMatrix, {AffectedDistance, AffectedDistance, AffectedDistance});
 
-        int LastTextureUnit = BindGBufferTextures(PointLightColorShader);
-        PointLightColorShader.SetMatrix4("MVPMatrix", MVPMatrix);
-        PointLightColorShader.SetInt("PointLightShadowCubeMap", LastTextureUnit += 1);
-        glBindTextureUnit(LastTextureUnit, PointLightShadowCubeMap);
-        PointLightColorShader.SetVec2("ScreenSize", {SceneViewSize.x, SceneViewSize.y});
-        PointLightColorShader.SetVec3("CameraPos", SceneView.GetPosition());
-        PointLightColorShader.SetFloat("PointLightFarPlane", PointLightFarDistance);
-        PointLightColorShader.SetVec3("PointLightPosition", PointLight->GetPosition());
-        PointLightColorShader.SetVec3("PointLightDiffuseColor", PointLight->GetColor());
-        PointLightColorShader.SetVec3("PointLightSpecularColor", PointLight->GetColor());
-        PointLightColorShader.SetFloat("PointLightAttenuationLinear", PointLight->GetAttenuationLinear());
-        PointLightColorShader.SetFloat("PointLightAttenuationQuad", PointLight->GetAttenuationQuad());
-        PointLightColorShader.SetFloat("PointLightAttenuationConstant", PointLight->GetAttenuationConstant());
+            glm::mat4 MVPMatrix = SceneViewProjMatrix * SceneViewViewMatrix * ModelMatrix;
 
-        // Now render ONLY to stencil
-
-        glEnable(GL_STENCIL_TEST);
-        glEnable(GL_DEPTH_TEST);
-        glDepthMask(GL_FALSE);
-        glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-
-        glStencilFunc(GL_ALWAYS, 0, 0xFF);
-        glStencilOpSeparate(GL_FRONT, GL_KEEP, GL_DECR_WRAP, GL_KEEP);
-        glStencilOpSeparate(GL_BACK, GL_KEEP, GL_INCR_WRAP, GL_KEEP);
-
-        glClear(GL_STENCIL_BUFFER_BIT);
+            int LastTextureUnit = BindGBufferTextures(PointLightColorShader);
+            PointLightColorShader.SetMatrix4("MVPMatrix", MVPMatrix);
+            PointLightColorShader.SetInt("PointLightShadowCubeMap", LastTextureUnit += 1);
+            glBindTextureUnit(LastTextureUnit, PointLightShadowCubeMap);
+            PointLightColorShader.SetVec2("ScreenSize", {SceneViewSize.x, SceneViewSize.y});
+            PointLightColorShader.SetVec3("CameraPos", SceneView.GetPosition());
+            PointLightColorShader.SetFloat("PointLightFarPlane", PointLightFarDistance);
+            PointLightColorShader.SetVec3("PointLightPosition", PointLight->GetPosition());
+            PointLightColorShader.SetVec3("PointLightDiffuseColor", PointLight->GetColor());
+            PointLightColorShader.SetVec3("PointLightSpecularColor", PointLight->GetColor());
+            PointLightColorShader.SetFloat("PointLightAttenuationLinear", PointLight->GetAttenuationLinear());
+            PointLightColorShader.SetFloat("PointLightAttenuationQuad", PointLight->GetAttenuationQuad());
+            PointLightColorShader.SetFloat("PointLightAttenuationConstant", PointLight->GetAttenuationConstant());
+        }
 
         const auto& SphereMesh = PointLightUnitSphere->GetMesh();
-        SphereMesh->BindVAOAndDraw();
 
-        glDisable(GL_STENCIL_TEST);
-        glDisable(GL_DEPTH_TEST);
-        glDepthMask(GL_TRUE);
-        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-        glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+        {
+            nvtx3::scoped_range PointLightPassStencilRange {"Stencil Render"};
 
-        // And finally render point light with stencil masking
+            // Now render ONLY to stencil
 
-        glEnable(GL_BLEND);
-        glBlendFuncSeparate(GL_ONE, GL_ONE, GL_ONE, GL_ONE);
-        glBlendEquationSeparate(GL_FUNC_ADD, GL_MAX); // resulting alpha is max(one, one) = one.
+            glEnable(GL_STENCIL_TEST);
+            glEnable(GL_DEPTH_TEST);
+            glDepthMask(GL_FALSE);
+            glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 
-        glEnable(GL_CULL_FACE);
-        glCullFace(GL_FRONT);
+            glStencilFunc(GL_ALWAYS, 0, 0xFF);
+            glStencilOpSeparate(GL_FRONT, GL_KEEP, GL_DECR_WRAP, GL_KEEP);
+            glStencilOpSeparate(GL_BACK, GL_KEEP, GL_INCR_WRAP, GL_KEEP);
 
-        glEnable(GL_STENCIL_TEST);
-        glStencilMask(0x00);
-        glStencilFunc(GL_EQUAL, 0x01, 0xFF);
+            glClear(GL_STENCIL_BUFFER_BIT);
 
-        SphereMesh->BindVAOAndDraw();
+            SphereMesh->BindVAOAndDraw();
 
-        int LastUnbindId = UnbindGBufferTextures();
-        glBindTextureUnit(LastUnbindId += 1, 0);
+            nvtx3::mark("Reset OpenGL state");
+            glDisable(GL_STENCIL_TEST);
+            glDisable(GL_DEPTH_TEST);
+            glDepthMask(GL_TRUE);
+            glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+            glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+        }
 
-        glDisable(GL_STENCIL_TEST);
-        glStencilMask(0xFF);
-        glStencilFunc(GL_ALWAYS, 0, 0xFF);
-        glDisable(GL_CULL_FACE);
-        glDisable(GL_BLEND);
-        glCullFace(GL_BACK);
-        glBlendFuncSeparate(GL_ONE, GL_ZERO, GL_ONE, GL_ZERO);
-        glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        {
+            nvtx3::scoped_range PointLightPassStencilRange {"Light Render"};
+
+            // And finally render point light with stencil masking
+
+            glEnable(GL_BLEND);
+            glBlendFuncSeparate(GL_ONE, GL_ONE, GL_ONE, GL_ONE);
+            glBlendEquationSeparate(GL_FUNC_ADD, GL_MAX); // resulting alpha is max(one, one) = one.
+
+            glEnable(GL_CULL_FACE);
+            glCullFace(GL_FRONT);
+
+            glEnable(GL_STENCIL_TEST);
+            glStencilMask(0x00);
+            glStencilFunc(GL_EQUAL, 0x01, 0xFF);
+
+            SphereMesh->BindVAOAndDraw();
+
+            int LastUnbindId = UnbindGBufferTextures();
+            glBindTextureUnit(LastUnbindId += 1, 0);
+
+            nvtx3::mark("Reset OpenGL state");
+            glDisable(GL_STENCIL_TEST);
+            glStencilMask(0xFF);
+            glStencilFunc(GL_ALWAYS, 0, 0xFF);
+            glDisable(GL_CULL_FACE);
+            glDisable(GL_BLEND);
+            glCullFace(GL_BACK);
+            glBlendFuncSeparate(GL_ONE, GL_ZERO, GL_ONE, GL_ZERO);
+            glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        }
     }
 }
 
 void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PostProcessingPass(const Core::SceneView& SceneView)
 {
+    nvtx3::scoped_range PostProcessingPassRange {"PostProcessing Pass"};
+
     const glm::ivec2 ViewSize = SceneView.GetViewportSize();
 
     glBindFramebuffer(GL_FRAMEBUFFER, SceneView.GetFramebuffer());
@@ -413,8 +458,9 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PostProcessingPass(
 
     FullscreenQuadMesh.BindVAOAndDraw();
 
+    nvtx3::mark("Reset OpenGL state");
     int LastUnbindId = UnbindGBufferTextures();
-    PostProcessShader.SetInt("FinalRenderTexture", LastUnbindId += 1);
+    glBindTextureUnit(LastUnbindId += 1, 0);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
@@ -474,6 +520,8 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeGBufferFo
     // No need to recreate GBuffer with same size
     if (GBufferSize == ViewportSize)
         return true;
+
+    nvtx3::scoped_range GBufferInitRange {"GBuffer Init"};
 
     // If we need to reinitialize GBuffer, first we should remove the old one
     if(GBufferFramebufferId > 0)
@@ -567,6 +615,8 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeLightPass
 
     if (ViewportSize == LightPassBufferSize)
         return true;
+
+    nvtx3::scoped_range LightFramebufferRange {"LightPass Framebuffer Init"};
 
     // If we need to reinitialize GBuffer, first we should remove the old one
     if(LightPassFramebufferId > 0)

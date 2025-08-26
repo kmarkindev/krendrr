@@ -72,7 +72,7 @@ namespace krendrr::Runtime::Renderer::Deferred
 
         void GeometryPass(const Core::SceneView& SceneView);
 
-        void SetupGBufferForLightPass(const Core::SceneView& SceneView);
+        void SetupLightPassFromGBuffer(const Core::SceneView& SceneView);
 
         void AmbientDirectionalLightPass(const Core::SceneView& SceneView);
 

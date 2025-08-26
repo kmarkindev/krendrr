@@ -5,4 +5,5 @@ target_link_libraries(${TARGET_NAME} PRIVATE
     krendrr::thirdparty::glm
     krendrr::thirdparty::opengl
     krendrr::runtime::modelloader
+    krendrr::thirdparty::nvtx
 )
