@@ -47,7 +47,7 @@ namespace krendrr::Runtime::RenderApi::Core
 
         bool SetupDebugLayer(UINT& DxgiFactoryFlags, const InitParams& Params);
         bool CreateDevice(UINT DxgiFactoryFlags);
-        bool CreateCommandQueue(const InitParams& Params);
+        bool CreateCommandQueue();
 
     };
 }

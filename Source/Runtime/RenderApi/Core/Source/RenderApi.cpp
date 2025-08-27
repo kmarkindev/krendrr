@@ -17,10 +17,10 @@ namespace krendrr::Runtime::RenderApi::Core
         if (!SetupDebugLayer(DxgiFactoryFlags, Params))
             return false;
 
-        if (!CreateDevice(DxgiFactoryFlags, Params))
+        if (!CreateDevice(DxgiFactoryFlags))
             return false;
 
-        if (!CreateCommandQueue(Params))
+        if (!CreateCommandQueue())
             return false;
 
         return true;
@@ -110,7 +110,7 @@ namespace krendrr::Runtime::RenderApi::Core
         return true;
     }
 
-    bool RenderApi::CreateCommandQueue(const InitParams& Params)
+    bool RenderApi::CreateCommandQueue()
     {
         D3D12_COMMAND_QUEUE_DESC QueueDesc = {};
         QueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
