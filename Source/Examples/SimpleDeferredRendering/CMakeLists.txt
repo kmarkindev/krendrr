@@ -7,4 +7,6 @@ target_link_libraries(${TARGET_NAME} PRIVATE
     krendrr::thirdparty::glm
     krendrr::runtime::modelloader
     krendrr::runtime::camera
+
+    krendrr::thirdparty::directx12
 )
