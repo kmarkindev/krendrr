@@ -27,11 +27,17 @@ namespace krendrr::Runtime::Renderer::Core
             GLint ApiFormat = GL_RGBA8;
             GLint MipMapsCount = 0;
             bool bFlipTexture = false;
+
+            static TextureLoadParams Default()
+            {
+                // https://bugs.llvm.org/show_bug.cgi?id=36684
+                return {};
+            }
         };
 
         [[nodiscard]] bool IsLoaded() const;
 
-        bool Load(const std::string_view& TextureFileName, const TextureLoadParams& Params = {});
+        bool Load(const std::string_view& TextureFileName, const TextureLoadParams& Params = TextureLoadParams::Default());
 
         bool ActivateTexture(std::uint32_t TextureUnit) const;
 

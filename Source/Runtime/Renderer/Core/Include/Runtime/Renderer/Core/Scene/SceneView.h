@@ -35,9 +35,15 @@ namespace krendrr::Runtime::Renderer::Core
 
             float NearPlane {1.f};
             float FarPlane {100'000.0f};
+
+            static InitParams Default()
+            {
+                // https://bugs.llvm.org/show_bug.cgi?id=36684
+                return {};
+            }
         };
 
-        bool Initialize(GLuint NewFramebuffer, const glm::ivec4& NewViewport, const InitParams& Params = {});
+        bool Initialize(GLuint NewFramebuffer, const glm::ivec4& NewViewport, const InitParams& Params = InitParams::Default());
 
         [[nodiscard]] bool IsValid() const;
 
