@@ -2,16 +2,12 @@
 
 namespace krendrr::Runtime::Application::Core
 {
-    Application::Application(const StartupArgs& Args)
-    {
-    }
-
     bool Application::Tick(float DeltaTime)
     {
         return true;
     }
 
-    bool Application::Initialize()
+    bool Application::Initialize(const StartupArgs& Args)
     {
         return true;
     }

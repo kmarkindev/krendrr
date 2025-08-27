@@ -5,7 +5,7 @@ namespace krendrr::Runtime::Application::Core
     class Application;
     class StartupArgs;
 
-    Application* ConstructApplicationInstance(const StartupArgs& Args);
+    Application* ConstructApplicationInstance();
 }
 
 /**
@@ -23,8 +23,8 @@ namespace krendrr::Runtime::Application::Core
 #define IMPLEMENT_ENTRY_POINT(ApplicationType) \
 namespace krendrr::Runtime::Application::Core \
 { \
-    Application* ConstructApplicationInstance(const StartupArgs& Args) \
+    Application* ConstructApplicationInstance() \
     { \
-        return new ApplicationType {Args}; \
+        return new ApplicationType {}; \
     } \
 } \

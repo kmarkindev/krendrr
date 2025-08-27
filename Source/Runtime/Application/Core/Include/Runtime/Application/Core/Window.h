@@ -1,6 +1,9 @@
 #pragma once
 
+#include <memory>
 #include <string_view>
+
+#include "../../../../../../RenderApi/Core/Include/Runtime/RenderApi/Core/RenderApi.h"
 #include "glm/vec2.hpp"
 
 namespace krendrr::Runtime::Application::Core
@@ -29,17 +32,13 @@ namespace krendrr::Runtime::Application::Core
             glm::ivec2 Size {};
         };
 
-        explicit Window(Application* Application);
-
-        [[nodiscard]] Application* GetApplication() const;
-
         virtual ~Window() = default;
 
-        static Window* Create(Application* Application, const InitializeParams& Params);
+        static Window* Create(const std::shared_ptr<RenderApi::Core::RenderApi>& RenderApi, const InitializeParams& Params);
 
-        virtual bool Initialize(const InitializeParams& Params) = 0;
+        virtual bool Initialize(const std::shared_ptr<RenderApi::Core::RenderApi>& RenderApi, const InitializeParams& Params) = 0;
 
-        virtual bool Close() = 0;
+        virtual bool Destroy() = 0;
 
         /**
          * Checks if this object holds valid window.
@@ -47,18 +46,9 @@ namespace krendrr::Runtime::Application::Core
          */
         [[nodiscard]] virtual bool IsValid() const = 0;
 
-        /**
-         * Creates (if was not created) and bind OpenGL context to this window
-         */
-        virtual bool CreateAndBindGlContext() = 0;
-
         [[nodiscard]] virtual glm::ivec2 GetSize() const = 0;
 
         virtual void Swap() = 0;
-
-    private:
-
-        Application* ParentApplication {};
 
     };
 }

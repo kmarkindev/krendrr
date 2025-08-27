@@ -3,19 +3,9 @@
 
 namespace krendrr::Runtime::Application::Core
 {
-    Window::Window(Application* Application)
-        : ParentApplication(Application)
+    Window* Window::Create(const std::shared_ptr<RenderApi::Core::RenderApi>& RenderApi, const InitializeParams& Params)
     {
-    }
-
-    Application* Window::GetApplication() const
-    {
-        return ParentApplication;
-    }
-
-    Window* Window::Create(Application* Application, const InitializeParams& Params)
-    {
-        Window* Window = ConstructWindowInstance(Application);
+        Window* Window = ConstructWindowInstance();
 
         if (!Window)
         {
@@ -23,7 +13,7 @@ namespace krendrr::Runtime::Application::Core
             return nullptr;
         }
 
-        if (!Window->Initialize(Params))
+        if (!Window->Initialize(RenderApi, Params))
         {
             // TODO: add error log about failed window init
             return nullptr;

@@ -48,11 +48,13 @@ int main(int Argc, char** Argv)
 
     krendrr::Runtime::Application::Core::StartupArgs StartupArgs {Argc, Argv};
 
-    std::unique_ptr<krendrr::Runtime::Application::Core::Application> Application { krendrr::Runtime::Application::Core::ConstructApplicationInstance(StartupArgs) };
+    std::shared_ptr<krendrr::Runtime::Application::Core::Application> Application {
+        krendrr::Runtime::Application::Core::ConstructApplicationInstance()
+    };
 
     {
         nvtx3::scoped_range WindowsApplicationInitialization {"Windows: Application Initialization"};
-        if (!Application->Initialize())
+        if (!Application->Initialize(StartupArgs))
             return -1;
     }
 
