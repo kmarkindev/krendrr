@@ -129,7 +129,7 @@ namespace krendrr::Runtime::Application::Windows
             CHECKED(
                 RenderApi->GetDXGIFactory()
                     ->CreateSwapChainForHwnd(
-                        RenderApi->GetCommandQueue().Get(),
+                        RenderApi->GetDirectQueue().Get(),
                         WindowHandle,
                         &SwapChainDesc,
                         nullptr,

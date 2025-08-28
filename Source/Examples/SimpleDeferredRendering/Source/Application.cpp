@@ -2,7 +2,6 @@
 #include <array>
 #include <iostream>
 #include <memory>
-#include <glad/gl.h>
 #include "Runtime/Application/Core/EntryPoint.h"
 #include "Runtime/Application/Core/StartupArgs.h"
 #include "Runtime/Application/Core/Window.h"

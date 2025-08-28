@@ -1,7 +1,10 @@
 #pragma once
 
 #include <string_view>
-#include <glad/gl.h>
+#include <wrl/client.h>
+#include <d3dx12/d3dx12.h>
+
+#include "Runtime/RenderApi/Core/RenderApi.h"
 
 namespace krendrr::Runtime::Renderer::Core
 {
@@ -12,20 +15,13 @@ namespace krendrr::Runtime::Renderer::Core
         Texture() = default;
         Texture(const Texture& Other) = delete;
         Texture& operator=(const Texture& Other) = delete;
-        Texture(Texture&& Other) noexcept;
-        Texture& operator=(Texture&& Other) noexcept;
-        ~Texture();
-
-        void MoveFrom(Texture& Other) noexcept;
+        Texture(Texture&& Other) noexcept = default;
+        Texture& operator=(Texture&& Other) noexcept = default;
+        ~Texture() = default;
 
         struct TextureLoadParams
         {
-            GLint TextureWrapS = GL_REPEAT;
-            GLint TextureWrapT = GL_REPEAT;
-            GLint TextureMinFilter = GL_LINEAR_MIPMAP_LINEAR;
-            GLint TextureMagFilter = GL_LINEAR;
-            GLint ApiFormat = GL_RGBA8;
-            GLint MipMapsCount = 0;
+            std::size_t MipMapsCount = 0;
             bool bFlipTexture = false;
 
             static TextureLoadParams Default()
@@ -35,17 +31,31 @@ namespace krendrr::Runtime::Renderer::Core
             }
         };
 
+        /**
+         * This only checks if internal resource objects were created.
+         * It doesn't check if async load operations were completed.
+         */
         [[nodiscard]] bool IsLoaded() const;
 
-        bool Load(const std::string_view& TextureFileName, const TextureLoadParams& Params = TextureLoadParams::Default());
+        struct TextureLoadOperation
+        {
+            bool bWasSuccessful {};
+            Microsoft::WRL::ComPtr<ID3D12Resource> TextureUploadBuffer {};
+        };
 
-        bool ActivateTexture(std::uint32_t TextureUnit) const;
+        /**
+         * Creates upload heaps and fills provided command list with copy operations.
+         * Caller need to execute the command list and keep upload buffers alive while copy is not finished.
+         */
+        TextureLoadOperation Load(const RenderApi::Core::RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList,
+            const std::string_view& TextureFileName, const TextureLoadParams& Params = TextureLoadParams::Default());
 
     private:
 
         bool CheckLoaded() const;
 
-        GLuint TextureId{};
+        Microsoft::WRL::ComPtr<ID3D12Resource> TextureBuffer {};
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CpuSrvHeap {};
 
     };
 }

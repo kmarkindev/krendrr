@@ -1,100 +1,107 @@
 #include "Runtime/Renderer/Core/TexturedMesh/Mesh.h"
+#include "Runtime/RenderApi/Core/ApiCallCheck.h"
 
 namespace krendrr::Runtime::Renderer::Core
 {
-    Mesh::Mesh()
-    {
-    }
-
-    Mesh::Mesh(Mesh&& Other) noexcept
-    {
-        MoveFrom(Other);
-    }
-
-    Mesh& Mesh::operator=(Mesh&& Other) noexcept
-    {
-        MoveFrom(Other);
-
-        return *this;
-    }
-
-    Mesh::~Mesh()
-    {
-        if(VAO != 0)
-            glDeleteVertexArrays(1, &VAO);
-
-        if(VBO != 0)
-            glDeleteBuffers(1, &VBO);
-
-        if(EBO != 0)
-            glDeleteBuffers(1, &EBO);
-    }
-
-    void Mesh::MoveFrom(Mesh& Other) noexcept
-    {
-        VAO = std::exchange(Other.VAO, 0);
-        VBO = std::exchange(Other.VBO, 0);
-        EBO = std::exchange(Other.EBO, 0);
-        PrimitivesCount = Other.PrimitivesCount;
-        PrimitivesOffset = Other.PrimitivesOffset;
-    }
-
-    bool Mesh::BindVAOAndDraw(GLuint Type) const
-    {
-        if (!CheckLoaded())
-            return false;
-
-        glBindVertexArray(VAO);
-
-        if (IsUsingIndices())
-            glDrawElements(Type, GetPrimitivesCount(), GL_UNSIGNED_INT, reinterpret_cast<void*>(GetPrimitivesOffset()));
-        else
-            glDrawArrays(Type, GetPrimitivesOffset(), GetPrimitivesCount());
-
-        return true;
-    }
-
-    bool Mesh::Load(const BufferLayout& Layout, const std::span<const std::byte>& VertexData)
+    Mesh::MeshLoadOperation Mesh::Load(const RenderApi::Core::RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList, const std::span<const std::byte>& VertexData)
     {
         if(IsLoaded())
         {
             // TODO: log "Mesh already loaded"
-            return false;
+            return {};
         }
 
-        glCreateVertexArrays(1, &VAO);
+        Microsoft::WRL::ComPtr<ID3D12Resource> VertexBufferUpload = LoadVertexBuffer(RenderApi, CommandList, VertexData);
+        if (!VertexBufferUpload)
+        {
+            // TODO: log error
+            return {};
+        }
 
-        LoadAndBindVertexBuffer(Layout, VertexData);
+        PrimitivesOffset = 0;
+        VertexBufferStride = RenderApi.GetCommonMeshBufferLayout().Stride;
+        PrimitivesCount = VertexData.size();
 
-        PrimitivesCount = static_cast<std::int32_t>(VertexData.size());
-
-        return true;
+        return {
+            .bWasSuccessful = true,
+            .VertexBufferUploadBuffer = std::move(VertexBufferUpload),
+            .IndexBufferUploadBuffer = {}
+        };
     }
 
-    bool Mesh::LoadIndexed(const BufferLayout& Layout, const std::span<const std::byte>& VertexData, const std::span<const std::uint32_t>& IndexData)
+    Mesh::MeshLoadOperation Mesh::LoadIndexed(const RenderApi::Core::RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList, const std::span<const std::byte>& VertexData, const std::span<const std::uint32_t>& IndexData)
     {
         if(IsLoaded())
         {
             // TODO: log "Mesh already loaded"
-            return false;
+            return {};
         }
 
-        glCreateVertexArrays(1, &VAO);
+        Microsoft::WRL::ComPtr<ID3D12Resource> VertexBufferUpload = LoadVertexBuffer(RenderApi, CommandList, VertexData);
+        Microsoft::WRL::ComPtr<ID3D12Resource> IndexBufferUpload = RenderApi.CreateUploadBufferAndMap(RenderApi::Core::RenderApi::ContainerToBytes(IndexData));
+        if (!VertexBufferUpload || !IndexBufferUpload)
+        {
+            // TODO: log error
+            return {};
+        }
 
-        LoadAndBindVertexBuffer(Layout, VertexData);
+        CD3DX12_RESOURCE_DESC VertexBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(IndexData.size_bytes());
+        CD3DX12_HEAP_PROPERTIES HeapProperties {D3D12_HEAP_TYPE_DEFAULT};
 
-        glCreateBuffers(1, &EBO);
-        glNamedBufferData(EBO, static_cast<GLsizeiptr>(IndexData.size_bytes()), IndexData.data(), GL_STATIC_DRAW);
-        glVertexArrayElementBuffer(VAO, EBO);
+        CHECKED(
+            RenderApi.GetDevice()
+                ->CreateCommittedResource(
+                    &HeapProperties,
+                    D3D12_HEAP_FLAG_NONE,
+                    &VertexBufferDesc,
+                    D3D12_RESOURCE_STATE_COMMON,
+                    nullptr,
+                    IID_PPV_ARGS(&IndexBuffer)
+                ),
+            "Failed to create index buffer"
+        )
 
-        PrimitivesCount = static_cast<std::int32_t>(IndexData.size());
+        CommandList.CopyResource(IndexBuffer.Get(), IndexBufferUpload.Get());
 
-        return true;
+        PrimitivesOffset = 0;
+        PrimitivesCount = IndexData.size();
+        VertexBufferStride = RenderApi.GetCommonMeshBufferLayout().Stride;
+
+        return {
+            .bWasSuccessful = true,
+            .VertexBufferUploadBuffer = std::move(VertexBufferUpload),
+            .IndexBufferUploadBuffer = std::move(IndexBufferUpload)
+        };
+    }
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> Mesh::LoadVertexBuffer(const RenderApi::Core::RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList, const std::span<const std::byte>& VertexData)
+    {
+        Microsoft::WRL::ComPtr<ID3D12Resource> VertexBufferUpload = RenderApi.CreateUploadBufferAndMap(VertexData);
+
+        CD3DX12_RESOURCE_DESC VertexBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(VertexData.size_bytes());
+        CD3DX12_HEAP_PROPERTIES HeapProperties {D3D12_HEAP_TYPE_DEFAULT};
+
+        CHECKED(
+            RenderApi.GetDevice()
+                ->CreateCommittedResource(
+                    &HeapProperties,
+                    D3D12_HEAP_FLAG_NONE,
+                    &VertexBufferDesc,
+                    D3D12_RESOURCE_STATE_COMMON,
+                    nullptr,
+                    IID_PPV_ARGS(&VertexBuffer)
+                ),
+            "Failed to create vertex buffer"
+        )
+
+        CommandList.CopyResource(VertexBuffer.Get(), VertexBufferUpload.Get());
+
+        return VertexBufferUpload;
     }
 
     bool Mesh::IsLoaded() const
     {
-        return VAO != 0 && VBO != 0;
+        return VertexBuffer != nullptr;
     }
 
     bool Mesh::IsUsingIndices() const
@@ -102,7 +109,7 @@ namespace krendrr::Runtime::Renderer::Core
         if (!CheckLoaded())
             return false;
 
-        return EBO != 0;
+        return IndexBuffer != nullptr;
     }
 
     std::int32_t Mesh::GetPrimitivesCount() const
@@ -121,6 +128,28 @@ namespace krendrr::Runtime::Renderer::Core
         return PrimitivesOffset;
     }
 
+    D3D12_VERTEX_BUFFER_VIEW Mesh::GetVertexBufferView() const
+    {
+        const D3D12_RESOURCE_DESC Desc = VertexBuffer->GetDesc();
+
+        return {
+            .BufferLocation = VertexBuffer->GetGPUVirtualAddress(),
+            .SizeInBytes = static_cast<UINT>(Desc.Width),
+            .StrideInBytes = VertexBufferStride,
+        };
+    }
+
+    D3D12_INDEX_BUFFER_VIEW Mesh::GetIndexBufferView() const
+    {
+        const D3D12_RESOURCE_DESC Desc = IndexBuffer->GetDesc();
+
+        return {
+            .BufferLocation = IndexBuffer->GetGPUVirtualAddress(),
+            .SizeInBytes = static_cast<UINT>(Desc.Width),
+            .Format = DXGI_FORMAT_R32_UINT,
+        };
+    }
+
     bool Mesh::CheckLoaded() const
     {
         if(!IsLoaded())
@@ -130,23 +159,5 @@ namespace krendrr::Runtime::Renderer::Core
         }
 
         return true;
-    }
-
-    void Mesh::LoadAndBindVertexBuffer(const BufferLayout& Layout, const std::span<const std::byte>& VertexData)
-    {
-        glCreateBuffers(1, &VBO);
-
-        glNamedBufferData(VBO, static_cast<GLsizeiptr>(VertexData.size_bytes()), VertexData.data(), GL_STATIC_DRAW);
-
-        glVertexArrayVertexBuffer(VAO, 0, VBO, 0, Layout.Stride);
-
-        for(int i = 0; i < Layout.Attributes.size(); i++)
-        {
-            const auto& [Offset, Type, Count] = Layout.Attributes[i];
-
-            glEnableVertexArrayAttrib(VAO, i);
-            glVertexArrayAttribFormat(VAO, i, Count, Type, GL_FALSE, Offset);
-            glVertexArrayAttribBinding(VAO, i, 0);
-        }
     }
 }

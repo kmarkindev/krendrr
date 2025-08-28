@@ -2,7 +2,6 @@
 
 #include <array>
 #include <memory>
-
 #include "Runtime/Renderer/Core/Renderer.h"
 #include "Runtime/Renderer/Core/Shader.h"
 #include "Runtime/Renderer/Core/TexturedMesh/Mesh.h"

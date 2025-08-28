@@ -20,7 +20,7 @@ namespace krendrr::Runtime::RenderApi::Core
         if (!CreateDevice(DxgiFactoryFlags))
             return false;
 
-        if (!CreateCommandQueue())
+        if (!CreateCommandQueues())
             return false;
 
         return true;
@@ -28,7 +28,7 @@ namespace krendrr::Runtime::RenderApi::Core
 
     bool RenderApi::IsValid() const
     {
-        return D3dDevice != nullptr && D3dCommandQueue != nullptr;
+        return D3dDevice != nullptr && D3dDirectCommandQueue != nullptr;
     }
 
     bool RenderApi::Shutdown()
@@ -47,14 +47,93 @@ namespace krendrr::Runtime::RenderApi::Core
         return D3dDevice;
     }
 
-    Microsoft::WRL::ComPtr<ID3D12CommandQueue> RenderApi::GetCommandQueue() const
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> RenderApi::GetDirectQueue() const
     {
-        return D3dCommandQueue;
+        return D3dDirectCommandQueue;
+    }
+
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> RenderApi::GetCopyQueue() const
+    {
+        return D3dCopyCommandQueue;
     }
 
     Microsoft::WRL::ComPtr<IDXGIFactory6> RenderApi::GetDXGIFactory() const
     {
         return DxgiFactory;
+    }
+
+    const RenderApi::BufferLayout& RenderApi::GetCommonMeshBufferLayout() const
+    {
+        static BufferLayout Layout = {
+            .Layout = {
+                D3D12_INPUT_ELEMENT_DESC {
+                    "POSITION",
+                    0,
+                    DXGI_FORMAT_R32G32B32_FLOAT,
+                    0,
+                    D3D12_APPEND_ALIGNED_ELEMENT,
+                    D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+                    0
+                },
+                D3D12_INPUT_ELEMENT_DESC {
+                    "UV",
+                    0,
+                    DXGI_FORMAT_R32G32_FLOAT,
+                    0,
+                    D3D12_APPEND_ALIGNED_ELEMENT,
+                    D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+                    0
+                },
+                D3D12_INPUT_ELEMENT_DESC {
+                    "NORMAL",
+                    0,
+                    DXGI_FORMAT_R32G32B32_FLOAT,
+                    0,
+                    D3D12_APPEND_ALIGNED_ELEMENT,
+                    D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+                    0
+                },
+                D3D12_INPUT_ELEMENT_DESC {
+                    "TANGENT",
+                    0,
+                    DXGI_FORMAT_R32G32B32_FLOAT,
+                    0,
+                    D3D12_APPEND_ALIGNED_ELEMENT,
+                    D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+                    0
+                }
+            }
+        };
+
+        return Layout;
+    }
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> RenderApi::CreateUploadBufferAndMap(const std::span<const std::byte>& Data) const
+    {
+        Microsoft::WRL::ComPtr<ID3D12Resource> UploadBuffer {};
+
+        const CD3DX12_HEAP_PROPERTIES HeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+        const CD3DX12_RESOURCE_DESC ResourceDesc = CD3DX12_RESOURCE_DESC::Buffer(Data.size_bytes());
+
+        CHECKED(
+            GetDevice()
+                ->CreateCommittedResource(
+                    &HeapProperties,
+                    D3D12_HEAP_FLAG_NONE,
+                    &ResourceDesc,
+                    D3D12_RESOURCE_STATE_GENERIC_READ,
+                    nullptr,
+                    IID_PPV_ARGS(&UploadBuffer)
+                ),
+            "Failed to create upload buffer"
+        )
+
+        void* MappedPtr {};
+        CHECKED(UploadBuffer->Map(0, nullptr, &MappedPtr));
+        std::memcpy(MappedPtr, Data.data(), Data.size_bytes());
+        UploadBuffer->Unmap(0, nullptr);
+
+        return UploadBuffer;
     }
 
     bool RenderApi::SetupDebugLayer(UINT& DxgiFactoryFlags, const InitParams& Params)
@@ -110,16 +189,31 @@ namespace krendrr::Runtime::RenderApi::Core
         return true;
     }
 
-    bool RenderApi::CreateCommandQueue()
+    bool RenderApi::CreateCommandQueues()
     {
-        D3D12_COMMAND_QUEUE_DESC QueueDesc = {};
-        QueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-        QueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+        // Direct
+        {
+            D3D12_COMMAND_QUEUE_DESC QueueDesc = {};
+            QueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+            QueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
 
-        CHECKED(
-            D3dDevice->CreateCommandQueue(&QueueDesc, IID_PPV_ARGS(&D3dCommandQueue)),
-            "Failed to create command queue"
-        )
+            CHECKED(
+                D3dDevice->CreateCommandQueue(&QueueDesc, IID_PPV_ARGS(&D3dDirectCommandQueue)),
+                "Failed to create direct command queue"
+            )
+        }
+
+        // Copy
+        {
+            D3D12_COMMAND_QUEUE_DESC QueueDesc = {};
+            QueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+            QueueDesc.Type = D3D12_COMMAND_LIST_TYPE_COPY;
+
+            CHECKED(
+                D3dDevice->CreateCommandQueue(&QueueDesc, IID_PPV_ARGS(&D3dCopyCommandQueue)),
+                "Failed to create copy command queue"
+            )
+        }
 
         return true;
     }

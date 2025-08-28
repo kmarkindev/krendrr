@@ -1,117 +1,139 @@
 #include "Runtime/Renderer/Core/TexturedMesh/Texture.h"
 #include <algorithm>
+#include <cassert>
 #include <stb_image.h>
 #include <stdexcept>
 #include <cmath>
 
+#include "Runtime/RenderApi/Core/ApiCallCheck.h"
+
 namespace krendrr::Runtime::Renderer::Core
 {
-Texture::Texture(Texture&& Other) noexcept
-{
-    MoveFrom(Other);
-}
-
-Texture& Texture::operator=(Texture&& Other) noexcept
-{
-    MoveFrom(Other);
-    return *this;
-}
-
-void Texture::MoveFrom(Texture& Other) noexcept
-{
-    TextureId = std::exchange(Other.TextureId, 0);
-}
-
-Texture::~Texture()
-{
-    if(TextureId > 0)
-        glDeleteTextures(1, &TextureId);
-}
 
 bool Texture::IsLoaded() const
 {
-    return TextureId > 0;
+    return TextureBuffer != nullptr;
 }
 
-bool Texture::Load(const std::string_view& TextureFileName, const TextureLoadParams& Params)
+Texture::TextureLoadOperation Texture::Load(const RenderApi::Core::RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList,
+    const std::string_view& TextureFileName, const TextureLoadParams& Params)
 {
     if(IsLoaded())
     {
         // TODO: log error already loaded
-        return false;
+        return {};
     }
 
-    glCreateTextures(GL_TEXTURE_2D, 1, &TextureId);
+    // Load texture and determine it's format
 
     stbi_set_flip_vertically_on_load(Params.bFlipTexture);
 
     int Width {};
     int Height {};
     int Channels {};
-    unsigned char* Data = stbi_load(TextureFileName.data(), &Width, &Height, &Channels, 0);
+
+    if (stbi_info(TextureFileName.data(), &Width, &Height, &Channels) != 1)
+    {
+        // TODO: log error
+        return {};
+    }
+
+    // DX12 doesn't have RGB format, only RGBA
+    int DesiredChannels = 0;
+    if (Channels == 3)
+    {
+        DesiredChannels = 4;
+    }
+
+    unsigned char* Data = stbi_load(TextureFileName.data(), &Width, &Height, &Channels, DesiredChannels);
 
     if(!Data)
     {
         // TODO: log error "Failed to load texture. File is invalid."
-        return false;
+        return {};
     }
 
     // Note: stbi returns channels only as 8-bit components, so make sure we use 8 bit per channel when specifying texture format
-    GLint Format {};
+    DXGI_FORMAT Format {};
     switch (Channels)
     {
         case 1:
-            Format = GL_RED;
+            Format = DXGI_FORMAT_R8_UNORM;
         break;
         case 2:
-            Format = GL_RG;
+            Format = DXGI_FORMAT_R8G8_UNORM;
         break;
         case 3:
-            Format = GL_RGB;
+            Format = DXGI_FORMAT_R8G8B8A8_UNORM;
         break;
         case 4:
-            Format = GL_RGBA;
+            Format = DXGI_FORMAT_R8G8B8A8_UNORM;
         break;
         default:
             // TODO: log error "Can't load texture, it has unsupported number of channels: " + std::to_string(Channels)
-            return false;
+            assert(false);
+            return {};
     }
 
-    GLint Levels = Params.MipMapsCount;
-    if(Levels <= 0)
+    std::size_t Levels = Params.MipMapsCount;
+    if(Levels == 0)
     {
         // calculate how many mip maps we need to generate for the full chain
-        Levels = static_cast<GLint>(std::floor(std::log2(Width))) + 1;
+        Levels = std::floor(std::log2(Width)) + 1;
     }
 
-    glTextureStorage2D(TextureId, Levels, Params.ApiFormat, Width, Height);
-    glTextureSubImage2D(TextureId, 0, 0, 0, Width, Height, Format, GL_UNSIGNED_BYTE, Data);
-    glGenerateTextureMipmap(TextureId);
+    // Generate Mip Maps
+    {
+        // TODO: generate mipmaps
+        // Set levels to 1 since we don't generate mipmaps
+        Levels = 1;
+    }
 
-    glTextureParameteri(TextureId, GL_TEXTURE_WRAP_S, Params.TextureWrapS);
-    glTextureParameteri(TextureId, GL_TEXTURE_WRAP_T, Params.TextureWrapT);
-    glTextureParameteri(TextureId, GL_TEXTURE_MIN_FILTER, Params.TextureMinFilter);
-    glTextureParameteri(TextureId, GL_TEXTURE_MAG_FILTER, Params.TextureMagFilter);
+    // Set up upload buffer
+    const std::size_t TextureBufferSize = Width * Height * Channels;
+    Microsoft::WRL::ComPtr<ID3D12Resource> TextureUploadBuffer = RenderApi.CreateUploadBufferAndMap(
+        std::span<const std::byte>{reinterpret_cast<std::byte*>(Data), TextureBufferSize}
+    );
+
+    // Create texture buffer
+
+    const CD3DX12_RESOURCE_DESC ResourceDesc = CD3DX12_RESOURCE_DESC::Tex2D(Format, Width, Height, 1, Levels);
+    const CD3DX12_HEAP_PROPERTIES HeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+
+    CHECKED(
+        RenderApi.GetDevice()
+            ->CreateCommittedResource(
+                &HeapProperties,
+                D3D12_HEAP_FLAG_NONE,
+                &ResourceDesc,
+                D3D12_RESOURCE_STATE_COMMON,
+                nullptr,
+                IID_PPV_ARGS(&TextureBuffer)
+            ),
+        "Could not create texture buffer"
+    )
+
+    CommandList.CopyResource(TextureBuffer.Get(), TextureUploadBuffer.Get());
+
+    // Create CPU descriptor heap
+    D3D12_DESCRIPTOR_HEAP_DESC HeapDesc {
+        .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+        .NumDescriptors = 1,
+        .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+    };
+
+    CHECKED(
+        RenderApi.GetDevice()
+            ->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(&CpuSrvHeap)),
+        "Could not create descriptor heap"
+    )
 
     stbi_image_free(Data);
 
-    return true;
-}
-
-bool Texture::ActivateTexture(std::uint32_t TextureUnit) const
-{
-    if(!CheckLoaded())
-        return false;
-
-    std::uint32_t ClampedTextureUnit = std::clamp(TextureUnit, 0u, 15u);
-    if (ClampedTextureUnit != TextureUnit)
-    {
-        // TODO: log warning
-    }
-
-    glBindTextureUnit(ClampedTextureUnit, TextureId);
-
-    return true;
+    return {
+        .bWasSuccessful = true,
+        .TextureUploadBuffer = TextureUploadBuffer,
+    };
 }
 
 bool Texture::CheckLoaded() const
