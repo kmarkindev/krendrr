@@ -48,8 +48,19 @@ namespace krendrr::Runtime::Application::Core
 
         [[nodiscard]] virtual glm::ivec2 GetSize() const = 0;
 
-        virtual void Swap() = 0;
+        virtual bool Swap() = 0;
 
+        struct WindowRenderData
+        {
+            Microsoft::WRL::ComPtr<ID3D12Resource> RenderTargetView {};
+            D3D12_CPU_DESCRIPTOR_HANDLE Handle {};
+        };
+
+        /**
+         * Returns Render Target View in D3D12_RESOURCE_STATE_PRESENT
+         * Note: After Swap, buffer may change, so do not forget to update your SceneView objects
+         */
+        virtual WindowRenderData GetCurrentRenderTargetView() const = 0;
     };
 }
 

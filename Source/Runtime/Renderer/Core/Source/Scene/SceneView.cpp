@@ -2,7 +2,7 @@
 
 namespace krendrr::Runtime::Renderer::Core
 {
-    bool SceneView::Initialize(GLuint NewFramebuffer, const glm::ivec4& NewViewport, const InitParams& Params)
+    bool SceneView::Initialize(const RenderViewTargetData& NewRenderData, const glm::ivec4& NewViewport, const InitParams& Params)
     {
         if (IsValid())
         {
@@ -10,9 +10,10 @@ namespace krendrr::Runtime::Renderer::Core
             return false;
         }
 
-        Framebuffer = NewFramebuffer;
         if (!SetViewport(NewViewport))
             return false;
+
+        RenderData = NewRenderData;
 
         Position = Params.Position;
         Rotation = Params.Rotation;
@@ -52,14 +53,14 @@ namespace krendrr::Runtime::Renderer::Core
         return bInitialized;
     }
 
-    GLuint SceneView::GetFramebuffer() const
+    D3D12_CPU_DESCRIPTOR_HANDLE SceneView::GetRenderTargetHandle() const
     {
-        return Framebuffer;
+        return RenderData.Handle;
     }
 
-    glm::ivec4 SceneView::GetViewport() const
+    D3D12_VIEWPORT SceneView::GetD3dViewport() const
     {
-        return Viewport;
+        return CD3DX12_VIEWPORT(Viewport.x, Viewport.y, Viewport.z, Viewport.w);
     }
 
     glm::ivec2 SceneView::GetViewportSize() const
@@ -154,6 +155,29 @@ namespace krendrr::Runtime::Renderer::Core
         Viewport = NewViewport;
 
         return true;
+    }
+
+    void SceneView::SetRenderData(RenderViewTargetData NewRenderData)
+    {
+        RenderData = std::move(NewRenderData);
+    }
+
+    void SceneView::TransitionIntoRenderTargetState(ID3D12GraphicsCommandList* CommandList) const
+    {
+        const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+           RenderData.RenderTargetView.Get(),
+           RenderData.OriginalState, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+        CommandList->ResourceBarrier(1, &barrier);
+    }
+
+    void SceneView::TransitionIntoOriginalState(ID3D12GraphicsCommandList* CommandList) const
+    {
+        const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+           RenderData.RenderTargetView.Get(),
+           D3D12_RESOURCE_STATE_RENDER_TARGET, RenderData.OriginalState);
+
+        CommandList->ResourceBarrier(1, &barrier);
     }
 
     void SceneView::SetRotation(const glm::quat& NewRotation)

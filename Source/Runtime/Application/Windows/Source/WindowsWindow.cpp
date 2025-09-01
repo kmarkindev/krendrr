@@ -1,11 +1,7 @@
 #include "Runtime/Application/Windows/WindowsWindow.h"
-
 #include <dxgi1_2.h>
-
 #include "Runtime/Application/Core/Internal/WindowAllocator.h"
 #include "SDL3/SDL_stdinc.h"
-#include <glad/gl.h>
-
 #include "Runtime/RenderApi/Core/ApiCallCheck.h"
 #include "SDL3/SDL_mouse.h"
 
@@ -99,9 +95,21 @@ namespace krendrr::Runtime::Application::Windows
         return Size;
     }
 
-    void WindowsWindow::Swap()
+    bool WindowsWindow::Swap()
     {
-        SDL_GL_SwapWindow(Window);
+        CHECKED(SwapChain->Present(0, 0), "Failed to present swap chain")
+
+        return true;
+    }
+
+    Core::Window::WindowRenderData WindowsWindow::GetCurrentRenderTargetView() const
+    {
+        const int Index = SwapChain->GetCurrentBackBufferIndex();
+
+        return {
+            .RenderTargetView = RenderTargets[Index],
+            .Handle = CD3DX12_CPU_DESCRIPTOR_HANDLE(RtvCpuDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), Index, DescriptorIncrementSize)
+        };
     }
 
     bool WindowsWindow::CreateUpdateSwapChain()
@@ -168,7 +176,8 @@ namespace krendrr::Runtime::Application::Windows
             )
         }
 
-        const int DescriptorIncrementSize = RenderApi->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+        if (DescriptorIncrementSize < 0)
+            DescriptorIncrementSize = RenderApi->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
         CD3DX12_CPU_DESCRIPTOR_HANDLE CpuHandle { RtvCpuDescriptorHeap->GetCPUDescriptorHandleForHeapStart() };
 

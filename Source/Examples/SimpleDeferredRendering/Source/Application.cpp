@@ -52,10 +52,6 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize(const R
         return false;
     }
 
-
-    // TODO: remove when renderer is done
-    return false;
-
     for (const auto& TexturedMesh : MeshesLoadResult.TexturedMeshes)
     {
         Scene->InsertTexturedMesh(TexturedMesh);
@@ -73,7 +69,7 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize(const R
         SetupSponzaScene();
 
     Renderer = std::make_unique<Runtime::Renderer::Deferred::DeferredRenderer>();
-    if (!Renderer->Initialize(Scene))
+    if (!Renderer->Initialize(RenderApi, Scene))
     {
         // TODO: log error
         return false;
@@ -93,18 +89,30 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Tick(float DeltaTi
     }))
         return false;
 
+    Runtime::Application::Core::Window::WindowRenderData RenderData = Window->GetCurrentRenderTargetView();
+    SceneView.SetRenderData({
+        RenderData.RenderTargetView,
+        RenderData.Handle,
+        D3D12_RESOURCE_STATE_PRESENT
+    });
+
     Camera.Update(DeltaTime);
 
     std::array Views = {
         SceneView
     };
+
     if (!Renderer->Render(Views))
     {
         // TODO: add error log
         return false;
     }
 
-    Window->Swap();
+    if (!Window->Swap())
+    {
+        // TODO: add error log
+        return false;
+    }
 
     return true;
 }
@@ -169,7 +177,19 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::InitializeSceneVie
     glm::ivec2 WindowSize = Window->GetSize();
 
     // Reinit it so we can keep it up with window size
-    const bool bSceneViewInit = SceneView.Initialize(0, {0, 0, WindowSize.x, WindowSize.y});
+    Runtime::Application::Core::Window::WindowRenderData RenderData = Window->GetCurrentRenderTargetView();
+    const bool bSceneViewInit = SceneView.Initialize(
+        {
+            RenderData.RenderTargetView,
+            RenderData.Handle,
+            D3D12_RESOURCE_STATE_PRESENT
+        },
+        {
+            0,
+            0,
+            WindowSize.x,
+            WindowSize.y
+        });
 
     if (!bSceneViewInit)
     {

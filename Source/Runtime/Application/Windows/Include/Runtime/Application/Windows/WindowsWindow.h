@@ -23,11 +23,15 @@ namespace krendrr::Runtime::Application::Windows
 
         [[nodiscard]] glm::ivec2 GetSize() const override;
 
-        void Swap() override;
+        bool Swap() override;
+
+        WindowRenderData GetCurrentRenderTargetView() const override;
 
     private:
 
         std::shared_ptr<RenderApi::Core::RenderApi> RenderApi {};
+
+        int DescriptorIncrementSize {-1};
 
         SDL_Window* Window {};
         HWND WindowHandle {};
