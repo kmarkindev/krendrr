@@ -1,5 +1,5 @@
 #include "Runtime/ModelLoader/Loader.h"
-#include <array>
+#include <nvtx3/nvtx3.hpp>
 #include <stdexcept>
 #include <unordered_map>
 #include <assimp/Importer.hpp>
@@ -47,6 +47,8 @@ namespace krendrr::Runtime::ModelLoader
     {
         if (bError.load(std::memory_order::relaxed))
             return;
+
+        nvtx3::scoped_range ProcessAiNodeRange {"Load Model: Process Ai Node"};
 
         // Create local-to-world transformation matrix
 
@@ -191,6 +193,7 @@ namespace krendrr::Runtime::ModelLoader
 
                 // Save mesh upload buffers
                 {
+                    nvtx3::mark("Save mesh upload buffers under mutex");
                     std::unique_lock Lock {LoadData.UploadBuffersMutex};
 
                     LoadData.UploadBuffers.push_back(MeshLoadOperation.VertexBufferUploadBuffer);
@@ -240,6 +243,7 @@ namespace krendrr::Runtime::ModelLoader
 
                             // Safe texture upload buffer
                             {
+                                nvtx3::mark("Save texture upload buffer under mutex");
                                 std::unique_lock UploadBuffersLock(LoadData.UploadBuffersMutex);
 
                                 LoadData.UploadBuffers.push_back(TextureLoadOperation.TextureUploadBuffer);
@@ -307,6 +311,7 @@ namespace krendrr::Runtime::ModelLoader
                 RenderApi.GetCopyQueue()
                     ->ExecuteCommandLists(1, CommandLists);
 
+                nvtx3::mark("Save command allocator and list under mutex");
                 std::unique_lock Lock {LoadData.CommandListsMutex};
                 LoadData.CommandLists.push_back({
                     .CommandAllocator = NewCommandAllocator,
@@ -319,6 +324,7 @@ namespace krendrr::Runtime::ModelLoader
                 if (bError.load(std::memory_order::relaxed))
                     return;
 
+                nvtx3::mark("Save final textured mesh object under mutex");
                 std::unique_lock Lock{LoadData.ResultMutex};
                 LoadData.Result.TexturedMeshes.push_back(NewTexturedMesh);
             }
@@ -327,6 +333,8 @@ namespace krendrr::Runtime::ModelLoader
 
     LoadResult LoadModel(const std::string_view& ModelFileName, const RenderApi::Core::RenderApi& RenderApi, const LoadParams& Params)
     {
+        nvtx3::scoped_range LoadModelRange {"Load Model"};
+
         Microsoft::WRL::ComPtr<ID3D12Fence> Fence {};
         CHECKED(
             RenderApi.GetDevice()
@@ -338,6 +346,8 @@ namespace krendrr::Runtime::ModelLoader
         Assimp::Importer Importer {};
         const aiScene* Scene {};
         {
+            nvtx3::scoped_range AssimpSceneLoadingRange {"Assimp scene loading"};
+
             unsigned Flags = aiProcess_Triangulate
             | aiProcess_CalcTangentSpace
             | aiProcess_JoinIdenticalVertices
@@ -377,6 +387,8 @@ namespace krendrr::Runtime::ModelLoader
         std::atomic_bool bError {};
 
         {
+            nvtx3::scoped_range PushJobsRange {"Pushing jobs"};
+
             std::queue<const aiNode*> ToProcess {};
             ToProcess.push(Scene->mRootNode);
 
@@ -408,23 +420,33 @@ namespace krendrr::Runtime::ModelLoader
         // First let thread pool finish all of it's jobs
         ThreadPool.WaitForAllJobs();
 
-        // Then wait for Copy Queue to finish all imports
-        CHECKED(
-            RenderApi.GetCopyQueue()
-                ->Signal(Fence.Get(), 1),
-            "Can't signal fence"
-        )
+        {
+            nvtx3::scoped_range WaitCopyQueueFenceRange {"Waiting d3d copy queue fence"};
 
-        CHECKED(
-            Fence->SetEventOnCompletion(1, nullptr),
-            "Can't wait on fence"
-        )
+            // Then wait for Copy Queue to finish all imports
+            CHECKED(
+                RenderApi.GetCopyQueue()
+                    ->Signal(Fence.Get(), 1),
+                "Can't signal fence"
+            )
+
+            CHECKED(
+                Fence->SetEventOnCompletion(1, nullptr),
+                "Can't wait on fence"
+            )
+        }
 
         // Let all CPU and GPU jobs to finish before error out,
         // we don't want to remove buffers while there are jobs that are using them
         if (bError)
+        {
+            // TODO: add error log
             return {};
+        }
 
+        // TODO: add success log
+
+        LoadData.Result.bSuccess = true;
         return LoadData.Result;
     }
 }

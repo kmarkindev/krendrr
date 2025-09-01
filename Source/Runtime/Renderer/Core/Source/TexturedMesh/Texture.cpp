@@ -141,6 +141,9 @@ Texture::TextureLoadOperation Texture::Load(const RenderApi::Core::RenderApi& Re
 
     stbi_image_free(Data);
 
+    TextureBuffer->SetName(L"Texture Buffer");
+    TextureUploadBuffer->SetName(L"Upload Texture Buffer");
+
     return {
         .bWasSuccessful = true,
         .TextureUploadBuffer = TextureUploadBuffer,

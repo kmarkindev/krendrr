@@ -58,7 +58,7 @@ namespace krendrr::Runtime::ThreadPool
     private:
 
         std::atomic<bool> bIsShutdown{};
-        std::atomic<bool> bIsAbort{};
+        std::atomic<bool> bShouldExitWorkers{};
 
         std::vector<std::jthread> Threads {};
 
@@ -66,7 +66,10 @@ namespace krendrr::Runtime::ThreadPool
         std::condition_variable WorkerFinishedCondVar {};
         std::mutex JobsMutex {};
         std::queue<std::function<void()>> Jobs {};
+        std::atomic_int ActiveJobs{};
 
         void ThreadWorker();
+
+        void ExitWorkers();
     };
 }

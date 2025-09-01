@@ -52,6 +52,10 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize(const R
         return false;
     }
 
+
+    // TODO: remove when renderer is done
+    return false;
+
     for (const auto& TexturedMesh : MeshesLoadResult.TexturedMeshes)
     {
         Scene->InsertTexturedMesh(TexturedMesh);

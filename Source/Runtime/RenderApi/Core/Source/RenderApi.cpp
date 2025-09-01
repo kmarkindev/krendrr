@@ -202,6 +202,8 @@ namespace krendrr::Runtime::RenderApi::Core
                 D3dDevice->CreateCommandQueue(&QueueDesc, IID_PPV_ARGS(&D3dDirectCommandQueue)),
                 "Failed to create direct command queue"
             )
+
+            D3dDirectCommandQueue->SetName(L"Direct Command Queue");
         }
 
         // Copy
@@ -214,6 +216,8 @@ namespace krendrr::Runtime::RenderApi::Core
                 D3dDevice->CreateCommandQueue(&QueueDesc, IID_PPV_ARGS(&D3dCopyCommandQueue)),
                 "Failed to create copy command queue"
             )
+
+            D3dCopyCommandQueue->SetName(L"Copy Command Queue");
         }
 
         return true;

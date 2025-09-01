@@ -63,6 +63,9 @@ namespace krendrr::Runtime::Renderer::Core
 
         CommandList.CopyResource(IndexBuffer.Get(), IndexBufferUpload.Get());
 
+        IndexBufferUpload->SetName(L"Upload Index Buffer");
+        IndexBuffer->SetName(L"Index Buffer");
+
         PrimitivesOffset = 0;
         PrimitivesCount = IndexData.size();
         VertexBufferStride = RenderApi.GetCommonMeshBufferLayout().Stride;
@@ -95,6 +98,9 @@ namespace krendrr::Runtime::Renderer::Core
         )
 
         CommandList.CopyResource(VertexBuffer.Get(), VertexBufferUpload.Get());
+
+        VertexBufferUpload->SetName(L"Upload Vertex Buffer");
+        VertexBuffer->SetName(L"Vertex Buffer");
 
         return VertexBufferUpload;
     }

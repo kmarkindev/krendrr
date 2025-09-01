@@ -2,6 +2,7 @@
 #include <condition_variable>
 #define LEAN_AND_MEAN
 #include <windows.h>
+#include "nvtx3/nvtx3.hpp"
 
 namespace krendrr::Runtime::ThreadPool
 {
@@ -17,7 +18,7 @@ namespace krendrr::Runtime::ThreadPool
             return false;
 
         bIsShutdown.store(false, std::memory_order::relaxed);
-        bIsAbort.store(false, std::memory_order::relaxed);
+        bShouldExitWorkers.store(false, std::memory_order::relaxed);
 
         Threads.resize(NumberOfThreads);
 
@@ -41,9 +42,17 @@ namespace krendrr::Runtime::ThreadPool
     void ThreadPool::Shutdown(bool bAbortAllJobs)
     {
         bIsShutdown.store(true, std::memory_order::relaxed);
-        bIsAbort.store(bAbortAllJobs, std::memory_order::relaxed);
 
-        WaitForAllJobs();
+        if (!bAbortAllJobs)
+        {
+            WaitForAllJobs();
+        }
+        else
+        {
+            // TODO: log warning "aborting N jobs during thread pool shutdown"
+        }
+
+        ExitWorkers();
 
         for (auto& Thread: Threads)
         {
@@ -66,6 +75,8 @@ namespace krendrr::Runtime::ThreadPool
         if (bIsShutdown.load(std::memory_order_relaxed))
             return false;
 
+        nvtx3::mark("New job pushed into thread pool");
+
         Jobs.emplace(std::move(NewJob));
 
         WorkerUpdateCondVar.notify_one();
@@ -73,14 +84,24 @@ namespace krendrr::Runtime::ThreadPool
         return true;
     }
 
+    void ThreadPool::ExitWorkers()
+    {
+        std::unique_lock Lock {JobsMutex};
+
+        bShouldExitWorkers.store(true, std::memory_order::relaxed);
+        WorkerUpdateCondVar.notify_all();
+    }
+
     void ThreadPool::WaitForAllJobs()
     {
         if (!IsInitialized())
             return;
 
+        nvtx3::scoped_range WaitAllJobsRange {"Waiting for all jobs on thread pool"};
+
         std::unique_lock Lock {JobsMutex};
 
-        while (!Jobs.empty())
+        while (!Jobs.empty() && ActiveJobs.load(std::memory_order_relaxed) > 0)
             WorkerFinishedCondVar.wait(Lock);
     }
 
@@ -91,32 +112,43 @@ namespace krendrr::Runtime::ThreadPool
             std::function<void()> JobToProcess {};
 
             {
-                if (bIsAbort.load(std::memory_order_relaxed))
+                if (bShouldExitWorkers.load(std::memory_order_relaxed))
                     return;
 
                 std::unique_lock Lock {JobsMutex};
 
-                if (Jobs.empty())
-                    WorkerFinishedCondVar.notify_all();
-
-                while(Jobs.empty() && !bIsAbort.load(std::memory_order_relaxed))
+                while(Jobs.empty() && !bShouldExitWorkers.load(std::memory_order_relaxed))
                     WorkerUpdateCondVar.wait(Lock);
 
-                if (bIsAbort.load(std::memory_order_relaxed))
+                if (bShouldExitWorkers.load(std::memory_order_relaxed))
                     return;
 
                 JobToProcess = std::move(Jobs.front());
                 Jobs.pop();
+
+                ActiveJobs.fetch_add(1, std::memory_order::relaxed);
             }
 
             try
             {
+                nvtx3::scoped_range JobProcessRange {"Processing Job"};
                 JobToProcess();
             }
             catch (...)
             {
                 // TODO: log error and continue
             }
+
+            {
+                std::unique_lock Lock {JobsMutex};
+
+                ActiveJobs.fetch_sub(1, std::memory_order::relaxed);
+
+                // Notify waiter AFTER job was processed
+                if (ActiveJobs.load(std::memory_order_relaxed) == 0 && Jobs.empty())
+                    WorkerFinishedCondVar.notify_all();
+            }
+
         }
     }
 }
