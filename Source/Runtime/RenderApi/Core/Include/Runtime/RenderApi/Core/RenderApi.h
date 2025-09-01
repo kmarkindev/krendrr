@@ -39,13 +39,20 @@ namespace krendrr::Runtime::RenderApi::Core
             }
         };
 
+        // not thread-safe
         bool Initialize(const InitParams& Params = InitParams::Default());
+        // thread-safe
         [[nodiscard]] bool IsValid() const;
+        // not thread-safe
         bool Shutdown();
 
+        // thread-safe
         [[nodiscard]] Microsoft::WRL::ComPtr<ID3D12Device> GetDevice() const;
+        // thread-safe
         [[nodiscard]] Microsoft::WRL::ComPtr<ID3D12CommandQueue> GetDirectQueue() const;
+        // thread-safe
         [[nodiscard]] Microsoft::WRL::ComPtr<ID3D12CommandQueue> GetCopyQueue() const;
+        // thread-safe
         [[nodiscard]] Microsoft::WRL::ComPtr<IDXGIFactory6> GetDXGIFactory() const;
 
         struct BufferLayout
@@ -57,6 +64,8 @@ namespace krendrr::Runtime::RenderApi::Core
         /**
          * For simplicity, all meshes should use same buffer layout
          * (we don't have our own shader compiler to alter root signatures in shaders anyway)
+         *
+         * thread-safe
          */
         [[nodiscard]] const BufferLayout& GetCommonMeshBufferLayout() const;
 
@@ -69,7 +78,8 @@ namespace krendrr::Runtime::RenderApi::Core
             );
         }
 
-        Microsoft::WRL::ComPtr<ID3D12Resource> CreateUploadBufferAndMap(const std::span<const std::byte>& Data) const;
+        // thread-safe
+        Microsoft::WRL::ComPtr<ID3D12Resource> CreateUploadBufferAndMap(const std::span<const std::byte>& Data, bool bSkipMap = false) const;
 
     private:
 

@@ -19,7 +19,7 @@
 /**
  * Checks if api call was successful. returns false or default value if false
  */
-#define CHECKED(ApiCall) \
+#define CHECKED_S(ApiCall) \
 { \
     if(FAILED(ApiCall)) \
     { \
@@ -44,7 +44,7 @@
 /**
  * Checks if api call was successful. Returns if not
  */
-#define CHECKEDV(ApiCall) \
+#define CHECKEDV_S(ApiCall) \
 { \
     if(FAILED(ApiCall)) \
     { \

@@ -1,0 +1,1 @@
+add_krendrr_target(STATIC ThreadPool TARGET_NAME)

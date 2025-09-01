@@ -109,6 +109,7 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::GeometryPass(const 
     {
         const bool bHasNormalMap = TexturedMesh->HasTexture(NORMAL_TEXTURE_NAME);
 
+        /*
         if(TexturedMesh->HasTexture(DIFFUSE_TEXTURE_NAME))
             TexturedMesh->GetTexture(DIFFUSE_TEXTURE_NAME)->ActivateTexture(0);
         if(TexturedMesh->HasTexture(METALLIC_TEXTURE_NAME))
@@ -119,6 +120,7 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::GeometryPass(const 
             TexturedMesh->GetTexture(ROUGHNESS_TEXTURE_NAME)->ActivateTexture(3);
         if (TexturedMesh->HasTexture(EMISSIVE_TEXTURE_NAME))
             TexturedMesh->GetTexture(EMISSIVE_TEXTURE_NAME)->ActivateTexture(4);
+        */
 
         GeometryPassShader.Use();
         GeometryPassShader.SetInt("BaseColorTexture", 0);
@@ -136,7 +138,7 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::GeometryPass(const 
         GeometryPassShader.SetMatrix4("ModelMatrix", ModelMatrix);
         GeometryPassShader.SetMatrix3("NormalMatrix", NormalMatrix);
 
-        TexturedMesh->GetMesh()->BindVAOAndDraw();
+        //TexturedMesh->GetMesh()->BindVAOAndDraw();
 
         glBindTextureUnit(0, 0);
         glBindTextureUnit(1, 0);
@@ -219,7 +221,7 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::AmbientDirectionalL
     AmbientDirectionalLightPassShader.SetVec2("ScreenSize", {SceneViewSize.x, SceneViewSize.y});
     AmbientDirectionalLightPassShader.SetVec3("CameraPos", SceneView.GetPosition());
 
-    FullscreenQuadMesh.BindVAOAndDraw();
+    //FullscreenQuadMesh.BindVAOAndDraw();
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
@@ -332,7 +334,7 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PointLightVolumesPa
                     PointLightShadowShader.SetMatrix4("MVPMatrix", MVPMatrix);
 
                     nvtx3::mark("Draw");
-                    TexturedMesh->GetMesh()->BindVAOAndDraw();
+                    //TexturedMesh->GetMesh()->BindVAOAndDraw();
                 }
             }
         }
@@ -396,7 +398,7 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PointLightVolumesPa
 
             glClear(GL_STENCIL_BUFFER_BIT);
 
-            SphereMesh->BindVAOAndDraw();
+            //SphereMesh->BindVAOAndDraw();
 
             nvtx3::mark("Reset OpenGL state");
             glDisable(GL_STENCIL_TEST);
@@ -422,7 +424,7 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PointLightVolumesPa
             glStencilMask(0x00);
             glStencilFunc(GL_EQUAL, 0x01, 0xFF);
 
-            SphereMesh->BindVAOAndDraw();
+            //SphereMesh->BindVAOAndDraw();
 
             int LastUnbindId = UnbindGBufferTextures();
             glBindTextureUnit(LastUnbindId += 1, 0);
@@ -456,7 +458,7 @@ void krendrr::Runtime::Renderer::Deferred::DeferredRenderer::PostProcessingPass(
     PostProcessShader.SetInt("FinalRenderTexture", LastBindId);
     PostProcessShader.SetVec2("ScreenSize", {ViewSize.x, ViewSize.y});
 
-    FullscreenQuadMesh.BindVAOAndDraw();
+    //FullscreenQuadMesh.BindVAOAndDraw();
 
     nvtx3::mark("Reset OpenGL state");
     int LastUnbindId = UnbindGBufferTextures();
@@ -474,9 +476,11 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::Shutdown()
 
 bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializePointLightUnitSphere()
 {
+    /*
     ModelLoader::LoadResult UnitSphereLoadResult = ModelLoader::LoadModel(
         "../Content/krendrr_runtime_renderer_deferred/UnitIcoSphere.obj"
     );
+
 
     if (!UnitSphereLoadResult.HasLoadedAtLeastOne())
     {
@@ -485,12 +489,13 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializePointLigh
     }
 
     PointLightUnitSphere = UnitSphereLoadResult.TexturedMeshes[0];
-
+    */
     return true;
 }
 
 bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeFullscreenQuadMesh()
 {
+    /*
     constexpr float QuadMesh[] = {
         -1.f, 1.f,
         -1.f, -1.f,
@@ -511,6 +516,9 @@ bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeFullscree
         .Attributes = LayoutAttributes
     };
     return FullscreenQuadMesh.Load(Layout, Core::Mesh::ContainerToBytes(QuadMesh));
+
+    */
+    return false;
 }
 
 bool krendrr::Runtime::Renderer::Deferred::DeferredRenderer::InitializeGBufferForView(const Core::SceneView& SceneView)

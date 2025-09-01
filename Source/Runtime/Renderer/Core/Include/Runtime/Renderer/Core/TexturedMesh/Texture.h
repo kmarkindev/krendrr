@@ -41,6 +41,11 @@ namespace krendrr::Runtime::Renderer::Core
         {
             bool bWasSuccessful {};
             Microsoft::WRL::ComPtr<ID3D12Resource> TextureUploadBuffer {};
+
+            bool WasSuccessful() const
+            {
+                return bWasSuccessful;
+            }
         };
 
         /**

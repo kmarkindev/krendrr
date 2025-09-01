@@ -40,6 +40,7 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize(const R
         bLoadFuturisticScene
             ?  "../Content/krendrr_examples_simpledeferredrendering/FuturisticRoom/source/CyberPunkRoom.fbx"
             : "../Content/krendrr_examples_simpledeferredrendering/Sponza/sponza.obj",
+        *RenderApi,
         {
             .bFlipNormals = bLoadFuturisticScene
         }

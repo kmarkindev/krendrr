@@ -59,15 +59,19 @@ Texture::TextureLoadOperation Texture::Load(const RenderApi::Core::RenderApi& Re
     {
         case 1:
             Format = DXGI_FORMAT_R8_UNORM;
+            Channels = 1;
         break;
         case 2:
             Format = DXGI_FORMAT_R8G8_UNORM;
+            Channels = 2;
         break;
         case 3:
             Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+            Channels = 4;
         break;
         case 4:
             Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+            Channels = 4;
         break;
         default:
             // TODO: log error "Can't load texture, it has unsupported number of channels: " + std::to_string(Channels)
@@ -92,7 +96,8 @@ Texture::TextureLoadOperation Texture::Load(const RenderApi::Core::RenderApi& Re
     // Set up upload buffer
     const std::size_t TextureBufferSize = Width * Height * Channels;
     Microsoft::WRL::ComPtr<ID3D12Resource> TextureUploadBuffer = RenderApi.CreateUploadBufferAndMap(
-        std::span<const std::byte>{reinterpret_cast<std::byte*>(Data), TextureBufferSize}
+        std::span<const std::byte>{reinterpret_cast<std::byte*>(Data), TextureBufferSize},
+        true
     );
 
     // Create texture buffer
@@ -113,7 +118,13 @@ Texture::TextureLoadOperation Texture::Load(const RenderApi::Core::RenderApi& Re
         "Could not create texture buffer"
     )
 
-    CommandList.CopyResource(TextureBuffer.Get(), TextureUploadBuffer.Get());
+    D3D12_SUBRESOURCE_DATA SubresData {
+        .pData = Data,
+        .RowPitch = Width * Channels,
+        .SlicePitch = Width * Height * Channels
+    };
+
+    UpdateSubresources(&CommandList, TextureBuffer.Get(), TextureUploadBuffer.Get(), 0, 0, 1, &SubresData);
 
     // Create CPU descriptor heap
     D3D12_DESCRIPTOR_HEAP_DESC HeapDesc {

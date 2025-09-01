@@ -2,6 +2,8 @@
 
 #include <string_view>
 #include <vector>
+
+#include "Runtime/RenderApi/Core/RenderApi.h"
 #include "Runtime/Renderer/Core/TexturedMesh/TexturedMesh.h"
 
 namespace krendrr::Runtime::ModelLoader
@@ -28,16 +30,11 @@ namespace krendrr::Runtime::ModelLoader
         bool bSuccess {};
         std::vector<std::shared_ptr<Renderer::Core::TexturedMesh>> TexturedMeshes {};
 
-        LoadResult()
-            : bSuccess(false), TexturedMeshes{}
-        {
-        }
-
         [[nodiscard]] bool HasLoadedAtLeastOne() const
         {
             return bSuccess && !TexturedMeshes.empty();
         }
     };
 
-    LoadResult LoadModel(const std::string_view& ModelFileName, const LoadParams& Params = {});
+    LoadResult LoadModel(const std::string_view& ModelFileName, const RenderApi::Core::RenderApi& RenderApi, const LoadParams& Params = {});
 }

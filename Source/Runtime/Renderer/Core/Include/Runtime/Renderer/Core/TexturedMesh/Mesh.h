@@ -23,6 +23,11 @@ namespace krendrr::Runtime::Renderer::Core
             bool bWasSuccessful {};
             Microsoft::WRL::ComPtr<ID3D12Resource> VertexBufferUploadBuffer {};
             Microsoft::WRL::ComPtr<ID3D12Resource> IndexBufferUploadBuffer {};
+
+            bool WasSuccessful() const
+            {
+                return bWasSuccessful;
+            }
         };
 
         /**

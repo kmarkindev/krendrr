@@ -108,7 +108,7 @@ namespace krendrr::Runtime::RenderApi::Core
         return Layout;
     }
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> RenderApi::CreateUploadBufferAndMap(const std::span<const std::byte>& Data) const
+    Microsoft::WRL::ComPtr<ID3D12Resource> RenderApi::CreateUploadBufferAndMap(const std::span<const std::byte>& Data, bool bSkipMap) const
     {
         Microsoft::WRL::ComPtr<ID3D12Resource> UploadBuffer {};
 
@@ -128,10 +128,13 @@ namespace krendrr::Runtime::RenderApi::Core
             "Failed to create upload buffer"
         )
 
-        void* MappedPtr {};
-        CHECKED(UploadBuffer->Map(0, nullptr, &MappedPtr));
-        std::memcpy(MappedPtr, Data.data(), Data.size_bytes());
-        UploadBuffer->Unmap(0, nullptr);
+        if (!bSkipMap)
+        {
+            void* MappedPtr {};
+            CHECKED_S(UploadBuffer->Map(0, nullptr, &MappedPtr));
+            std::memcpy(MappedPtr, Data.data(), Data.size_bytes());
+            UploadBuffer->Unmap(0, nullptr);
+        }
 
         return UploadBuffer;
     }
@@ -162,10 +165,8 @@ namespace krendrr::Runtime::RenderApi::Core
 
     bool RenderApi::CreateDevice(UINT DxgiFactoryFlags)
     {
-        Microsoft::WRL::ComPtr<IDXGIFactory6> Factory {};
-
         CHECKED(
-            CreateDXGIFactory2(DxgiFactoryFlags, IID_PPV_ARGS(&Factory)),
+            CreateDXGIFactory2(DxgiFactoryFlags, IID_PPV_ARGS(&DxgiFactory)),
             "Failed to create DXGI factory"
         )
 

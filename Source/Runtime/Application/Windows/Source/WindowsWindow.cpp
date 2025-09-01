@@ -106,7 +106,7 @@ namespace krendrr::Runtime::Application::Windows
 
     bool WindowsWindow::CreateUpdateSwapChain()
     {
-        if (!SwapChain)
+        if (SwapChain)
         {
             CHECKED(
                 SwapChain->ResizeBuffers(0, 0, 0, DXGI_FORMAT_UNKNOWN, 0),
@@ -139,7 +139,7 @@ namespace krendrr::Runtime::Application::Windows
                 "Failed to create Swap Chain"
             )
 
-            CHECKED(SwapChain1.As(&SwapChain))
+            CHECKED_S(SwapChain1.As(&SwapChain))
         }
 
         SwapChainBufferIndex = SwapChain->GetCurrentBackBufferIndex();
