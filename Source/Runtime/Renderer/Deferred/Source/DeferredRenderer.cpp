@@ -175,6 +175,8 @@ bool DeferredRenderer::InitPrePostRender()
         "Failed to create command list"
     )
 
+    CHECKED_S(PrePostRenderData.CommandList->Close());
+
     return true;
 }
 
@@ -247,10 +249,15 @@ DeferredRenderer::GBufferInitResult DeferredRenderer::InitGBufferForView(const C
 
     // Allocate textures
 
-    auto CreateTextureBuffer = [&](Microsoft::WRL::ComPtr<ID3D12Resource>& TextureBuffer, DXGI_FORMAT Format) -> bool
+    auto CreateTextureBuffer = [&](Microsoft::WRL::ComPtr<ID3D12Resource>& TextureBuffer, DXGI_FORMAT Format, bool bIsDepth = false) -> bool
     {
         D3D12_HEAP_PROPERTIES HeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
         D3D12_RESOURCE_DESC ResourceDesc = CD3DX12_RESOURCE_DESC::Tex2D(Format, ViewportSize.x, ViewportSize.y, 1, 1);
+
+        if (bIsDepth)
+            ResourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+        else
+            ResourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 
         CHECKED(
             RenderApi->GetDevice()
@@ -269,17 +276,17 @@ DeferredRenderer::GBufferInitResult DeferredRenderer::InitGBufferForView(const C
     };
 
     const bool bError = !CreateTextureBuffer(GBuffer.DiffuseTexture, DXGI_FORMAT_R8G8B8A8_UNORM)
-        || !CreateTextureBuffer(GBuffer.WorldPositionTexture, DXGI_FORMAT_R32G32B32_FLOAT)
-        || !CreateTextureBuffer(GBuffer.WorldNormalTexture, DXGI_FORMAT_R32G32B32_FLOAT)
-        || !CreateTextureBuffer(GBuffer.MetallicTexture, DXGI_FORMAT_R8_UNORM)
-        || !CreateTextureBuffer(GBuffer.RoughnessTexture, DXGI_FORMAT_R8_UNORM)
+        || !CreateTextureBuffer(GBuffer.WorldPositionTexture, DXGI_FORMAT_R32G32B32A32_FLOAT)
+        || !CreateTextureBuffer(GBuffer.WorldNormalTexture, DXGI_FORMAT_R32G32B32A32_FLOAT)
+        || !CreateTextureBuffer(GBuffer.MetallicTexture, DXGI_FORMAT_R8G8B8A8_UNORM)
+        || !CreateTextureBuffer(GBuffer.RoughnessTexture, DXGI_FORMAT_R8G8B8A8_UNORM)
         || !CreateTextureBuffer(GBuffer.EmissiveTexture, DXGI_FORMAT_R8G8B8A8_UNORM)
-        || !CreateTextureBuffer(GBuffer.DepthStencilTexture, DXGI_FORMAT_D24_UNORM_S8_UINT);
+        || !CreateTextureBuffer(GBuffer.DepthStencilTexture, DXGI_FORMAT_D24_UNORM_S8_UINT, true);
 
     if (bError)
         return {false, false};
 
-    std::array Textures {
+    const std::array Textures {
         std::addressof(GBuffer.DiffuseTexture),
         std::addressof(GBuffer.WorldPositionTexture),
         std::addressof(GBuffer.WorldNormalTexture),
@@ -352,7 +359,7 @@ DeferredRenderer::GBufferInitResult DeferredRenderer::InitGBufferForView(const C
             "Can't create cpu dsv descriptor heap for gbuffer"
         )
 
-        CD3DX12_CPU_DESCRIPTOR_HANDLE Handle {GBuffer.CpuSrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart()};
+        CD3DX12_CPU_DESCRIPTOR_HANDLE Handle {GBuffer.CpuDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart()};
         RenderApi->GetDevice()->CreateDepthStencilView(GBuffer.DepthStencilTexture.Get(), nullptr, Handle);
     }
 
