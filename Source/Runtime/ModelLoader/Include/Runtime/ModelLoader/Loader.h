@@ -2,9 +2,9 @@
 
 #include <string_view>
 #include <vector>
-
 #include "Runtime/RenderApi/Core/RenderApi.h"
 #include "Runtime/Renderer/Core/TexturedMesh/TexturedMesh.h"
+#include "Runtime/ThreadPool/ThreadPool.h"
 
 namespace krendrr::Runtime::ModelLoader
 {
@@ -23,6 +23,8 @@ namespace krendrr::Runtime::ModelLoader
         std::string_view RoughnessTextureName {"roughness"};
         std::string_view NormalTextureName {"normal"};
         std::string_view EmissiveTextureName {"emissive"};
+
+        ThreadPool::ThreadPool* ThreadPool {};
     };
 
     struct LoadResult

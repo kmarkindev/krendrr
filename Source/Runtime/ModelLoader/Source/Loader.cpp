@@ -380,8 +380,20 @@ namespace krendrr::Runtime::ModelLoader
         }
 
         // Startup thread pool, collect import jobs into pool
-        ThreadPool::ThreadPool ThreadPool {};
-        ThreadPool.Initialize();
+        std::optional<ThreadPool::ThreadPool> LocalThreadPool {};
+        ThreadPool::ThreadPool* ThreadPool {};
+
+        if (Params.ThreadPool)
+        {
+            ThreadPool = Params.ThreadPool;
+        }
+        else
+        {
+            LocalThreadPool.emplace();
+            LocalThreadPool->Initialize();
+
+            ThreadPool = &LocalThreadPool.value();
+        }
 
         LoadData LoadData {};
         std::atomic_bool bError {};
@@ -397,7 +409,7 @@ namespace krendrr::Runtime::ModelLoader
                 const aiNode* Node = ToProcess.front();
                 ToProcess.pop();
 
-                ThreadPool.PushJob([&, Node]()
+                ThreadPool->PushJob([&, Node]()
                 {
                     ProcessAiNodeJob(
                         RenderApi,
@@ -418,7 +430,7 @@ namespace krendrr::Runtime::ModelLoader
         }
 
         // First let thread pool finish all of it's jobs
-        ThreadPool.WaitForAllJobs();
+        ThreadPool->WaitForAllJobs();
 
         {
             nvtx3::scoped_range WaitCopyQueueFenceRange {"Waiting d3d copy queue fence"};

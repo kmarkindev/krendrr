@@ -101,7 +101,7 @@ namespace krendrr::Runtime::ThreadPool
 
         std::unique_lock Lock {JobsMutex};
 
-        while (!Jobs.empty() && ActiveJobs.load(std::memory_order_relaxed) > 0)
+        while (!Jobs.empty() || ActiveJobs.load(std::memory_order_relaxed) > 0)
             WorkerFinishedCondVar.wait(Lock);
     }
 

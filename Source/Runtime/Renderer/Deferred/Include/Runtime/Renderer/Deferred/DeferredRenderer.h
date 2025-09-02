@@ -1,10 +1,10 @@
 #pragma once
 
-#include <array>
 #include <memory>
 #include "Runtime/Renderer/Core/Renderer.h"
 #include "Runtime/Renderer/Core/TexturedMesh/Mesh.h"
 #include "Runtime/Renderer/Core/TexturedMesh/TexturedMesh.h"
+#include "Runtime/ThreadPool/ThreadPool.h"
 
 namespace krendrr::Runtime::Renderer::Deferred
 {
@@ -29,8 +29,26 @@ namespace krendrr::Runtime::Renderer::Deferred
         std::shared_ptr<RenderApi::Core::RenderApi> RenderApi {};
         std::shared_ptr<Core::Scene> Scene {};
 
-        Microsoft::WRL::ComPtr<ID3D12Fence> RenderFence {};
-        int RenderFenceValue {};
+        Runtime::ThreadPool::ThreadPool RenderThreadPool {};
+
+        std::shared_ptr<Core::Mesh> FullscreenQuadMesh {};
+        std::shared_ptr<Core::Mesh> SphereMesh {};
+        bool InitBasicMeshes();
+
+        struct PrePostRenderData
+        {
+            Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CommandAllocator {};
+            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> CommandList {};
+        };
+
+        PrePostRenderData PrePostRenderData {};
+
+        bool InitPrePostRender();
+        bool PreRender(const Core::SceneView& SceneView);
+        bool PostRender(const Core::SceneView& SceneView);
+
+        Microsoft::WRL::ComPtr<ID3D12Fence> FrameFence {};
+        int FrameFenceValue {};
 
         bool WaitDirectQueue();
 
@@ -64,7 +82,15 @@ namespace krendrr::Runtime::Renderer::Deferred
         };
 
         // Called every time we need to update GBuffer, so it has same size as scene view
-        GBufferInitResult InitGBufferForView(const Core::SceneView& SceneView, ID3D12GraphicsCommandList* CommandList);
+        GBufferInitResult InitGBufferForView(const Core::SceneView& SceneView);
+
+        bool GeometryPass(const Core::SceneView& SceneView);
+
+        bool AmbientDirectionalLightPass(const Core::SceneView& SceneView);
+
+        bool PointLightVolumesPass(const Core::SceneView& SceneView);
+
+        bool PostProcessingPass(const Core::SceneView& SceneView);
 
     };
 }

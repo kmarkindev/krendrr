@@ -20,7 +20,7 @@ namespace krendrr::Runtime::Renderer::Core
 
         PrimitivesOffset = 0;
         VertexBufferStride = RenderApi.GetCommonMeshBufferLayout().Stride;
-        PrimitivesCount = VertexData.size();
+        PrimitivesCount = VertexBufferStride <= 0 ? 0 : VertexData.size() / VertexBufferStride;
 
         return {
             .bWasSuccessful = true,

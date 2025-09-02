@@ -1,7 +1,6 @@
 #include "Runtime/Renderer/Deferred/DeferredRenderer.h"
 #include <array>
 #include "Runtime/ModelLoader/Loader.h"
-#include "Runtime/Renderer/Core/Lights/PointLight.h"
 #include "Runtime/Renderer/Core/Scene/Scene.h"
 #include "Runtime/Renderer/Core/Scene/SceneView.h"
 #include "Runtime/Renderer/Core/TexturedMesh/Texture.h"
@@ -13,16 +12,27 @@ namespace krendrr::Runtime::Renderer::Deferred
 
 bool DeferredRenderer::Initialize(std::shared_ptr<RenderApi::Core::RenderApi> NewRenderApi, std::shared_ptr<Core::Scene> NewScene)
 {
+    nvtx3::scoped_range InitRange {"Deferred Renderer: Initialize"};
+
     RenderApi = std::move(NewRenderApi);
     Scene = std::move(NewScene);
 
-    nvtx3::scoped_range InitRange {"Deferred Renderer: Initialize"};
+    RenderThreadPool.Initialize();
 
     CHECKED(
         RenderApi->GetDevice()
-            ->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&RenderFence)),
+            ->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&FrameFence)),
         "Failed to create Fence"
     )
+
+    if (!InitPrePostRender())
+        return false;
+
+    if (!InitBasicMeshes())
+        return false;
+
+    if (!WaitDirectQueue())
+        return false;
 
     return true;
 }
@@ -31,52 +41,26 @@ bool DeferredRenderer::Render(const std::span<Core::SceneView>& SceneViews)
 {
     for (const Core::SceneView& SceneView : SceneViews)
     {
-        D3D12_CPU_DESCRIPTOR_HANDLE RenderTargetHandle = SceneView.GetRenderTargetHandle();
+        if (!PreRender(SceneView))
+            return false;
 
-        Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CommandAllocator {};
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> CommandList {};
+        if (const auto [bSuccess, bRecordedCommands] = InitGBufferForView(SceneView); !bSuccess)
+            return false;
 
-        CHECKED(
-        RenderApi->GetDevice()
-            ->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&CommandAllocator)),
-            "Failed to create command allocator"
-        )
+        if (!GeometryPass(SceneView))
+            return false;
 
-        CHECKED(
-            RenderApi->GetDevice()
-                ->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, CommandAllocator.Get(), nullptr, IID_PPV_ARGS(&CommandList)),
-            "Failed to create command list"
-        )
+        if (!AmbientDirectionalLightPass(SceneView))
+            return false;
 
-        {
-            const GBufferInitResult Result = InitGBufferForView(SceneView, CommandList.Get());
+        if (!PointLightVolumesPass(SceneView))
+            return false;
 
-            if (!Result.bSuccess)
-            {
-                // TODO: log error
-                return false;
-            }
-        }
+        if (!PostProcessingPass(SceneView))
+            return false;
 
-        SceneView.TransitionIntoRenderTargetState(CommandList.Get());
-
-        const static D3D12_RECT ScissorRect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
-        D3D12_VIEWPORT SceneViewViewport = SceneView.GetD3dViewport();
-
-        CommandList->RSSetViewports(1, &SceneViewViewport);
-
-        constexpr FLOAT ClearColor[4] = {0.3, 0.5, 0.25, 1.0};
-        CommandList->ClearRenderTargetView(RenderTargetHandle, ClearColor, 0, nullptr);
-
-        CommandList->OMSetRenderTargets(1, &RenderTargetHandle, true, nullptr);
-
-        SceneView.TransitionIntoOriginalState(CommandList.Get());
-
-        CHECKED_S(CommandList->Close());
-        ID3D12CommandList* CommandLists[] = {CommandList.Get()};
-
-        RenderApi->GetDirectQueue()
-            ->ExecuteCommandLists(std::size(CommandLists), CommandLists);
+        if (!PostRender(SceneView))
+            return false;
 
         WaitDirectQueue();
     }
@@ -84,33 +68,184 @@ bool DeferredRenderer::Render(const std::span<Core::SceneView>& SceneViews)
     return true;
 }
 
+bool DeferredRenderer::GeometryPass(const Core::SceneView& SceneView)
+{
+    return true;
+}
+
+bool DeferredRenderer::AmbientDirectionalLightPass(const Core::SceneView& SceneView)
+{
+    return true;
+}
+
+bool DeferredRenderer::PointLightVolumesPass(const Core::SceneView& SceneView)
+{
+    return true;
+}
+
+bool DeferredRenderer::PostProcessingPass(const Core::SceneView& SceneView)
+{
+    return true;
+}
+
 bool DeferredRenderer::Shutdown()
 {
+    RenderThreadPool.Shutdown();
+
     return WaitDirectQueue();
+}
+
+bool DeferredRenderer::InitBasicMeshes()
+{
+    // Load fullscreen Quad
+
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> InitCommandAllocator {};
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> InitCommandList {};
+
+    CHECKED(
+        RenderApi->GetDevice()
+        ->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&InitCommandAllocator)),
+        "Failed to create command allocator"
+    )
+
+    CHECKED(
+        RenderApi->GetDevice()
+        ->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+            InitCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&InitCommandList)),
+        "Failed to create command list"
+    )
+
+    constexpr float QuadMesh[] = {
+        -1.f, 1.f, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        -1.f, -1.f, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        1.f, -1.f, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        1.f, 1.f, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        -1.f, 1.f, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        1.f, -1.f, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    };
+
+    FullscreenQuadMesh = std::make_shared<Core::Mesh>();
+    const Core::Mesh::MeshLoadOperation MeshLoad = FullscreenQuadMesh->Load(*RenderApi.get(), *InitCommandList.Get(), RenderApi->ContainerToBytes(QuadMesh));
+
+    if (!MeshLoad.WasSuccessful())
+        return false;
+
+    CHECKED_S(InitCommandList->Close());
+
+    ID3D12CommandList* InitCommandLists[] = {InitCommandList.Get()};
+    RenderApi->GetDirectQueue()
+            ->ExecuteCommandLists(1, InitCommandLists);
+
+    // Load unit sphere
+
+    ModelLoader::LoadResult UnitSphereLoadResult = ModelLoader::LoadModel(
+        "../Content/krendrr_runtime_renderer_deferred/UnitIcoSphere.obj",
+        *RenderApi.get(),
+        {
+            .ThreadPool = &RenderThreadPool
+        }
+    );
+
+    if (!UnitSphereLoadResult.HasLoadedAtLeastOne())
+    {
+        // TODO: log error can't load unit sphere model
+        return false;
+    }
+
+    SphereMesh = UnitSphereLoadResult.TexturedMeshes[0]->GetMesh();
+
+    // Wait before removing mesh upload buffers
+    WaitDirectQueue();
+
+    return true;
+}
+
+bool DeferredRenderer::InitPrePostRender()
+{
+    CHECKED(
+        RenderApi->GetDevice()
+            ->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&PrePostRenderData.CommandAllocator)),
+        "Failed to create command allocator"
+    )
+
+    CHECKED(
+        RenderApi->GetDevice()
+            ->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+                PrePostRenderData.CommandAllocator.Get(), nullptr, IID_PPV_ARGS(&PrePostRenderData.CommandList)),
+        "Failed to create command list"
+    )
+
+    return true;
+}
+
+bool DeferredRenderer::PreRender(const Core::SceneView& SceneView)
+{
+    CHECKED(
+        PrePostRenderData.CommandList->Reset(PrePostRenderData.CommandAllocator.Get(), nullptr),
+        "Can't reset command list"
+    )
+
+    SceneView.TransitionIntoRenderTargetState(PrePostRenderData.CommandList.Get());
+
+    CHECKED(
+        PrePostRenderData.CommandList->Close(),
+        "Failed to close command list"
+    )
+
+    ID3D12CommandList* CommandLists[] = {PrePostRenderData.CommandList.Get()};
+
+    RenderApi->GetDirectQueue()
+        ->ExecuteCommandLists(1, CommandLists);
+
+    return true;
+}
+
+bool DeferredRenderer::PostRender(const Core::SceneView& SceneView)
+{
+    CHECKED(
+        PrePostRenderData.CommandList->Reset(PrePostRenderData.CommandAllocator.Get(), nullptr),
+        "Can't reset command list"
+    )
+
+    SceneView.TransitionIntoOriginalState(PrePostRenderData.CommandList.Get());
+
+    CHECKED(
+        PrePostRenderData.CommandList->Close(),
+        "Failed to close command list"
+    )
+
+    ID3D12CommandList* CommandLists[] = {PrePostRenderData.CommandList.Get()};
+
+    RenderApi->GetDirectQueue()
+        ->ExecuteCommandLists(1, CommandLists);
+
+    return true;
 }
 
 bool DeferredRenderer::WaitDirectQueue()
 {
     CHECKED(
         RenderApi->GetDirectQueue()
-            ->Signal(RenderFence.Get(), ++RenderFenceValue),
+            ->Signal(FrameFence.Get(), ++FrameFenceValue),
         "Failed to signal Fence"
     )
 
     CHECKED(
-        RenderFence->SetEventOnCompletion(RenderFenceValue, nullptr),
+        FrameFence->SetEventOnCompletion(FrameFenceValue, nullptr),
         "Failed to wait for Fence"
     )
 
     return true;
 }
 
-DeferredRenderer::GBufferInitResult DeferredRenderer::InitGBufferForView(const Core::SceneView& SceneView, ID3D12GraphicsCommandList* CommandList)
+DeferredRenderer::GBufferInitResult DeferredRenderer::InitGBufferForView(const Core::SceneView& SceneView)
 {
     const glm::ivec2 ViewportSize = SceneView.GetViewportSize();
 
     if (GBuffer.Size == ViewportSize)
         return {true, false};
+
+    // Allocate textures
 
     auto CreateTextureBuffer = [&](Microsoft::WRL::ComPtr<ID3D12Resource>& TextureBuffer, DXGI_FORMAT Format) -> bool
     {

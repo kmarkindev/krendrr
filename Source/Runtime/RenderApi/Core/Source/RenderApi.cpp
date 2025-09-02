@@ -65,6 +65,7 @@ namespace krendrr::Runtime::RenderApi::Core
     const RenderApi::BufferLayout& RenderApi::GetCommonMeshBufferLayout() const
     {
         static BufferLayout Layout = {
+            .Stride = 11 * sizeof(float),
             .Layout = {
                 D3D12_INPUT_ELEMENT_DESC {
                     "POSITION",
