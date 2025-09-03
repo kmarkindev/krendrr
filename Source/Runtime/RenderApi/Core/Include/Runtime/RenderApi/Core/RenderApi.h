@@ -60,6 +60,8 @@ namespace krendrr::Runtime::RenderApi::Core
         [[nodiscard]] bool IsShadersDebugEnabled() const;
         [[nodiscard]] unsigned GetShaderCompileFlags() const;
 
+        bool WaitForQueue(ID3D12CommandQueue* Queue) const;
+
         struct BufferLayout
         {
             std::uint32_t Stride {};

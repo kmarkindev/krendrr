@@ -158,6 +158,11 @@ D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetTextureHandle() const
     return CpuSrvHeap->GetCPUDescriptorHandleForHeapStart();
 }
 
+D3D12_GPU_VIRTUAL_ADDRESS Texture::GetTextureGpuAddress() const
+{
+    return TextureBuffer->GetGPUVirtualAddress();
+}
+
 bool Texture::CheckLoaded() const
 {
     if (!IsLoaded())

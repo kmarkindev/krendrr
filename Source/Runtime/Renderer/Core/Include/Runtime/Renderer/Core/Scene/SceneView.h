@@ -45,7 +45,7 @@ namespace krendrr::Runtime::Renderer::Core
 
         struct RenderViewTargetData
         {
-            Microsoft::WRL::ComPtr<ID3D12Resource> RenderTargetView {};
+            Microsoft::WRL::ComPtr<ID3D12Resource> RenderTarget {};
             D3D12_CPU_DESCRIPTOR_HANDLE Handle {};
             D3D12_RESOURCE_STATES OriginalState {};
 
@@ -56,12 +56,12 @@ namespace krendrr::Runtime::Renderer::Core
                 D3D12_CPU_DESCRIPTOR_HANDLE Handle,
                 D3D12_RESOURCE_STATES CurrentState
             )
-                : RenderTargetView(std::move(RenderTarget)), Handle(Handle), OriginalState(CurrentState)
+                : RenderTarget(std::move(RenderTarget)), Handle(Handle), OriginalState(CurrentState)
             {
             }
         };
 
-        bool Initialize(const RenderViewTargetData& NewRenderData, const glm::ivec4& NewViewport, const InitParams& Params = InitParams::Default());
+        bool Initialize(const InitParams& Params = InitParams::Default());
 
         [[nodiscard]] bool IsValid() const;
 
@@ -79,8 +79,15 @@ namespace krendrr::Runtime::Renderer::Core
         void SetPosition(const glm::vec3& NewPosition);
         void SetRotation(const glm::quat& NewRotation);
 
-        bool SetViewport(const glm::ivec4& NewViewport);
-        void SetRenderData(RenderViewTargetData NewRenderData);
+        /**
+         * Must be called to set up render target before rendering into the view
+         */
+        bool SetRenderData(const RenderViewTargetData& NewRenderData, const glm::ivec4& NewViewport);
+
+        /**
+         * Must be called before exiting the application tick if UpdateRenderData was called previously
+         */
+        void RemoveRenderData();
 
         void TransitionIntoRenderTargetState(ID3D12GraphicsCommandList* CommandList) const;
 
@@ -107,6 +114,8 @@ namespace krendrr::Runtime::Renderer::Core
         glm::vec4 OrthographicBounds {};
 
         [[nodiscard]] bool CheckValid() const;
+
+        bool SetViewport(const glm::ivec4& NewViewport);
     };
 }
 

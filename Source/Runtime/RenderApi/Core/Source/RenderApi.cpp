@@ -83,6 +83,26 @@ namespace krendrr::Runtime::RenderApi::Core
         return 0;
     }
 
+    bool RenderApi::WaitForQueue(ID3D12CommandQueue* Queue) const
+    {
+        Microsoft::WRL::ComPtr<ID3D12Fence> Fence {};
+
+        CHECKED_S(
+            GetDevice()
+                ->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&Fence))
+        )
+
+        CHECKED_S(
+            Queue->Signal(Fence.Get(), 1)
+        )
+
+        CHECKED_S(
+            Fence->SetEventOnCompletion(1, nullptr)
+        )
+
+        return true;
+    }
+
     const RenderApi::BufferLayout& RenderApi::GetCommonMeshBufferLayout() const
     {
         static BufferLayout Layout = {

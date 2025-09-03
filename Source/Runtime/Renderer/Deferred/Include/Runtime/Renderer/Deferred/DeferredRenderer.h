@@ -42,9 +42,15 @@ namespace krendrr::Runtime::Renderer::Deferred
         bool PostRender(const Core::SceneView& SceneView);
 
         Microsoft::WRL::ComPtr<ID3D12Fence> FrameFence {};
-        int FrameFenceValue {};
+        uint64_t FrameFenceValue {};
 
         bool WaitDirectQueue();
+
+        // Used when there is no texture in TexturedMesh. It is filled with 0s
+        Microsoft::WRL::ComPtr<ID3D12Resource> EmptyTexture {};
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CpuEmptyTextureHeap {};
+
+        bool InitEmptyTexture();
 
         struct GBuffer
         {
@@ -65,12 +71,19 @@ namespace krendrr::Runtime::Renderer::Deferred
 
             // Contains only one descriptor
             Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CpuDsvDescriptorHeap {};
+
+            // Used for GBuffer barrier transitions
+            Microsoft::WRL::ComPtr<ID3D12CommandAllocator> PresentToReadTransitionAllocator {};
+            Microsoft::WRL::ComPtr<ID3D12CommandAllocator> ReadToPresentTransitionAllocator {};
+            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> TransitionCommandList {};
         };
 
         GBuffer GBuffer {};
 
         // Called every time we need to update GBuffer, so it has same size as scene view
         bool InitGBufferForView(const Core::SceneView& SceneView);
+        bool TransitionGBufferFromPresentToReadState();
+        bool TransitionGBufferFromReadToPresentState();
 
         // Make sure our C++ <-> HLSL types have same sizes
         static_assert(sizeof(float) == 4);
@@ -101,11 +114,6 @@ namespace krendrr::Runtime::Renderer::Deferred
         {
             Microsoft::WRL::ComPtr<ID3D12Resource> ConstantBuffer {};
             Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CpuSrvHeap {};
-
-            D3D12_CPU_DESCRIPTOR_HANDLE GetConstantBufferHandle() const
-            {
-                return CpuSrvHeap->GetCPUDescriptorHandleForHeapStart();
-            }
         };
 
         FrameData FrameData {};
@@ -128,6 +136,9 @@ namespace krendrr::Runtime::Renderer::Deferred
             Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineState {};
 
             Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> GpuDescriptorHeap {};
+
+            Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CommandAllocator {};
+            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> CommandList {};
         };
         GeometryPassData GeometryPassData {};
 

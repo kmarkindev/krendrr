@@ -56,6 +56,7 @@ namespace krendrr::Runtime::Renderer::Core
             const std::string_view& TextureFileName, const TextureLoadParams& Params = TextureLoadParams::Default());
 
         D3D12_CPU_DESCRIPTOR_HANDLE GetTextureHandle() const;
+        D3D12_GPU_VIRTUAL_ADDRESS GetTextureGpuAddress() const;
 
     private:
 

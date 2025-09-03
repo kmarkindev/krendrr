@@ -35,6 +35,9 @@ bool DeferredRenderer::Initialize(std::shared_ptr<RenderApi::Core::RenderApi> Ne
     if (!InitBasicMeshes())
         return false;
 
+    if (!InitEmptyTexture())
+        return false;
+
     if (!InitializeGeometryPass())
         return false;
 
@@ -66,6 +69,9 @@ bool DeferredRenderer::Render(const std::span<Core::SceneView>& SceneViews)
         if (!GeometryPass(SceneView))
             return false;
 
+        if (!TransitionGBufferFromPresentToReadState())
+            return false;
+
         if (!AmbientDirectionalLightPass(SceneView))
             return false;
 
@@ -81,7 +87,11 @@ bool DeferredRenderer::Render(const std::span<Core::SceneView>& SceneViews)
         if (!PostRender(SceneView))
             return false;
 
-        WaitDirectQueue();
+        if (!TransitionGBufferFromReadToPresentState())
+            return false;
+
+        if (!WaitDirectQueue())
+            return false;
     }
 
     return true;
@@ -253,8 +263,8 @@ bool DeferredRenderer::InitializeGeometryPass()
             .NumRenderTargets = GBuffer.TEXTURES_COUNT,
             .RTVFormats = {
                 DXGI_FORMAT_R8G8B8A8_UNORM,
-                DXGI_FORMAT_R8G8B8A8_UNORM,
-                DXGI_FORMAT_R8G8B8A8_UNORM,
+                DXGI_FORMAT_R32G32B32A32_FLOAT,
+                DXGI_FORMAT_R32G32B32A32_FLOAT,
                 DXGI_FORMAT_R8G8B8A8_UNORM,
                 DXGI_FORMAT_R8G8B8A8_UNORM,
                 DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -287,12 +297,202 @@ bool DeferredRenderer::InitializeGeometryPass()
         )
     }
 
+    // Create command list
+    {
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&GeometryPassData.CommandAllocator)),
+            "Can't create command allocator"
+        )
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+                    GeometryPassData.CommandAllocator.Get(), nullptr, IID_PPV_ARGS(&GeometryPassData.CommandList)),
+            "Can't create command list"
+        )
+
+        CHECKED_S(GeometryPassData.CommandList->Close());
+    }
+
     return true;
 }
 
 bool DeferredRenderer::GeometryPass(const Core::SceneView& SceneView)
 {
     nvtx3::scoped_range PassRange {"Geometry Pass"};
+
+    bool bIsFirstIteration = true;
+    const unsigned RtvHandleIncrement = RenderApi->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    const unsigned SrvHandleIncrement = RenderApi->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+    std::array<D3D12_CPU_DESCRIPTOR_HANDLE, GBuffer.TEXTURES_COUNT> RtvHandles {};
+    for (int i = 0; i < GBuffer.TEXTURES_COUNT; ++i)
+    {
+        RtvHandles[i] = CD3DX12_CPU_DESCRIPTOR_HANDLE{GBuffer.CpuRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), i, RtvHandleIncrement};
+    }
+
+    // TMP: temporary way of quickly showing GBuffer values in window
+    RtvHandles[0] = SceneView.GetRenderTargetHandle();
+
+    const D3D12_CPU_DESCRIPTOR_HANDLE DsvHandle = GBuffer.CpuDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+
+    for (const std::shared_ptr<Core::TexturedMesh>& TexturedMesh : Scene->GetTexturedMeshes())
+    {
+        nvtx3::scoped_range MeshIterationRange {"Mesh Iteration"};
+
+        auto& CommandList = GeometryPassData.CommandList;
+        auto Mesh = TexturedMesh->GetMesh();
+
+        CHECKED_S(GeometryPassData.CommandAllocator->Reset());
+        CHECKED_S(CommandList->Reset(GeometryPassData.CommandAllocator.Get(), nullptr));
+
+        // If this is the first iteration, clear all render targets and depth/stencil buffer
+        if (bIsFirstIteration)
+        {
+            bIsFirstIteration = false;
+
+            for (auto& RtvHandle: RtvHandles)
+            {
+                constexpr static FLOAT ClearColor[] = {0.f, 0.f, 0.f, 1.f};
+                CommandList->ClearRenderTargetView(RtvHandle, ClearColor, 0, nullptr);
+            }
+
+            CommandList->ClearDepthStencilView(
+                GBuffer.CpuDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+                D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
+                1.0f,
+                0,
+                0,
+                nullptr
+            );
+        }
+
+        // Setup pipeline
+        {
+            CommandList->SetGraphicsRootSignature(GeometryPassData.RootSignature.Get());
+            CommandList->SetPipelineState(GeometryPassData.PipelineState.Get());
+
+            CommandList->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+            D3D12_VERTEX_BUFFER_VIEW VertexBufferView = Mesh->GetVertexBufferView();
+            CommandList->IASetVertexBuffers(0, 1, &VertexBufferView);
+
+            if (Mesh->IsUsingIndices())
+            {
+                D3D12_INDEX_BUFFER_VIEW IndexBufferView = Mesh->GetIndexBufferView();
+                CommandList->IASetIndexBuffer(&IndexBufferView);
+            }
+
+            const D3D12_VIEWPORT Viewport = SceneView.GetD3dViewport();
+            CommandList->RSSetViewports(1, &Viewport);
+
+            static const D3D12_RECT ScissorRect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
+            CommandList->RSSetScissorRects(1, &ScissorRect);
+
+            CommandList->OMSetRenderTargets(
+                GBuffer.TEXTURES_COUNT,
+                RtvHandles.data(),
+                false,
+                &DsvHandle
+            );
+        }
+
+        // Prepare SRV descriptor heap
+        {
+            D3D12_CPU_DESCRIPTOR_HANDLE SourceHandles[GeometryPassData.TEXTURED_MESH_TEXTURES_COUNT] = {
+                TexturedMesh->HasTexture(GeometryPassData.DIFFUSE_TEXTURE_NAME)
+                    ? TexturedMesh->GetTexture(GeometryPassData.DIFFUSE_TEXTURE_NAME)->GetTextureHandle()
+                    : CpuEmptyTextureHeap->GetCPUDescriptorHandleForHeapStart(),
+
+                TexturedMesh->HasTexture(GeometryPassData.METALLIC_TEXTURE_NAME)
+                    ? TexturedMesh->GetTexture(GeometryPassData.METALLIC_TEXTURE_NAME)->GetTextureHandle()
+                    : CpuEmptyTextureHeap->GetCPUDescriptorHandleForHeapStart(),
+
+                TexturedMesh->HasTexture(GeometryPassData.ROUGHNESS_TEXTURE_NAME)
+                    ? TexturedMesh->GetTexture(GeometryPassData.ROUGHNESS_TEXTURE_NAME)->GetTextureHandle()
+                    : CpuEmptyTextureHeap->GetCPUDescriptorHandleForHeapStart(),
+
+                TexturedMesh->HasTexture(GeometryPassData.NORMAL_TEXTURE_NAME)
+                    ? TexturedMesh->GetTexture(GeometryPassData.NORMAL_TEXTURE_NAME)->GetTextureHandle()
+                    : CpuEmptyTextureHeap->GetCPUDescriptorHandleForHeapStart(),
+
+                TexturedMesh->HasTexture(GeometryPassData.EMISSIVE_TEXTURE_NAME)
+                    ? TexturedMesh->GetTexture(GeometryPassData.EMISSIVE_TEXTURE_NAME)->GetTextureHandle()
+                    : CpuEmptyTextureHeap->GetCPUDescriptorHandleForHeapStart(),
+            };
+
+            D3D12_CPU_DESCRIPTOR_HANDLE DestinationHandles[GeometryPassData.TEXTURED_MESH_TEXTURES_COUNT] = {};
+            for (int i = 0; i < GeometryPassData.TEXTURED_MESH_TEXTURES_COUNT; ++i)
+            {
+                DestinationHandles[i] = CD3DX12_CPU_DESCRIPTOR_HANDLE {
+                    GeometryPassData.GpuDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+                    i,
+                    SrvHandleIncrement
+                };
+            }
+
+            UINT RangeSize[GeometryPassData.TEXTURED_MESH_TEXTURES_COUNT] = {
+                1,
+                1,
+                1,
+                1,
+                1
+            };
+
+            RenderApi->GetDevice()
+                ->CopyDescriptors(
+                    GeometryPassData.TEXTURED_MESH_TEXTURES_COUNT,
+                    DestinationHandles,
+                    RangeSize,
+                    GeometryPassData.TEXTURED_MESH_TEXTURES_COUNT,
+                    SourceHandles,
+                    RangeSize,
+                    D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
+                );
+
+            CommandList->SetDescriptorHeaps(1, GeometryPassData.GpuDescriptorHeap.GetAddressOf());
+        }
+
+        // Set root signature parameters
+        {
+            CommandList->SetGraphicsRootDescriptorTable(0, GeometryPassData.GpuDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+            CommandList->SetGraphicsRootConstantBufferView(1, FrameData.ConstantBuffer->GetGPUVirtualAddress());
+            CommandList->SetGraphicsRootConstantBufferView(2, TexturedMesh->GetConstantBufferGpuAddress());
+        }
+
+        // Draw
+        {
+            const std::int32_t PrimitivesCount = Mesh->GetPrimitivesCount();
+            if (Mesh->IsUsingIndices())
+            {
+                CommandList->DrawIndexedInstanced(
+                    PrimitivesCount,
+                    1,
+                    0,
+                    0,
+                    0
+                );
+            }
+            else
+            {
+                CommandList->DrawInstanced(
+                    PrimitivesCount,
+                    1,
+                    0,
+                    0
+                );
+            }
+        }
+
+        CHECKED_S(CommandList->Close());
+
+        ID3D12CommandList* CommandLists[] = {CommandList.Get()};
+        RenderApi->GetDirectQueue()
+            ->ExecuteCommandLists(1, CommandLists);
+
+        WaitDirectQueue();
+    }
 
     return true;
 }
@@ -392,9 +592,7 @@ bool DeferredRenderer::InitBasicMeshes()
     SphereMesh = UnitSphereLoadResult.TexturedMeshes[0]->GetMesh();
 
     // Wait before removing mesh upload buffers
-    WaitDirectQueue();
-
-    return true;
+    return WaitDirectQueue();
 }
 
 bool DeferredRenderer::InitPrePostRender()
@@ -477,6 +675,99 @@ bool DeferredRenderer::WaitDirectQueue()
     return true;
 }
 
+bool DeferredRenderer::InitEmptyTexture()
+{
+    {
+        D3D12_HEAP_PROPERTIES HeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+        D3D12_RESOURCE_DESC ResourceDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, 1, 1, 1, 1);
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateCommittedResource(
+                    &HeapProperties,
+                    D3D12_HEAP_FLAG_NONE,
+                    &ResourceDesc,
+                    D3D12_RESOURCE_STATE_GENERIC_READ,
+                    nullptr,
+                    IID_PPV_ARGS(&EmptyTexture)
+                ),
+            "Can't create empty texture"
+        )
+    }
+
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> InitCommandAllocator {};
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> InitCommandList {};
+
+    CHECKED(
+        RenderApi->GetDevice()
+        ->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&InitCommandAllocator)),
+        "Failed to create command allocator"
+    )
+
+    CHECKED(
+        RenderApi->GetDevice()
+        ->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+            InitCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&InitCommandList)),
+        "Failed to create command list"
+    )
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> UploadBuffer {};
+    {
+        D3D12_HEAP_PROPERTIES HeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+        D3D12_RESOURCE_DESC ResourceDesc = CD3DX12_RESOURCE_DESC::Buffer(1);
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateCommittedResource(
+                    &HeapProperties,
+                    D3D12_HEAP_FLAG_NONE,
+                    &ResourceDesc,
+                    D3D12_RESOURCE_STATE_GENERIC_READ,
+                    nullptr,
+                    IID_PPV_ARGS(&UploadBuffer)
+                ),
+            "Can't create upload buffer"
+        )
+
+    }
+
+    // One zeroes RGBA pixel
+    const std::byte Data[4] = {};
+
+    D3D12_SUBRESOURCE_DATA SubResourceData {
+        .pData = &Data,
+        .RowPitch = 1,
+        .SlicePitch = 1
+    };
+    UpdateSubresources(
+        InitCommandList.Get(),
+        EmptyTexture.Get(),
+        UploadBuffer.Get(),
+        0,
+        0,
+        1,
+        &SubResourceData
+    );
+
+    ID3D12CommandList* CommandLists[] = {PrePostRenderData.CommandList.Get()};
+    RenderApi->GetDirectQueue()
+        ->ExecuteCommandLists(1, CommandLists);
+
+    D3D12_DESCRIPTOR_HEAP_DESC HeapDesc = {
+        .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+        .NumDescriptors = 1,
+        .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+    };
+
+    CHECKED(
+        RenderApi->GetDevice()
+            ->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(&CpuEmptyTextureHeap)),
+        "Failed to create descriptor heap for empty texture"
+    )
+
+    return WaitDirectQueue();
+}
+
 bool DeferredRenderer::InitGBufferForView(const Core::SceneView& SceneView)
 {
     const glm::ivec2 ViewportSize = SceneView.GetViewportSize();
@@ -491,10 +782,26 @@ bool DeferredRenderer::InitGBufferForView(const Core::SceneView& SceneView)
         D3D12_HEAP_PROPERTIES HeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
         D3D12_RESOURCE_DESC ResourceDesc = CD3DX12_RESOURCE_DESC::Tex2D(Format, ViewportSize.x, ViewportSize.y, 1, 1);
 
+        D3D12_CLEAR_VALUE ClearValue = {};
+        ClearValue.Format = Format;
+
+        D3D12_RESOURCE_STATES State = D3D12_RESOURCE_STATE_RENDER_TARGET;
+
         if (bIsDepth)
+        {
             ResourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+            ClearValue.DepthStencil.Depth = 1.0f;
+            ClearValue.DepthStencil.Stencil = 0;
+            State = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+        }
         else
+        {
             ResourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+            ClearValue.Color[0] = 0.f;
+            ClearValue.Color[1] = 0.f;
+            ClearValue.Color[2] = 0.f;
+            ClearValue.Color[3] = 1.f;
+        }
 
         CHECKED(
             RenderApi->GetDevice()
@@ -502,8 +809,8 @@ bool DeferredRenderer::InitGBufferForView(const Core::SceneView& SceneView)
                     &HeapProperties,
                     D3D12_HEAP_FLAG_NONE,
                     &ResourceDesc,
-                    D3D12_RESOURCE_STATE_COMMON,
-                    nullptr,
+                    State,
+                    &ClearValue,
                     IID_PPV_ARGS(&TextureBuffer)
                 ),
             "Can't create texture for gbuffer"
@@ -600,7 +907,79 @@ bool DeferredRenderer::InitGBufferForView(const Core::SceneView& SceneView)
         RenderApi->GetDevice()->CreateDepthStencilView(GBuffer.DepthStencilTexture.Get(), nullptr, Handle);
     }
 
+    // Create command list for barrier transitions
+    {
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&GBuffer.PresentToReadTransitionAllocator)),
+            "Failed to create command allocator"
+        )
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&GBuffer.ReadToPresentTransitionAllocator)),
+            "Failed to create command allocator"
+        )
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+                    GBuffer.PresentToReadTransitionAllocator.Get(), nullptr, IID_PPV_ARGS(&GBuffer.TransitionCommandList)),
+            "Failed to create command list"
+        )
+
+        CHECKED_S(GBuffer.TransitionCommandList->Close());
+    }
+
     GBuffer.Size = ViewportSize;
+
+    return true;
+}
+
+bool DeferredRenderer::TransitionGBufferFromPresentToReadState()
+{
+    const std::array Barriers = {
+        CD3DX12_RESOURCE_BARRIER::Transition(GBuffer.DiffuseTexture.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_GENERIC_READ),
+        CD3DX12_RESOURCE_BARRIER::Transition(GBuffer.WorldPositionTexture.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_GENERIC_READ),
+        CD3DX12_RESOURCE_BARRIER::Transition(GBuffer.WorldNormalTexture.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_GENERIC_READ),
+        CD3DX12_RESOURCE_BARRIER::Transition(GBuffer.MetallicTexture.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_GENERIC_READ),
+        CD3DX12_RESOURCE_BARRIER::Transition(GBuffer.RoughnessTexture.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_GENERIC_READ),
+        CD3DX12_RESOURCE_BARRIER::Transition(GBuffer.EmissiveTexture.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_GENERIC_READ),
+    };
+
+    CHECKED_S(GBuffer.PresentToReadTransitionAllocator->Reset());
+    CHECKED_S(GBuffer.TransitionCommandList->Reset(GBuffer.PresentToReadTransitionAllocator.Get(), nullptr))
+
+    GBuffer.TransitionCommandList->ResourceBarrier(std::size(Barriers), Barriers.data());
+    CHECKED_S(GBuffer.TransitionCommandList->Close());
+
+    ID3D12CommandList* CommandLists[] = {GBuffer.TransitionCommandList.Get()};
+    RenderApi->GetDirectQueue()
+        ->ExecuteCommandLists(1, CommandLists);
+
+    return true;
+}
+
+bool DeferredRenderer::TransitionGBufferFromReadToPresentState()
+{
+    const std::array Barriers = {
+        CD3DX12_RESOURCE_BARRIER::Transition(GBuffer.DiffuseTexture.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_RENDER_TARGET),
+        CD3DX12_RESOURCE_BARRIER::Transition(GBuffer.WorldPositionTexture.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_RENDER_TARGET),
+        CD3DX12_RESOURCE_BARRIER::Transition(GBuffer.WorldNormalTexture.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_RENDER_TARGET),
+        CD3DX12_RESOURCE_BARRIER::Transition(GBuffer.MetallicTexture.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_RENDER_TARGET),
+        CD3DX12_RESOURCE_BARRIER::Transition(GBuffer.RoughnessTexture.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_RENDER_TARGET),
+        CD3DX12_RESOURCE_BARRIER::Transition(GBuffer.EmissiveTexture.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_RENDER_TARGET),
+    };
+
+    CHECKED_S(GBuffer.ReadToPresentTransitionAllocator->Reset());
+    CHECKED_S(GBuffer.TransitionCommandList->Reset(GBuffer.ReadToPresentTransitionAllocator.Get(), nullptr))
+
+    GBuffer.TransitionCommandList->ResourceBarrier(std::size(Barriers), Barriers.data());
+    CHECKED_S(GBuffer.TransitionCommandList->Close());
+
+    ID3D12CommandList* CommandLists[] = {GBuffer.TransitionCommandList.Get()};
+    RenderApi->GetDirectQueue()
+        ->ExecuteCommandLists(1, CommandLists);
 
     return true;
 }

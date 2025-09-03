@@ -81,27 +81,29 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize(const R
 bool krendrr::Examples::SimpleDeferredRendering::Application::Tick(float DeltaTime)
 {
     const glm::ivec2 WindowSize = Window->GetSize();
-    if (!SceneView.SetViewport({
-        0,
-        0,
-        WindowSize.x,
-        WindowSize.y
-    }))
-        return false;
-
     Runtime::Application::Core::Window::WindowRenderData RenderData = Window->GetCurrentRenderTargetView();
-    SceneView.SetRenderData({
-        RenderData.RenderTargetView,
-        RenderData.Handle,
-        D3D12_RESOURCE_STATE_PRESENT
-    });
+
+    const bool bRenderDataSetSuccess = SceneView.SetRenderData(
+        {
+            RenderData.WindowRenderTarget,
+            RenderData.Handle,
+            D3D12_RESOURCE_STATE_PRESENT
+        }, {
+            0,
+            0,
+            WindowSize.x,
+            WindowSize.y
+        }
+    );
+
+    if (!bRenderDataSetSuccess)
+        return false;
 
     Camera.Update(DeltaTime);
 
     std::array Views = {
         SceneView
     };
-
     if (!Renderer->Render(Views))
     {
         // TODO: add error log
@@ -113,6 +115,8 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Tick(float DeltaTi
         // TODO: add error log
         return false;
     }
+
+    SceneView.RemoveRenderData();
 
     return true;
 }
@@ -174,24 +178,7 @@ void krendrr::Examples::SimpleDeferredRendering::Application::SetupSponzaScene()
 
 bool krendrr::Examples::SimpleDeferredRendering::Application::InitializeSceneViewAndCamera()
 {
-    glm::ivec2 WindowSize = Window->GetSize();
-
-    // Reinit it so we can keep it up with window size
-    Runtime::Application::Core::Window::WindowRenderData RenderData = Window->GetCurrentRenderTargetView();
-    const bool bSceneViewInit = SceneView.Initialize(
-        {
-            RenderData.RenderTargetView,
-            RenderData.Handle,
-            D3D12_RESOURCE_STATE_PRESENT
-        },
-        {
-            0,
-            0,
-            WindowSize.x,
-            WindowSize.y
-        });
-
-    if (!bSceneViewInit)
+    if (!SceneView.Initialize())
     {
         // TODO: add error log
         return false;

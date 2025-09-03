@@ -102,23 +102,46 @@ namespace krendrr::Runtime::Application::Windows
         return true;
     }
 
+    void WindowsWindow::HandleWindowSizeChanged()
+    {
+        if (!CreateUpdateSwapChain())
+        {
+            // TODO: log error
+            return;
+        }
+
+        if (!CreateUpdateRenderTargets())
+        {
+            // TODO: log error
+            return;
+        }
+    }
+
     Core::Window::WindowRenderData WindowsWindow::GetCurrentRenderTargetView() const
     {
         const int Index = SwapChain->GetCurrentBackBufferIndex();
 
         return {
-            .RenderTargetView = RenderTargets[Index],
+            .WindowRenderTarget = RenderTargets[Index],
             .Handle = CD3DX12_CPU_DESCRIPTOR_HANDLE(RtvCpuDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), Index, DescriptorIncrementSize)
         };
     }
 
     bool WindowsWindow::CreateUpdateSwapChain()
     {
+        RenderApi->WaitForQueue(RenderApi->GetDirectQueue().Get());
+        RenderApi->WaitForQueue(RenderApi->GetCopyQueue().Get());
+
         if (SwapChain)
         {
+            for (auto& RenderTarget: RenderTargets)
+            {
+                RenderTarget.Reset();
+            }
+
             CHECKED(
                 SwapChain->ResizeBuffers(0, 0, 0, DXGI_FORMAT_UNKNOWN, 0),
-                "Failed to resize Swap Chain Buffers"
+                "Failed to resize Swap Chain Buffers. Most likely you forgot to remove render data from a scene view, connected to this window"
             )
         }
         else
@@ -161,7 +184,7 @@ namespace krendrr::Runtime::Application::Windows
         {
             for (auto& RenderTarget: RenderTargets)
             {
-                RenderTarget->Release();
+                RenderTarget.Reset();
             }
         }
         else

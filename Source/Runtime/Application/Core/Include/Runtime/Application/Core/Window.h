@@ -3,7 +3,7 @@
 #include <memory>
 #include <string_view>
 
-#include "../../../../../../RenderApi/Core/Include/Runtime/RenderApi/Core/RenderApi.h"
+#include "Runtime/RenderApi/Core/RenderApi.h"
 #include "glm/vec2.hpp"
 
 namespace krendrr::Runtime::Application::Core
@@ -50,15 +50,19 @@ namespace krendrr::Runtime::Application::Core
 
         virtual bool Swap() = 0;
 
+        virtual void HandleWindowSizeChanged() = 0;
+
         struct WindowRenderData
         {
-            Microsoft::WRL::ComPtr<ID3D12Resource> RenderTargetView {};
+            Microsoft::WRL::ComPtr<ID3D12Resource> WindowRenderTarget {};
             D3D12_CPU_DESCRIPTOR_HANDLE Handle {};
         };
 
         /**
          * Returns Render Target View in D3D12_RESOURCE_STATE_PRESENT
          * Note: After Swap, buffer may change, so do not forget to update your SceneView objects
+         *
+         * Also, it is required to release render target pointer after swap. While it is alive, it is impossible to change window size correctly.
          */
         virtual WindowRenderData GetCurrentRenderTargetView() const = 0;
     };

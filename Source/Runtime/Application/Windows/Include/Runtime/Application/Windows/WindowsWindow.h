@@ -25,6 +25,8 @@ namespace krendrr::Runtime::Application::Windows
 
         bool Swap() override;
 
+        void HandleWindowSizeChanged() override;
+
         WindowRenderData GetCurrentRenderTargetView() const override;
 
     private:

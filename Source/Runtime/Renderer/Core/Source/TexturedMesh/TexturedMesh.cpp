@@ -143,4 +143,9 @@ namespace krendrr::Runtime::Renderer::Core
             CpuSrvHeap->GetCPUDescriptorHandleForHeapStart()
         };
     }
+
+    D3D12_GPU_VIRTUAL_ADDRESS TexturedMesh::GetConstantBufferGpuAddress() const
+    {
+        return ConstantBuffer->GetGPUVirtualAddress();
+    }
 }

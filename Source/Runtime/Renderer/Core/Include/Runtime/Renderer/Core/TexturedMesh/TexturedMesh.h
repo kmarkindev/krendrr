@@ -51,6 +51,7 @@ namespace krendrr::Runtime::Renderer::Core
 
         bool UpdateConstantBuffer(const RenderApi::Core::RenderApi& RenderApi);
         D3D12_CPU_DESCRIPTOR_HANDLE GetConstantBufferHandle() const;
+        D3D12_GPU_VIRTUAL_ADDRESS GetConstantBufferGpuAddress() const;
 
     private:
 

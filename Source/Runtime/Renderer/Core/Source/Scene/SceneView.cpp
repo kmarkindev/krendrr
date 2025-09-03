@@ -2,18 +2,13 @@
 
 namespace krendrr::Runtime::Renderer::Core
 {
-    bool SceneView::Initialize(const RenderViewTargetData& NewRenderData, const glm::ivec4& NewViewport, const InitParams& Params)
+    bool SceneView::Initialize(const InitParams& Params)
     {
         if (IsValid())
         {
             // TODO: log error
             return false;
         }
-
-        if (!SetViewport(NewViewport))
-            return false;
-
-        RenderData = NewRenderData;
 
         Position = Params.Position;
         Rotation = Params.Rotation;
@@ -157,15 +152,27 @@ namespace krendrr::Runtime::Renderer::Core
         return true;
     }
 
-    void SceneView::SetRenderData(RenderViewTargetData NewRenderData)
+    bool SceneView::SetRenderData(const RenderViewTargetData& NewRenderData, const glm::ivec4& NewViewport)
     {
-        RenderData = std::move(NewRenderData);
+        if (SetViewport(NewViewport))
+        {
+            RenderData = NewRenderData;
+            return true;
+        }
+
+        return false;
+    }
+
+    void SceneView::RemoveRenderData()
+    {
+        RenderData = {};
+        Viewport = {};
     }
 
     void SceneView::TransitionIntoRenderTargetState(ID3D12GraphicsCommandList* CommandList) const
     {
         const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-           RenderData.RenderTargetView.Get(),
+           RenderData.RenderTarget.Get(),
            RenderData.OriginalState, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
         CommandList->ResourceBarrier(1, &barrier);
@@ -174,7 +181,7 @@ namespace krendrr::Runtime::Renderer::Core
     void SceneView::TransitionIntoOriginalState(ID3D12GraphicsCommandList* CommandList) const
     {
         const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-           RenderData.RenderTargetView.Get(),
+           RenderData.RenderTarget.Get(),
            D3D12_RESOURCE_STATE_RENDER_TARGET, RenderData.OriginalState);
 
         CommandList->ResourceBarrier(1, &barrier);
