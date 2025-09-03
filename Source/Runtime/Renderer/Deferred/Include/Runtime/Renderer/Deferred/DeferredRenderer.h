@@ -75,14 +75,8 @@ namespace krendrr::Runtime::Renderer::Deferred
 
         GBuffer GBuffer {};
 
-        struct GBufferInitResult
-        {
-            bool bSuccess {};
-            bool bRecordedCommands {};
-        };
-
         // Called every time we need to update GBuffer, so it has same size as scene view
-        GBufferInitResult InitGBufferForView(const Core::SceneView& SceneView);
+        bool InitGBufferForView(const Core::SceneView& SceneView);
 
         // Make sure our C++ <-> HLSL types have same sizes
         static_assert(sizeof(float) == 4);

@@ -55,7 +55,7 @@ bool DeferredRenderer::Render(const std::span<Core::SceneView>& SceneViews)
         if (!PreRender(SceneView))
             return false;
 
-        if (const auto [bSuccess, bRecordedCommands] = InitGBufferForView(SceneView); !bSuccess)
+        if (!InitGBufferForView(SceneView))
             return false;
 
         if (!GeometryPass(SceneView))
@@ -330,12 +330,12 @@ bool DeferredRenderer::WaitDirectQueue()
     return true;
 }
 
-DeferredRenderer::GBufferInitResult DeferredRenderer::InitGBufferForView(const Core::SceneView& SceneView)
+bool DeferredRenderer::InitGBufferForView(const Core::SceneView& SceneView)
 {
     const glm::ivec2 ViewportSize = SceneView.GetViewportSize();
 
     if (GBuffer.Size == ViewportSize)
-        return {true, false};
+        return true;
 
     // Allocate textures
 
@@ -374,7 +374,7 @@ DeferredRenderer::GBufferInitResult DeferredRenderer::InitGBufferForView(const C
         || !CreateTextureBuffer(GBuffer.DepthStencilTexture, DXGI_FORMAT_D24_UNORM_S8_UINT, true);
 
     if (bError)
-        return {false, false};
+        return false;
 
     const std::array Textures {
         std::addressof(GBuffer.DiffuseTexture),
@@ -455,7 +455,7 @@ DeferredRenderer::GBufferInitResult DeferredRenderer::InitGBufferForView(const C
 
     GBuffer.Size = ViewportSize;
 
-    return {true, true};
+    return true;
 }
 
 }
