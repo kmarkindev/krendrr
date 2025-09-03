@@ -32,6 +32,8 @@ namespace krendrr::Runtime::RenderApi::Core
              */
             Debug Debug {};
 
+            bool bEnableShadersDebug {};
+
             static InitParams Default()
             {
                 // https://bugs.llvm.org/show_bug.cgi?id=36684
@@ -54,6 +56,9 @@ namespace krendrr::Runtime::RenderApi::Core
         [[nodiscard]] Microsoft::WRL::ComPtr<ID3D12CommandQueue> GetCopyQueue() const;
         // thread-safe
         [[nodiscard]] Microsoft::WRL::ComPtr<IDXGIFactory6> GetDXGIFactory() const;
+
+        [[nodiscard]] bool IsShadersDebugEnabled() const;
+        [[nodiscard]] unsigned GetShaderCompileFlags() const;
 
         struct BufferLayout
         {
@@ -87,6 +92,8 @@ namespace krendrr::Runtime::RenderApi::Core
         Microsoft::WRL::ComPtr<ID3D12CommandQueue> D3dDirectCommandQueue {};
         Microsoft::WRL::ComPtr<ID3D12CommandQueue> D3dCopyCommandQueue {};
         Microsoft::WRL::ComPtr<IDXGIFactory6> DxgiFactory {};
+
+        bool bShadersDebugEnabled {};
 
         bool SetupDebugLayer(UINT& DxgiFactoryFlags, const InitParams& Params);
         bool CreateDevice(UINT DxgiFactoryFlags);

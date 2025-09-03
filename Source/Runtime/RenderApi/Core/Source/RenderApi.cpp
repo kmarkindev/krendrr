@@ -1,4 +1,6 @@
 #include "Runtime/RenderApi/Core/RenderApi.h"
+
+#include <d3dcompiler.h>
 #include <dxgi1_6.h>
 #include "Runtime/RenderApi/Core/ApiCallCheck.h"
 
@@ -22,6 +24,8 @@ namespace krendrr::Runtime::RenderApi::Core
 
         if (!CreateCommandQueues())
             return false;
+
+        bShadersDebugEnabled = Params.bEnableShadersDebug;
 
         return true;
     }
@@ -60,6 +64,23 @@ namespace krendrr::Runtime::RenderApi::Core
     Microsoft::WRL::ComPtr<IDXGIFactory6> RenderApi::GetDXGIFactory() const
     {
         return DxgiFactory;
+    }
+
+    bool RenderApi::IsShadersDebugEnabled() const
+    {
+        return bShadersDebugEnabled;
+    }
+
+    unsigned RenderApi::GetShaderCompileFlags() const
+    {
+#if defined(_DEBUG)
+        if (IsShadersDebugEnabled())
+        {
+            return D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+        }
+#endif
+
+        return 0;
     }
 
     const RenderApi::BufferLayout& RenderApi::GetCommonMeshBufferLayout() const

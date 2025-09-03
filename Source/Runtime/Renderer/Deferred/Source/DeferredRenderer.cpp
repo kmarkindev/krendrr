@@ -1,5 +1,7 @@
 #include "Runtime/Renderer/Deferred/DeferredRenderer.h"
 #include <array>
+#include <d3dcompiler.h>
+
 #include "Runtime/ModelLoader/Loader.h"
 #include "Runtime/Renderer/Core/Scene/Scene.h"
 #include "Runtime/Renderer/Core/Scene/SceneView.h"
@@ -31,6 +33,9 @@ bool DeferredRenderer::Initialize(std::shared_ptr<RenderApi::Core::RenderApi> Ne
         return false;
 
     if (!InitBasicMeshes())
+        return false;
+
+    if (!InitializeGeometryPass())
         return false;
 
     if (!WaitDirectQueue())
@@ -138,6 +143,148 @@ bool DeferredRenderer::UpdatePointLightConstantBuffers()
     {
         if (!PointLight->UpdateConstantBuffer(*RenderApi.get()))
             return false;
+    }
+
+    return true;
+}
+
+bool DeferredRenderer::InitializeGeometryPass()
+{
+    // Create Root Signature
+    {
+        CD3DX12_ROOT_PARAMETER RootParams[3] {};
+
+        // Descriptor table with textured mesh textures
+        CD3DX12_DESCRIPTOR_RANGE TexturedMeshTexturesRange {};
+        TexturedMeshTexturesRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, GeometryPassData.TEXTURED_MESH_TEXTURES_COUNT, 0);
+
+        RootParams[0].InitAsDescriptorTable(1, &TexturedMeshTexturesRange);
+
+        // Frame constant buffer
+        RootParams[1].InitAsConstantBufferView(0);
+
+        // Textured mesh constant buffer
+        RootParams[2].InitAsConstantBufferView(1);
+
+        CD3DX12_STATIC_SAMPLER_DESC StaticSamplers[2] {};
+        StaticSamplers[0].Init(0); // Anisotropic
+        StaticSamplers[1].Init(1, D3D12_FILTER_MIN_MAG_MIP_POINT); // Point
+
+        CD3DX12_ROOT_SIGNATURE_DESC RootSignatureDesc {};
+        RootSignatureDesc.Init(
+            std::size(RootParams),
+            RootParams,
+            std::size(StaticSamplers),
+            StaticSamplers,
+            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
+        );
+
+        Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureBlob {};
+        Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureErrorBlob {};
+
+        CHECKED(
+            D3D12SerializeRootSignature(&RootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &RootSignatureBlob, &RootSignatureErrorBlob),
+            "Can't serialize root signature"
+        )
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateRootSignature(
+                    0,
+                    RootSignatureBlob->GetBufferPointer(),
+                    RootSignatureBlob->GetBufferSize(),
+                    IID_PPV_ARGS(&GeometryPassData.RootSignature)
+                ),
+            "Can't create root signature"
+        )
+    }
+
+    // Load Shaders
+    Microsoft::WRL::ComPtr<ID3DBlob> VertexShader {};
+    Microsoft::WRL::ComPtr<ID3DBlob> PixelShader {};
+    {
+        Microsoft::WRL::ComPtr<ID3DBlob> CompilationErrorBlob {};
+
+
+        D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/GeometryPass.hlsl",
+            nullptr, nullptr, "VS_Main", "vs_5_1",
+            RenderApi->GetShaderCompileFlags(), 0, &VertexShader, &CompilationErrorBlob);
+
+        if(CompilationErrorBlob != nullptr)
+        {
+            std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
+            // TODO: log error
+
+            __debugbreak();
+
+            return false;
+        }
+
+        D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/GeometryPass.hlsl",
+            nullptr, nullptr, "PS_Main", "ps_5_1",
+            RenderApi->GetShaderCompileFlags(), 0, &PixelShader, &CompilationErrorBlob);
+
+        if(CompilationErrorBlob != nullptr)
+        {
+            std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
+            // TODO: log error
+
+            __debugbreak();
+
+            return false;
+        }
+    }
+
+    // Create PSO
+    {
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC PsoDesc {
+            .pRootSignature = GeometryPassData.RootSignature.Get(),
+            .VS = CD3DX12_SHADER_BYTECODE(VertexShader.Get()),
+            .PS = CD3DX12_SHADER_BYTECODE(PixelShader.Get()),
+            .BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
+            .SampleMask = UINT_MAX,
+            .RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT),
+            .DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT),
+            .InputLayout = {
+                .pInputElementDescs = RenderApi->GetCommonMeshBufferLayout().Layout.data(),
+                .NumElements = static_cast<UINT>(RenderApi->GetCommonMeshBufferLayout().Layout.size())
+            },
+            .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+            .NumRenderTargets = GBuffer.TEXTURES_COUNT,
+            .RTVFormats = {
+                DXGI_FORMAT_R8G8B8A8_UNORM,
+                DXGI_FORMAT_R8G8B8A8_UNORM,
+                DXGI_FORMAT_R8G8B8A8_UNORM,
+                DXGI_FORMAT_R8G8B8A8_UNORM,
+                DXGI_FORMAT_R8G8B8A8_UNORM,
+                DXGI_FORMAT_R8G8B8A8_UNORM,
+            },
+            .DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT,
+            .SampleDesc = {
+                .Count = 1
+            }
+        };
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateGraphicsPipelineState(&PsoDesc, IID_PPV_ARGS(&GeometryPassData.PipelineState)),
+            "Failed to create PSO"
+        )
+    }
+
+    // Create GPU srv heap for textured mesh texture handles
+    {
+        D3D12_DESCRIPTOR_HEAP_DESC HeapDesc {
+            .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+            .NumDescriptors = GeometryPassData.TEXTURED_MESH_TEXTURES_COUNT,
+            .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
+        };
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(&GeometryPassData.GpuDescriptorHeap)),
+            "Can't create descriptor heap"
+        )
     }
 
     return true;
@@ -415,16 +562,16 @@ bool DeferredRenderer::InitGBufferForView(const Core::SceneView& SceneView)
         D3D12_DESCRIPTOR_HEAP_DESC HeapDesc = {
             .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
             .NumDescriptors = 6,
-            .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE
+            .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
         };
 
         CHECKED(
             RenderApi->GetDevice()
-                ->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(&GBuffer.CpuSrvDescriptorHeap)),
-            "Can't create cpu srv descriptor heap for gbuffer"
+                ->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(&GBuffer.GpuSrvDescriptorHeap)),
+            "Can't create gpu srv descriptor heap for gbuffer"
         )
 
-        CD3DX12_CPU_DESCRIPTOR_HANDLE Handle {GBuffer.CpuSrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart()};
+        CD3DX12_CPU_DESCRIPTOR_HANDLE Handle {GBuffer.GpuSrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart()};
         const unsigned IncrementSize = RenderApi->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         for (const auto & Texture: Textures)
         {

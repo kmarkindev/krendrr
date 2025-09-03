@@ -12,12 +12,6 @@ namespace krendrr::Runtime::Renderer::Deferred
     {
     public:
 
-        constexpr inline static const char* DIFFUSE_TEXTURE_NAME = "diffuse";
-        constexpr inline static const char* METALLIC_TEXTURE_NAME = "metallic";
-        constexpr inline static const char* ROUGHNESS_TEXTURE_NAME = "roughness";
-        constexpr inline static const char* NORMAL_TEXTURE_NAME = "normal";
-        constexpr inline static const char* EMISSIVE_TEXTURE_NAME = "emissive";
-
         bool Initialize(std::shared_ptr<RenderApi::Core::RenderApi> NewRenderApi, std::shared_ptr<Core::Scene> NewScene) override;
 
         bool Render(const std::span<Core::SceneView>& SceneViews) override;
@@ -66,8 +60,8 @@ namespace krendrr::Runtime::Renderer::Deferred
 
             // Descriptors follow same order as textures are declared in this struct
             Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CpuRtvDescriptorHeap {};
-            Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CpuSrvDescriptorHeap {};
-            inline constexpr static int TEXTURES_COUNT = 6;
+            Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> GpuSrvDescriptorHeap {};
+            inline constexpr static unsigned TEXTURES_COUNT = 6;
 
             // Contains only one descriptor
             Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CpuDsvDescriptorHeap {};
@@ -107,6 +101,11 @@ namespace krendrr::Runtime::Renderer::Deferred
         {
             Microsoft::WRL::ComPtr<ID3D12Resource> ConstantBuffer {};
             Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CpuSrvHeap {};
+
+            D3D12_CPU_DESCRIPTOR_HANDLE GetConstantBufferHandle() const
+            {
+                return CpuSrvHeap->GetCPUDescriptorHandleForHeapStart();
+            }
         };
 
         FrameData FrameData {};
@@ -115,13 +114,55 @@ namespace krendrr::Runtime::Renderer::Deferred
         bool UpdateTexturedMeshConstantBuffers();
         bool UpdatePointLightConstantBuffers();
 
+        struct GeometryPassData
+        {
+            // Shaders are going to get textures in the same order as declared here
+            constexpr inline static unsigned TEXTURED_MESH_TEXTURES_COUNT = 5;
+            constexpr inline static const char* DIFFUSE_TEXTURE_NAME = "diffuse";
+            constexpr inline static const char* METALLIC_TEXTURE_NAME = "metallic";
+            constexpr inline static const char* ROUGHNESS_TEXTURE_NAME = "roughness";
+            constexpr inline static const char* NORMAL_TEXTURE_NAME = "normal";
+            constexpr inline static const char* EMISSIVE_TEXTURE_NAME = "emissive";
+
+            Microsoft::WRL::ComPtr<ID3D12RootSignature> RootSignature {};
+            Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineState {};
+
+            Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> GpuDescriptorHeap {};
+        };
+        GeometryPassData GeometryPassData {};
+
+        bool InitializeGeometryPass();
         bool GeometryPass(const Core::SceneView& SceneView);
+
+        struct AmbientDirectionalLightPassData
+        {
+
+        };
+        AmbientDirectionalLightPassData AmbientDirectionalLightPassData {};
 
         bool AmbientDirectionalLightPass(const Core::SceneView& SceneView);
 
+        struct PointLightShadowCubeMapData
+        {
+
+        };
+        PointLightShadowCubeMapData PointLightShadowCubeMap {};
+
         bool PointLightShadowCubeMapsPass();
 
+        struct PointLightVolumePassData
+        {
+
+        };
+        PointLightVolumePassData PointLightVolumePass{};
+
         bool PointLightVolumesPass(const Core::SceneView& SceneView);
+
+        struct PostProcessingPassData
+        {
+
+        };
+        PostProcessingPassData PostProcessingPassData {};
 
         bool PostProcessingPass(const Core::SceneView& SceneView);
 
