@@ -24,7 +24,7 @@ Texture::TextureLoadOperation Texture::Load(const RenderApi::Core::RenderApi& Re
         return {};
     }
 
-    // Load texture and determine it's format
+    // Load texture and determine its format
 
     stbi_set_flip_vertically_on_load(Params.bFlipTexture);
 
@@ -148,6 +148,14 @@ Texture::TextureLoadOperation Texture::Load(const RenderApi::Core::RenderApi& Re
         .bWasSuccessful = true,
         .TextureUploadBuffer = TextureUploadBuffer,
     };
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetTextureHandle() const
+{
+    if (CpuSrvHeap == nullptr)
+        return {};
+
+    return CpuSrvHeap->GetCPUDescriptorHandleForHeapStart();
 }
 
 bool Texture::CheckLoaded() const

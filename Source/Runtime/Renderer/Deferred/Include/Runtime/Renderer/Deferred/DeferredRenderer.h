@@ -29,7 +29,7 @@ namespace krendrr::Runtime::Renderer::Deferred
         std::shared_ptr<RenderApi::Core::RenderApi> RenderApi {};
         std::shared_ptr<Core::Scene> Scene {};
 
-        Runtime::ThreadPool::ThreadPool RenderThreadPool {};
+        ThreadPool::ThreadPool RenderThreadPool {};
 
         std::shared_ptr<Core::Mesh> FullscreenQuadMesh {};
         std::shared_ptr<Core::Mesh> SphereMesh {};
@@ -84,9 +84,48 @@ namespace krendrr::Runtime::Renderer::Deferred
         // Called every time we need to update GBuffer, so it has same size as scene view
         GBufferInitResult InitGBufferForView(const Core::SceneView& SceneView);
 
+        // Make sure our C++ <-> HLSL types have same sizes
+        static_assert(sizeof(float) == 4);
+        static_assert(sizeof(glm::mat4) == sizeof(float) * 16);
+        static_assert(sizeof(glm::vec3) == sizeof(float) * 3);
+        static_assert(sizeof(int) == 4);
+        static_assert(sizeof(glm::ivec2) == sizeof(int) * 2);
+
+        struct alignas(256) ConstBuff_Frame
+        {
+            glm::mat4 ViewMatrix {};
+            glm::mat4 ProjectionMatrix {};
+
+            std::uint32_t bHasAmbientLight {};
+            glm::vec3 AmbientColor {};
+            float AmbientIntensity {};
+
+            std::uint32_t bHasDirectionalLight {};
+            glm::vec3 DirectionalColor {};
+            glm::vec3 DirectionalDir {};
+            float DirectionalIntensity {};
+
+            glm::ivec2 ViewportSize {};
+            glm::vec3 CameraPosition {};
+        };
+
+        struct FrameData
+        {
+            Microsoft::WRL::ComPtr<ID3D12Resource> ConstantBuffer {};
+            Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CpuSrvHeap {};
+        };
+
+        FrameData FrameData {};
+
+        bool UpdateFrameDataConstantBuffer(const Core::SceneView& SceneView);
+        bool UpdateTexturedMeshConstantBuffers();
+        bool UpdatePointLightConstantBuffers();
+
         bool GeometryPass(const Core::SceneView& SceneView);
 
         bool AmbientDirectionalLightPass(const Core::SceneView& SceneView);
+
+        bool PointLightShadowCubeMapsPass();
 
         bool PointLightVolumesPass(const Core::SceneView& SceneView);
 

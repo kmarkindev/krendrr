@@ -55,6 +55,8 @@ namespace krendrr::Runtime::Renderer::Core
         TextureLoadOperation Load(const RenderApi::Core::RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList,
             const std::string_view& TextureFileName, const TextureLoadParams& Params = TextureLoadParams::Default());
 
+        D3D12_CPU_DESCRIPTOR_HANDLE GetTextureHandle() const;
+
     private:
 
         bool CheckLoaded() const;

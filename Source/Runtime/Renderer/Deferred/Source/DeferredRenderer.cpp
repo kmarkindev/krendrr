@@ -6,6 +6,8 @@
 #include "Runtime/Renderer/Core/TexturedMesh/Texture.h"
 #include "nvtx3/nvtx3.hpp"
 #include "Runtime/RenderApi/Core/ApiCallCheck.h"
+#include "Runtime/RenderApi/Core/ConstBufferHelper.h"
+#include "Runtime/Renderer/Core/Lights/PointLight.h"
 
 namespace krendrr::Runtime::Renderer::Deferred
 {
@@ -41,6 +43,15 @@ bool DeferredRenderer::Render(const std::span<Core::SceneView>& SceneViews)
 {
     for (const Core::SceneView& SceneView : SceneViews)
     {
+        if (!UpdateFrameDataConstantBuffer(SceneView))
+            return false;
+
+        if (!UpdateTexturedMeshConstantBuffers())
+            return false;
+
+        if (!UpdatePointLightConstantBuffers())
+            return false;
+
         if (!PreRender(SceneView))
             return false;
 
@@ -51,6 +62,9 @@ bool DeferredRenderer::Render(const std::span<Core::SceneView>& SceneViews)
             return false;
 
         if (!AmbientDirectionalLightPass(SceneView))
+            return false;
+
+        if (!PointLightShadowCubeMapsPass())
             return false;
 
         if (!PointLightVolumesPass(SceneView))
@@ -68,23 +82,99 @@ bool DeferredRenderer::Render(const std::span<Core::SceneView>& SceneViews)
     return true;
 }
 
+bool DeferredRenderer::UpdateFrameDataConstantBuffer(const Core::SceneView& SceneView)
+{
+    nvtx3::scoped_range ConstBufUpdateRange {"Update Frame Data Constant Buffer"};
+
+    // Create buffer if not created
+    if (FrameData.ConstantBuffer == nullptr)
+    {
+        if (!InitializeConstantBuffer<ConstBuff_Frame>(*RenderApi.get(), FrameData.ConstantBuffer, FrameData.CpuSrvHeap, L"Frame Data Constant Buffer"))
+            return false;
+    }
+
+    // Update buffer
+
+    ConstBuff_Frame* Buffer {};
+    CHECKED_S(FrameData.ConstantBuffer->Map(0, nullptr, reinterpret_cast<void**>(&Buffer)))
+
+    *Buffer = {
+        .ViewMatrix = SceneView.GetViewMatrix(),
+        .ProjectionMatrix = SceneView.GetProjectionMatrix(),
+        .bHasAmbientLight = Scene->HasAmbientLight(),
+        .AmbientColor = Scene->GetAmbientLightData().Color,
+        .AmbientIntensity = Scene->GetAmbientLightData().Intensity,
+        .bHasDirectionalLight = Scene->HasDirectionalLight(),
+        .DirectionalColor = Scene->GetDirectionalLightData().Color,
+        .DirectionalDir = Scene->GetDirectionalLightData().Direction,
+        .DirectionalIntensity = Scene->GetDirectionalLightData().Intensity,
+        .ViewportSize = SceneView.GetViewportSize(),
+        .CameraPosition = SceneView.GetPosition(),
+    };
+
+    FrameData.ConstantBuffer->Unmap(0, nullptr);
+
+    return true;
+}
+
+bool DeferredRenderer::UpdateTexturedMeshConstantBuffers()
+{
+    nvtx3::scoped_range ConstBufUpdateRange {"Update Textured Mesh Constant Buffers"};
+
+    for (auto& TexturedMesh : Scene->GetTexturedMeshes())
+    {
+        if (!TexturedMesh->UpdateConstantBuffer(*RenderApi.get()))
+            return false;
+    }
+
+    return true;
+}
+
+bool DeferredRenderer::UpdatePointLightConstantBuffers()
+{
+    nvtx3::scoped_range ConstBufUpdateRange {"Update Point Light Constant Buffers"};
+
+    for (auto& PointLight : Scene->GetPointLights())
+    {
+        if (!PointLight->UpdateConstantBuffer(*RenderApi.get()))
+            return false;
+    }
+
+    return true;
+}
+
 bool DeferredRenderer::GeometryPass(const Core::SceneView& SceneView)
 {
+    nvtx3::scoped_range PassRange {"Geometry Pass"};
+
     return true;
 }
 
 bool DeferredRenderer::AmbientDirectionalLightPass(const Core::SceneView& SceneView)
 {
+    nvtx3::scoped_range PassRange {"Ambient & Directional Light Pass"};
+
+    return true;
+}
+
+bool DeferredRenderer::PointLightShadowCubeMapsPass()
+{
+    nvtx3::scoped_range PassRange {"Point Light Shadow Cube Maps Pass"};
+
     return true;
 }
 
 bool DeferredRenderer::PointLightVolumesPass(const Core::SceneView& SceneView)
 {
+    nvtx3::scoped_range PassRange {"Point Light Volumes Pass"};
+
     return true;
 }
 
 bool DeferredRenderer::PostProcessingPass(const Core::SceneView& SceneView)
 {
+    nvtx3::scoped_range PassRange {"Post Processing Pass"};
+
     return true;
 }
 

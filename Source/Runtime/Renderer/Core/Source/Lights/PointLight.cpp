@@ -1,5 +1,7 @@
 #include "Runtime/Renderer/Core/Lights/PointLight.h"
 
+#include "Runtime/RenderApi/Core/ConstBufferHelper.h"
+
 namespace krendrr::Runtime::Renderer::Core
 {
     const glm::vec3& PointLight::GetPosition() const
@@ -65,5 +67,44 @@ namespace krendrr::Runtime::Renderer::Core
     void PointLight::SetCastsShadows(bool NewCastsShadows)
     {
         bCastsShadows = NewCastsShadows;
+    }
+
+    bool PointLight::UpdateConstantBuffer(const RenderApi::Core::RenderApi& RenderApi)
+    {
+        // Create buffer if not created
+        if (ConstantBuffer == nullptr)
+        {
+            if (!InitializeConstantBuffer<ConstBuff_PointLight>(RenderApi, ConstantBuffer, CpuSrvHeap, L"Point Light Constant Buffer"))
+                return false;
+        }
+
+        // Update buffer
+
+        ConstBuff_PointLight* Buffer {};
+        CHECKED_S(ConstantBuffer->Map(0, nullptr, reinterpret_cast<void**>(&Buffer)))
+
+        *Buffer = {
+            .ModelMatrix = glm::translate(glm::mat4(1.0f), Position),
+            .Position = Position,
+            .DiffuseColor = Color,
+            .SpecularColor = Color,
+            .Distance = Distance,
+            .ShadowMapProjectionFarPlane = Distance + 1.f,
+            .AttenuationLinear = AttenuationLinear,
+            .AttenuationQuad = AttenuationQuad,
+            .AttenuationConstant = AttenuationConstant
+        };
+
+        ConstantBuffer->Unmap(0, nullptr);
+
+        return true;
+    }
+
+    D3D12_CPU_DESCRIPTOR_HANDLE PointLight::GetConstantBufferHandle() const
+    {
+        if (CpuSrvHeap == nullptr)
+            return {};
+
+        return CpuSrvHeap->GetCPUDescriptorHandleForHeapStart();
     }
 }

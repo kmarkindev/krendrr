@@ -3,9 +3,11 @@
 #include <map>
 #include <memory>
 #include <string>
-
+#include <wrl/client.h>
+#include <d3dx12/d3dx12.h>
 #include "glm/fwd.hpp"
 #include "glm/detail/type_quat.hpp"
+#include "Runtime/RenderApi/Core/RenderApi.h"
 
 namespace krendrr::Runtime::Renderer::Core
 {
@@ -45,6 +47,10 @@ namespace krendrr::Runtime::Renderer::Core
         void SetScale(const glm::vec3& NewScale);
 
         [[nodiscard]] glm::mat4 GetModelMatrix() const;
+        [[nodiscard]] glm::mat3 GetNormalMatrix() const;
+
+        bool UpdateConstantBuffer(const RenderApi::Core::RenderApi& RenderApi);
+        D3D12_CPU_DESCRIPTOR_HANDLE GetConstantBufferHandle() const;
 
     private:
 
@@ -57,6 +63,17 @@ namespace krendrr::Runtime::Renderer::Core
 
         glm::vec3 MeshColor {};
         bool bCanCastShadow {true};
+
+        struct alignas(256) ConstBuff_TexturedMesh
+        {
+            glm::mat4 NormalMatrix {};
+            glm::mat4 ModelMatrix {};
+
+            std::uint32_t bHasNormalMap {};
+        };
+
+        Microsoft::WRL::ComPtr<ID3D12Resource> ConstantBuffer {};
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CpuSrvHeap {};
 
     };
 }
