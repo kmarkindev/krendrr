@@ -79,7 +79,7 @@ PSOutput PS_Main(PSInput Input)
 {
     PSOutput Output = (PSOutput)0;
 
-    Output.Diffuse = TexturedMeshTextures[0].Sample(DefaultSampler, Input.Uv);
+    Output.Diffuse = TexturedMeshTextures[0].Sample(PointSampler, Input.Uv);
 
     return Output;
 }

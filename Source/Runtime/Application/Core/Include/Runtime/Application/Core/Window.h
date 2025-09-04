@@ -54,15 +54,15 @@ namespace krendrr::Runtime::Application::Core
 
         struct WindowRenderData
         {
-            Microsoft::WRL::ComPtr<ID3D12Resource> WindowRenderTarget {};
+            ID3D12Resource* WindowRenderTarget {};
             D3D12_CPU_DESCRIPTOR_HANDLE Handle {};
         };
 
         /**
          * Returns Render Target View in D3D12_RESOURCE_STATE_PRESENT
          * Note: After Swap, buffer may change, so do not forget to update your SceneView objects
-         *
-         * Also, it is required to release render target pointer after swap. While it is alive, it is impossible to change window size correctly.
+         * Important: returned pointer and handle may become invalid in the next Application Tick because of window resize.
+         *  You should get new pointer every new tick. DO NOT create ComPtr for returned resource. It should be treated like weak pointer.
          */
         virtual WindowRenderData GetCurrentRenderTargetView() const = 0;
     };

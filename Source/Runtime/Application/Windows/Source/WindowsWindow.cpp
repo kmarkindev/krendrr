@@ -122,7 +122,7 @@ namespace krendrr::Runtime::Application::Windows
         const int Index = SwapChain->GetCurrentBackBufferIndex();
 
         return {
-            .WindowRenderTarget = RenderTargets[Index],
+            .WindowRenderTarget = RenderTargets[Index].Get(),
             .Handle = CD3DX12_CPU_DESCRIPTOR_HANDLE(RtvCpuDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), Index, DescriptorIncrementSize)
         };
     }

@@ -45,18 +45,18 @@ namespace krendrr::Runtime::Renderer::Core
 
         struct RenderViewTargetData
         {
-            Microsoft::WRL::ComPtr<ID3D12Resource> RenderTarget {};
+            ID3D12Resource* RenderTarget {};
             D3D12_CPU_DESCRIPTOR_HANDLE Handle {};
             D3D12_RESOURCE_STATES OriginalState {};
 
             RenderViewTargetData() = default;
 
             RenderViewTargetData(
-                Microsoft::WRL::ComPtr<ID3D12Resource> RenderTarget,
+                ID3D12Resource* RenderTarget,
                 D3D12_CPU_DESCRIPTOR_HANDLE Handle,
                 D3D12_RESOURCE_STATES CurrentState
             )
-                : RenderTarget(std::move(RenderTarget)), Handle(Handle), OriginalState(CurrentState)
+                : RenderTarget(RenderTarget), Handle(Handle), OriginalState(CurrentState)
             {
             }
         };

@@ -172,7 +172,7 @@ namespace krendrr::Runtime::Renderer::Core
     void SceneView::TransitionIntoRenderTargetState(ID3D12GraphicsCommandList* CommandList) const
     {
         const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-           RenderData.RenderTarget.Get(),
+           RenderData.RenderTarget,
            RenderData.OriginalState, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
         CommandList->ResourceBarrier(1, &barrier);
@@ -181,7 +181,7 @@ namespace krendrr::Runtime::Renderer::Core
     void SceneView::TransitionIntoOriginalState(ID3D12GraphicsCommandList* CommandList) const
     {
         const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-           RenderData.RenderTarget.Get(),
+           RenderData.RenderTarget,
            D3D12_RESOURCE_STATE_RENDER_TARGET, RenderData.OriginalState);
 
         CommandList->ResourceBarrier(1, &barrier);

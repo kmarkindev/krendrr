@@ -410,8 +410,6 @@ bool DeferredRenderer::GeometryPass(const Core::SceneView& SceneView)
         {
             if (DrawIndex + 1 == GeometryPassData.PARALLEL_DRAWS_COUNT_ALLOWED)
             {
-                CHECKED_S(CommandList->Close())
-
                 ExecuteCommandList();
                 WaitDirectQueue();
 
@@ -802,6 +800,11 @@ bool DeferredRenderer::InitEmptyTexture()
             ->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(&CpuEmptyTextureHeap)),
         "Failed to create descriptor heap for empty texture"
     )
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM);
+
+    RenderApi->GetDevice()
+        ->CreateShaderResourceView(EmptyTexture.Get(), &SRVDesc, CpuEmptyTextureHeap->GetCPUDescriptorHandleForHeapStart());
 
     return WaitDirectQueue();
 }
