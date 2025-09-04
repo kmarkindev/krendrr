@@ -84,11 +84,6 @@ namespace krendrr::Runtime::Renderer::Core
          */
         bool SetRenderData(const RenderViewTargetData& NewRenderData, const glm::ivec4& NewViewport);
 
-        /**
-         * Must be called before exiting the application tick if UpdateRenderData was called previously
-         */
-        void RemoveRenderData();
-
         void TransitionIntoRenderTargetState(ID3D12GraphicsCommandList* CommandList) const;
 
         void TransitionIntoOriginalState(ID3D12GraphicsCommandList* CommandList) const;

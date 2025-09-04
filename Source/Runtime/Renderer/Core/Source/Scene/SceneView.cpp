@@ -163,12 +163,6 @@ namespace krendrr::Runtime::Renderer::Core
         return false;
     }
 
-    void SceneView::RemoveRenderData()
-    {
-        RenderData = {};
-        Viewport = {};
-    }
-
     void SceneView::TransitionIntoRenderTargetState(ID3D12GraphicsCommandList* CommandList) const
     {
         const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(

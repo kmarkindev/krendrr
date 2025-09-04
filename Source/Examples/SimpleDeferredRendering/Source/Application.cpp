@@ -117,8 +117,6 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Tick(float DeltaTi
         return false;
     }
 
-    SceneView.RemoveRenderData();
-
     return true;
 }
 
