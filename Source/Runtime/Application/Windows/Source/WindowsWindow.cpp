@@ -171,6 +171,7 @@ namespace krendrr::Runtime::Application::Windows
             )
 
             CHECKED_S(SwapChain1.As(&SwapChain))
+            CHECKED_S(RenderApi->GetDXGIFactory()->MakeWindowAssociation(WindowHandle, DXGI_MWA_NO_ALT_ENTER))
         }
 
         SwapChainBufferIndex = SwapChain->GetCurrentBackBufferIndex();

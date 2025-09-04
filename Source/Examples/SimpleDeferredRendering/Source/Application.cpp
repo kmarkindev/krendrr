@@ -14,6 +14,13 @@ IMPLEMENT_ENTRY_POINT(krendrr::Examples::SimpleDeferredRendering::Application)
 
 bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize(const Runtime::Application::Core::StartupArgs& Args)
 {
+    std::cout << "Startup Args: ";
+    for (const auto& Arg: Args.GetStartupArgs())
+    {
+        std::cout << Arg << " ";
+    }
+    std::cout << std::endl;
+
     bLoadFuturisticScene = Args.GetStartupArgs().size() > 1 && Args.GetStartupArgs()[1] == "futuristic";
 
     RenderApi = std::make_shared<Runtime::RenderApi::Core::RenderApi>();
@@ -81,6 +88,14 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize(const R
 
 bool krendrr::Examples::SimpleDeferredRendering::Application::Tick(float DeltaTime)
 {
+    // Show FPS in console
+    {
+        static std::size_t FpsDisplayCounter = 0;
+        FpsDisplayCounter++;
+        if (FpsDisplayCounter % 100 == 0)
+            std::cout << "Delta: " << DeltaTime << " FPS: " << 1.f / DeltaTime << std::endl;
+    }
+
     const glm::ivec2 WindowSize = Window->GetSize();
     Runtime::Application::Core::Window::WindowRenderData RenderData = Window->GetCurrentRenderTargetView();
 

@@ -136,7 +136,7 @@ namespace krendrr::Runtime::Renderer::Deferred
             Microsoft::WRL::ComPtr<ID3D12RootSignature> RootSignature {};
             Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineState {};
 
-            constexpr inline static unsigned PARALLEL_DRAWS_COUNT_ALLOWED = 30;
+            constexpr inline static unsigned PARALLEL_DRAWS_COUNT_ALLOWED = 500;
             Microsoft::WRL::ComPtr<ID3D12CommandAllocator> DrawCommandAllocator {};
             Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> DrawCommandList {};
 
