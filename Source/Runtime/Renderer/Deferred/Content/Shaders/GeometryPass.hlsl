@@ -59,8 +59,8 @@ struct ConstBuff_TexturedMesh
 // 4 - emissive
 Texture2D TexturedMeshTextures[5] : register(t0);
 
-//SamplerState DefaultSampler : register(s0);
-//SamplerState PointSampler : register(s1);
+SamplerState DefaultSampler : register(s0);
+SamplerState PointSampler : register(s1);
 
 ConstantBuffer<ConstBuff_Frame> FrameData : register(b0);
 ConstantBuffer<ConstBuff_TexturedMesh> TexturedMeshData : register(b1);
@@ -79,7 +79,7 @@ PSOutput PS_Main(PSInput Input)
 {
     PSOutput Output = (PSOutput)0;
 
-    Output.Diffuse = float4(0.5f, 0.15f, 0.7f, 1.0f); //TexturedMeshTextures[0].Sample(DefaultSampler, Input.Uv);
+    Output.Diffuse = TexturedMeshTextures[0].Sample(DefaultSampler, Input.Uv);
 
     return Output;
 }

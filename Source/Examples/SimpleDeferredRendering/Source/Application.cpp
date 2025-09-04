@@ -42,7 +42,8 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize(const R
             : "../Content/krendrr_examples_simpledeferredrendering/Sponza/sponza.obj",
         *RenderApi,
         {
-            .bFlipNormals = bLoadFuturisticScene
+            .bFlipUVs = true,
+            .bFlipNormals = bLoadFuturisticScene,
         }
     );
 

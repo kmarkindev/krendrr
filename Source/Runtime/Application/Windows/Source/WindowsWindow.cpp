@@ -97,7 +97,7 @@ namespace krendrr::Runtime::Application::Windows
 
     bool WindowsWindow::Swap()
     {
-        CHECKED(SwapChain->Present(0, 0), "Failed to present swap chain")
+        CHECKED(SwapChain->Present(0, DXGI_PRESENT_ALLOW_TEARING), "Failed to present swap chain")
 
         return true;
     }
@@ -130,7 +130,6 @@ namespace krendrr::Runtime::Application::Windows
     bool WindowsWindow::CreateUpdateSwapChain()
     {
         RenderApi->WaitForQueue(RenderApi->GetDirectQueue().Get());
-        RenderApi->WaitForQueue(RenderApi->GetCopyQueue().Get());
 
         if (SwapChain)
         {
@@ -140,7 +139,7 @@ namespace krendrr::Runtime::Application::Windows
             }
 
             CHECKED(
-                SwapChain->ResizeBuffers(0, 0, 0, DXGI_FORMAT_UNKNOWN, 0),
+                SwapChain->ResizeBuffers(0, 0, 0, DXGI_FORMAT_UNKNOWN, DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING),
                 "Failed to resize Swap Chain Buffers. Most likely you forgot to remove render data from a scene view, connected to this window"
             )
         }
@@ -154,6 +153,7 @@ namespace krendrr::Runtime::Application::Windows
             SwapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
             SwapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
             SwapChainDesc.SampleDesc.Count = 1;
+            SwapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 
             Microsoft::WRL::ComPtr<IDXGISwapChain1> SwapChain1 {};
 

@@ -126,6 +126,8 @@ Texture::TextureLoadOperation Texture::Load(const RenderApi::Core::RenderApi& Re
 
     UpdateSubresources(&CommandList, TextureBuffer.Get(), TextureUploadBuffer.Get(), 0, 0, 1, &SubresData);
 
+    stbi_image_free(Data);
+
     // Create CPU descriptor heap
     D3D12_DESCRIPTOR_HEAP_DESC HeapDesc {
         .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
@@ -139,7 +141,12 @@ Texture::TextureLoadOperation Texture::Load(const RenderApi::Core::RenderApi& Re
         "Could not create descriptor heap"
     )
 
-    stbi_image_free(Data);
+    D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(
+        Format
+    );
+
+    RenderApi.GetDevice()
+        ->CreateShaderResourceView(TextureBuffer.Get(), &SRVDesc, CpuSrvHeap->GetCPUDescriptorHandleForHeapStart());
 
     TextureBuffer->SetName(L"Texture Buffer");
     TextureUploadBuffer->SetName(L"Upload Texture Buffer");

@@ -247,13 +247,16 @@ bool DeferredRenderer::InitializeGeometryPass()
 
     // Create PSO
     {
+        auto RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+        RasterizerState.FrontCounterClockwise = true;
+
         D3D12_GRAPHICS_PIPELINE_STATE_DESC PsoDesc {
             .pRootSignature = GeometryPassData.RootSignature.Get(),
             .VS = CD3DX12_SHADER_BYTECODE(VertexShader.Get()),
             .PS = CD3DX12_SHADER_BYTECODE(PixelShader.Get()),
             .BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
             .SampleMask = UINT_MAX,
-            .RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT),
+            .RasterizerState = RasterizerState,
             .DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT),
             .InputLayout = {
                 .pInputElementDescs = RenderApi->GetCommonMeshBufferLayout().Layout.data(),
@@ -286,7 +289,7 @@ bool DeferredRenderer::InitializeGeometryPass()
     {
         D3D12_DESCRIPTOR_HEAP_DESC HeapDesc {
             .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-            .NumDescriptors = GeometryPassData.TEXTURED_MESH_TEXTURES_COUNT,
+            .NumDescriptors = GeometryPassData.PARALLEL_DRAWS_COUNT_ALLOWED * GeometryPassData.TEXTURED_MESH_TEXTURES_COUNT,
             .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
         };
 
@@ -301,18 +304,18 @@ bool DeferredRenderer::InitializeGeometryPass()
     {
         CHECKED(
             RenderApi->GetDevice()
-                ->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&GeometryPassData.CommandAllocator)),
+                ->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&GeometryPassData.DrawCommandAllocator)),
             "Can't create command allocator"
         )
 
         CHECKED(
             RenderApi->GetDevice()
                 ->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
-                    GeometryPassData.CommandAllocator.Get(), nullptr, IID_PPV_ARGS(&GeometryPassData.CommandList)),
+                    GeometryPassData.DrawCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&GeometryPassData.DrawCommandList)),
             "Can't create command list"
         )
 
-        CHECKED_S(GeometryPassData.CommandList->Close());
+        CHECKED_S(GeometryPassData.DrawCommandList->Close());
     }
 
     return true;
@@ -322,7 +325,6 @@ bool DeferredRenderer::GeometryPass(const Core::SceneView& SceneView)
 {
     nvtx3::scoped_range PassRange {"Geometry Pass"};
 
-    bool bIsFirstIteration = true;
     const unsigned RtvHandleIncrement = RenderApi->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     const unsigned SrvHandleIncrement = RenderApi->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
@@ -337,44 +339,90 @@ bool DeferredRenderer::GeometryPass(const Core::SceneView& SceneView)
 
     const D3D12_CPU_DESCRIPTOR_HANDLE DsvHandle = GBuffer.CpuDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 
+    auto& CommandAllocator = GeometryPassData.DrawCommandAllocator;
+    auto& CommandList = GeometryPassData.DrawCommandList;
+
+    auto ExecuteCommandList = [this, CommandList]() -> bool
+    {
+        CHECKED_S(CommandList->Close())
+
+        ID3D12CommandList* CommandLists[] = {CommandList.Get()};
+
+        RenderApi->GetDirectQueue()
+            ->ExecuteCommandLists(1, CommandLists);
+
+        return true;
+    };
+
+    auto ResetCommandList = [this, &CommandAllocator, &CommandList, &SceneView, &RtvHandles, &DsvHandle]() -> bool
+    {
+        CHECKED_S(CommandAllocator->Reset());
+        CHECKED_S(CommandList->Reset(CommandAllocator.Get(), GeometryPassData.PipelineState.Get()));
+
+        // Setup pipeline
+
+        CommandList->SetGraphicsRootSignature(GeometryPassData.RootSignature.Get());
+        CommandList->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        const D3D12_VIEWPORT Viewport = SceneView.GetD3dViewport();
+        CommandList->RSSetViewports(1, &Viewport);
+
+        static const D3D12_RECT ScissorRect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
+        CommandList->RSSetScissorRects(1, &ScissorRect);
+
+        CommandList->OMSetRenderTargets(
+            GBuffer.TEXTURES_COUNT,
+            RtvHandles.data(),
+            false,
+            &DsvHandle
+        );
+
+        CommandList->SetDescriptorHeaps(1, GeometryPassData.GpuDescriptorHeap.GetAddressOf());
+
+        return true;
+    };
+
+    ResetCommandList();
+
+    for (auto& RtvHandle: RtvHandles)
+    {
+        constexpr static FLOAT ClearColor[] = {0.f, 0.f, 0.f, 1.f};
+        CommandList->ClearRenderTargetView(RtvHandle, ClearColor, 0, nullptr);
+    }
+
+    CommandList->ClearDepthStencilView(
+        GBuffer.CpuDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+        D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
+        1.0f,
+        0,
+        0,
+        nullptr
+    );
+
+    int DrawIndex = -1;
     for (const std::shared_ptr<Core::TexturedMesh>& TexturedMesh : Scene->GetTexturedMeshes())
     {
         nvtx3::scoped_range MeshIterationRange {"Mesh Iteration"};
 
-        auto& CommandList = GeometryPassData.CommandList;
         auto Mesh = TexturedMesh->GetMesh();
 
-        CHECKED_S(GeometryPassData.CommandAllocator->Reset());
-        CHECKED_S(CommandList->Reset(GeometryPassData.CommandAllocator.Get(), nullptr));
-
-        // If this is the first iteration, clear all render targets and depth/stencil buffer
-        if (bIsFirstIteration)
+        // Make sure we have enough descriptors to draw this textured mesh
         {
-            bIsFirstIteration = false;
-
-            for (auto& RtvHandle: RtvHandles)
+            if (DrawIndex + 1 == GeometryPassData.PARALLEL_DRAWS_COUNT_ALLOWED)
             {
-                constexpr static FLOAT ClearColor[] = {0.f, 0.f, 0.f, 1.f};
-                CommandList->ClearRenderTargetView(RtvHandle, ClearColor, 0, nullptr);
-            }
+                CHECKED_S(CommandList->Close())
 
-            CommandList->ClearDepthStencilView(
-                GBuffer.CpuDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
-                D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
-                1.0f,
-                0,
-                0,
-                nullptr
-            );
+                ExecuteCommandList();
+                WaitDirectQueue();
+
+                DrawIndex = -1;
+                ResetCommandList();
+            }
+            DrawIndex += 1;
         }
 
-        // Setup pipeline
+        // Setup Mesh
         {
-            CommandList->SetGraphicsRootSignature(GeometryPassData.RootSignature.Get());
-            CommandList->SetPipelineState(GeometryPassData.PipelineState.Get());
-
-            CommandList->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
             D3D12_VERTEX_BUFFER_VIEW VertexBufferView = Mesh->GetVertexBufferView();
             CommandList->IASetVertexBuffers(0, 1, &VertexBufferView);
 
@@ -383,19 +431,10 @@ bool DeferredRenderer::GeometryPass(const Core::SceneView& SceneView)
                 D3D12_INDEX_BUFFER_VIEW IndexBufferView = Mesh->GetIndexBufferView();
                 CommandList->IASetIndexBuffer(&IndexBufferView);
             }
-
-            const D3D12_VIEWPORT Viewport = SceneView.GetD3dViewport();
-            CommandList->RSSetViewports(1, &Viewport);
-
-            static const D3D12_RECT ScissorRect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
-            CommandList->RSSetScissorRects(1, &ScissorRect);
-
-            CommandList->OMSetRenderTargets(
-                GBuffer.TEXTURES_COUNT,
-                RtvHandles.data(),
-                false,
-                &DsvHandle
-            );
+            else
+            {
+                CommandList->IASetIndexBuffer(nullptr);
+            }
         }
 
         // Prepare SRV descriptor heap
@@ -427,7 +466,7 @@ bool DeferredRenderer::GeometryPass(const Core::SceneView& SceneView)
             {
                 DestinationHandles[i] = CD3DX12_CPU_DESCRIPTOR_HANDLE {
                     GeometryPassData.GpuDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
-                    i,
+                    DrawIndex * static_cast<int>(GeometryPassData.TEXTURED_MESH_TEXTURES_COUNT) + i,
                     SrvHandleIncrement
                 };
             }
@@ -450,13 +489,17 @@ bool DeferredRenderer::GeometryPass(const Core::SceneView& SceneView)
                     RangeSize,
                     D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
                 );
-
-            CommandList->SetDescriptorHeaps(1, GeometryPassData.GpuDescriptorHeap.GetAddressOf());
         }
 
         // Set root signature parameters
         {
-            CommandList->SetGraphicsRootDescriptorTable(0, GeometryPassData.GpuDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+            const CD3DX12_GPU_DESCRIPTOR_HANDLE TableHandle {
+                GeometryPassData.GpuDescriptorHeap->GetGPUDescriptorHandleForHeapStart(),
+                DrawIndex * static_cast<int>(GeometryPassData.TEXTURED_MESH_TEXTURES_COUNT),
+                SrvHandleIncrement
+            };
+
+            CommandList->SetGraphicsRootDescriptorTable(0, TableHandle);
             CommandList->SetGraphicsRootConstantBufferView(1, FrameData.ConstantBuffer->GetGPUVirtualAddress());
             CommandList->SetGraphicsRootConstantBufferView(2, TexturedMesh->GetConstantBufferGpuAddress());
         }
@@ -484,15 +527,10 @@ bool DeferredRenderer::GeometryPass(const Core::SceneView& SceneView)
                 );
             }
         }
-
-        CHECKED_S(CommandList->Close());
-
-        ID3D12CommandList* CommandLists[] = {CommandList.Get()};
-        RenderApi->GetDirectQueue()
-            ->ExecuteCommandLists(1, CommandLists);
-
-        WaitDirectQueue();
     }
+
+    if (DrawIndex >= 0)
+        ExecuteCommandList();
 
     return true;
 }
