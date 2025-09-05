@@ -124,9 +124,9 @@ namespace krendrr::Runtime::Renderer::Core
         CHECKED_S(ConstantBuffer->Map(0, nullptr, reinterpret_cast<void**>(&Buffer)))
 
         *Buffer = {
-            .NormalMatrix = GetNormalMatrix(),
+            .bHasNormalMap = HasTexture(NORMAL_TEXTURE_NAME),
             .ModelMatrix = GetModelMatrix(),
-            .bHasNormalMap = HasTexture("NormalMap")
+            .NormalMatrix = GetNormalMatrix(),
         };
 
         ConstantBuffer->Unmap(0, nullptr);

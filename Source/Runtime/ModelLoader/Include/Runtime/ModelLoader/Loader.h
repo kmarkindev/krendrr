@@ -18,6 +18,11 @@ namespace krendrr::Runtime::ModelLoader
          */
         bool bFlipNormals = false;
 
+        /**
+         * Convert between left <-> right handed system for mesh normals and tangents
+         */
+        bool bNegateNormalZ = false;
+
         std::string_view DiffuseTextureName {"diffuse"};
         std::string_view MetallicTextureName {"metallic"};
         std::string_view RoughnessTextureName {"roughness"};

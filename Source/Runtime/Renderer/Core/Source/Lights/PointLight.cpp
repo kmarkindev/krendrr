@@ -85,8 +85,8 @@ namespace krendrr::Runtime::Renderer::Core
 
         *Buffer = {
             .ModelMatrix = glm::translate(glm::mat4(1.0f), Position),
-            .Position = Position,
-            .DiffuseColor = Color,
+            .Position = glm::vec4(Position, 0.f),
+            .DiffuseColor = glm::vec4(Color, 0.f),
             .SpecularColor = Color,
             .Distance = Distance,
             .ShadowMapProjectionFarPlane = Distance + 1.f,

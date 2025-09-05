@@ -65,12 +65,16 @@ namespace krendrr::Runtime::Renderer::Core
         glm::vec3 MeshColor {};
         bool bCanCastShadow {true};
 
+        constexpr inline static const char* NORMAL_TEXTURE_NAME = "normal";
+
         struct alignas(256) ConstBuff_TexturedMesh
         {
-            glm::mat4 NormalMatrix {};
+            std::uint32_t bHasNormalMap {};
+            std::byte Padding[12];
+
             glm::mat4 ModelMatrix {};
 
-            std::uint32_t bHasNormalMap {};
+            glm::mat3x4 NormalMatrix {};
         };
 
         Microsoft::WRL::ComPtr<ID3D12Resource> ConstantBuffer {};

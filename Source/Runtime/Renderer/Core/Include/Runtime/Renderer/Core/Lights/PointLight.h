@@ -50,13 +50,14 @@ namespace krendrr::Runtime::Renderer::Core
         {
             glm::mat4 ModelMatrix {};
 
-            glm::vec3 Position {};
-            glm::vec3 DiffuseColor {};
+            glm::vec4 Position {};
+
+            glm::vec4 DiffuseColor {};
+
             glm::vec3 SpecularColor {};
-
             float Distance {};
-            float ShadowMapProjectionFarPlane {};
 
+            float ShadowMapProjectionFarPlane {};
             float AttenuationLinear {};
             float AttenuationQuad {};
             float AttenuationConstant {};

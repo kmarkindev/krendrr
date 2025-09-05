@@ -52,6 +52,7 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize(const R
         {
             .bFlipUVs = true,
             .bFlipNormals = bLoadFuturisticScene,
+            .bNegateNormalZ = bLoadFuturisticScene,
         }
     );
 

@@ -132,6 +132,12 @@ namespace krendrr::Runtime::ModelLoader
 
                 if (Params.bFlipNormals)
                     std::swap(Tangent.y, Tangent.z);
+
+                if (Params.bNegateNormalZ)
+                {
+                    Normal.z = -Normal.z;
+                    Tangent.z = -Tangent.z;
+                }
             }
 
             for(unsigned faceIndex = 0; faceIndex < Mesh->mNumFaces; faceIndex++)
@@ -349,10 +355,10 @@ namespace krendrr::Runtime::ModelLoader
             nvtx3::scoped_range AssimpSceneLoadingRange {"Assimp scene loading"};
 
             unsigned Flags = aiProcess_Triangulate
-            | aiProcess_CalcTangentSpace
-            | aiProcess_JoinIdenticalVertices
-            | aiProcess_SortByPType
-            | aiProcess_RemoveComponent;
+                | aiProcess_CalcTangentSpace
+                | aiProcess_JoinIdenticalVertices
+                | aiProcess_SortByPType
+                | aiProcess_RemoveComponent;
 
             if(Params.bFlipUVs)
                 Flags |= aiProcess_FlipUVs;

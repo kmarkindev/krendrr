@@ -104,7 +104,7 @@ bool DeferredRenderer::UpdateFrameDataConstantBuffer(const Core::SceneView& Scen
     // Create buffer if not created
     if (FrameData.ConstantBuffer == nullptr)
     {
-        if (!InitializeConstantBuffer<ConstBuff_Frame>(*RenderApi.get(), FrameData.ConstantBuffer, FrameData.CpuSrvHeap, L"Frame Data Constant Buffer"))
+        if (!InitializeConstantBuffer<ConstBuff_Frame>(*RenderApi, FrameData.ConstantBuffer, FrameData.CpuSrvHeap, L"Frame Data Constant Buffer"))
             return false;
     }
 
@@ -119,12 +119,12 @@ bool DeferredRenderer::UpdateFrameDataConstantBuffer(const Core::SceneView& Scen
         .bHasAmbientLight = Scene->HasAmbientLight(),
         .AmbientColor = Scene->GetAmbientLightData().Color,
         .AmbientIntensity = Scene->GetAmbientLightData().Intensity,
-        .bHasDirectionalLight = Scene->HasDirectionalLight(),
         .DirectionalColor = Scene->GetDirectionalLightData().Color,
+        .bHasDirectionalLight = Scene->HasDirectionalLight(),
         .DirectionalDir = Scene->GetDirectionalLightData().Direction,
         .DirectionalIntensity = Scene->GetDirectionalLightData().Intensity,
-        .ViewportSize = SceneView.GetViewportSize(),
         .CameraPosition = SceneView.GetPosition(),
+        .ViewportSize = SceneView.GetViewportSize(),
     };
 
     FrameData.ConstantBuffer->Unmap(0, nullptr);
@@ -138,7 +138,7 @@ bool DeferredRenderer::UpdateTexturedMeshConstantBuffers()
 
     for (auto& TexturedMesh : Scene->GetTexturedMeshes())
     {
-        if (!TexturedMesh->UpdateConstantBuffer(*RenderApi.get()))
+        if (!TexturedMesh->UpdateConstantBuffer(*RenderApi))
             return false;
     }
 
@@ -818,7 +818,7 @@ bool DeferredRenderer::InitGBufferForView(const Core::SceneView& SceneView)
 
     // Allocate textures
 
-    auto CreateTextureBuffer = [&](Microsoft::WRL::ComPtr<ID3D12Resource>& TextureBuffer, DXGI_FORMAT Format, bool bIsDepth = false) -> bool
+    auto CreateTextureBuffer = [&](Microsoft::WRL::ComPtr<ID3D12Resource>& TextureBuffer, DXGI_FORMAT Format, const std::wstring_view& Name, bool bIsDepth = false) -> bool
     {
         D3D12_HEAP_PROPERTIES HeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
         D3D12_RESOURCE_DESC ResourceDesc = CD3DX12_RESOURCE_DESC::Tex2D(Format, ViewportSize.x, ViewportSize.y, 1, 1);
@@ -857,16 +857,18 @@ bool DeferredRenderer::InitGBufferForView(const Core::SceneView& SceneView)
             "Can't create texture for gbuffer"
         )
 
+        TextureBuffer->SetName(Name.data());
+
         return true;
     };
 
-    const bool bError = !CreateTextureBuffer(GBuffer.DiffuseTexture, DXGI_FORMAT_R8G8B8A8_UNORM)
-        || !CreateTextureBuffer(GBuffer.WorldPositionTexture, DXGI_FORMAT_R32G32B32A32_FLOAT)
-        || !CreateTextureBuffer(GBuffer.WorldNormalTexture, DXGI_FORMAT_R32G32B32A32_FLOAT)
-        || !CreateTextureBuffer(GBuffer.MetallicTexture, DXGI_FORMAT_R8G8B8A8_UNORM)
-        || !CreateTextureBuffer(GBuffer.RoughnessTexture, DXGI_FORMAT_R8G8B8A8_UNORM)
-        || !CreateTextureBuffer(GBuffer.EmissiveTexture, DXGI_FORMAT_R8G8B8A8_UNORM)
-        || !CreateTextureBuffer(GBuffer.DepthStencilTexture, DXGI_FORMAT_D24_UNORM_S8_UINT, true);
+    const bool bError = !CreateTextureBuffer(GBuffer.DiffuseTexture, DXGI_FORMAT_R8G8B8A8_UNORM, L"GBuffer Diffuse")
+        || !CreateTextureBuffer(GBuffer.WorldPositionTexture, DXGI_FORMAT_R32G32B32A32_FLOAT, L"GBuffer World Position")
+        || !CreateTextureBuffer(GBuffer.WorldNormalTexture, DXGI_FORMAT_R32G32B32A32_FLOAT, L"GBuffer World Normal")
+        || !CreateTextureBuffer(GBuffer.MetallicTexture, DXGI_FORMAT_R8G8B8A8_UNORM, L"GBuffer Metallic")
+        || !CreateTextureBuffer(GBuffer.RoughnessTexture, DXGI_FORMAT_R8G8B8A8_UNORM, L"GBuffer Roughness")
+        || !CreateTextureBuffer(GBuffer.EmissiveTexture, DXGI_FORMAT_R8G8B8A8_UNORM, L"GBuffer Emissive")
+        || !CreateTextureBuffer(GBuffer.DepthStencilTexture, DXGI_FORMAT_D24_UNORM_S8_UINT, L"GBuffer DepthStencil", true);
 
     if (bError)
         return false;

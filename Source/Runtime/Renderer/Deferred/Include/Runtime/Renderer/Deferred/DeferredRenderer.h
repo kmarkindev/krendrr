@@ -89,6 +89,7 @@ namespace krendrr::Runtime::Renderer::Deferred
         // Make sure our C++ <-> HLSL types have same sizes
         static_assert(sizeof(float) == 4);
         static_assert(sizeof(glm::mat4) == sizeof(float) * 16);
+        static_assert(sizeof(glm::mat3) == sizeof(float) * 9);
         static_assert(sizeof(glm::vec3) == sizeof(float) * 3);
         static_assert(sizeof(int) == 4);
         static_assert(sizeof(glm::ivec2) == sizeof(int) * 2);
@@ -96,19 +97,22 @@ namespace krendrr::Runtime::Renderer::Deferred
         struct alignas(256) ConstBuff_Frame
         {
             glm::mat4 ViewMatrix {};
+
             glm::mat4 ProjectionMatrix {};
 
             std::uint32_t bHasAmbientLight {};
             glm::vec3 AmbientColor {};
+
             float AmbientIntensity {};
+            glm::vec3 DirectionalColor {};
 
             std::uint32_t bHasDirectionalLight {};
-            glm::vec3 DirectionalColor {};
             glm::vec3 DirectionalDir {};
+
             float DirectionalIntensity {};
+            glm::vec3 CameraPosition {};
 
             glm::ivec2 ViewportSize {};
-            glm::vec3 CameraPosition {};
         };
 
         struct FrameData
