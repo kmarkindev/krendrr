@@ -46,8 +46,8 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize(const R
 
     Runtime::ModelLoader::LoadResult MeshesLoadResult = Runtime::ModelLoader::LoadModel(
         bLoadFuturisticScene
-            ?  "../Content/krendrr_examples_simpledeferredrendering/FuturisticRoom/source/CyberPunkRoom.fbx"
-            : "../Content/krendrr_examples_simpledeferredrendering/Sponza/sponza.obj",
+            ?  "../Content/krendrr_examples_deferredrendering/FuturisticRoom/source/CyberPunkRoom.fbx"
+            : "../Content/krendrr_examples_deferredrendering/Sponza/sponza.obj",
         *RenderApi,
         {
             .bFlipUVs = true,
