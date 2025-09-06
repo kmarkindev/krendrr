@@ -9,6 +9,7 @@
 #include "nvtx3/nvtx3.hpp"
 #include "Runtime/RenderApi/Core/ApiCallCheck.h"
 #include "Runtime/RenderApi/Core/ConstBufferHelper.h"
+#include "Runtime/RenderApi/Core/ContentFolderD3DInclude.h"
 #include "Runtime/Renderer/Core/Lights/PointLight.h"
 
 namespace krendrr::Runtime::Renderer::Deferred
@@ -215,12 +216,13 @@ bool DeferredRenderer::InitializeGeometryPass()
     {
         Microsoft::WRL::ComPtr<ID3DBlob> CompilationErrorBlob {};
 
+        RenderApi::Core::ContentFolderD3dInclude VertexShaderInclude {};
 
-        D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/GeometryPass.hlsl",
-            nullptr, nullptr, "VS_Main", "vs_5_1",
+        HRESULT VSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/GeometryPass.hlsl",
+            nullptr, &VertexShaderInclude, "VS_Main", "vs_5_1",
             RenderApi->GetShaderCompileFlags(), 0, &VertexShader, &CompilationErrorBlob);
 
-        if(CompilationErrorBlob != nullptr)
+        if(FAILED(VSCompileResult) || CompilationErrorBlob != nullptr)
         {
             std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
             // TODO: log error
@@ -230,11 +232,13 @@ bool DeferredRenderer::InitializeGeometryPass()
             return false;
         }
 
-        D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/GeometryPass.hlsl",
-            nullptr, nullptr, "PS_Main", "ps_5_1",
+        RenderApi::Core::ContentFolderD3dInclude PixelShaderInclude {};
+
+        HRESULT PSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/GeometryPass.hlsl",
+            nullptr, &PixelShaderInclude, "PS_Main", "ps_5_1",
             RenderApi->GetShaderCompileFlags(), 0, &PixelShader, &CompilationErrorBlob);
 
-        if(CompilationErrorBlob != nullptr)
+        if(FAILED(PSCompileResult) || CompilationErrorBlob != nullptr)
         {
             std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
             // TODO: log error
@@ -335,7 +339,7 @@ bool DeferredRenderer::GeometryPass(const Core::SceneView& SceneView)
     }
 
     // TMP: temporary way of quickly showing GBuffer values in window
-    RtvHandles[2] = SceneView.GetRenderTargetHandle();
+    RtvHandles[0] = SceneView.GetRenderTargetHandle();
 
     const D3D12_CPU_DESCRIPTOR_HANDLE DsvHandle = GBuffer.CpuDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 

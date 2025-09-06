@@ -1,3 +1,6 @@
+#include <krendrr_runtime_renderer_deferred/Shaders/ConstBuffers/FrameConstBuffer.hlsli>
+#include <krendrr_runtime_renderer_deferred/Shaders/ConstBuffers/TexturedMeshConstBuffer.hlsli>
+#include <krendrr_runtime_renderer_deferred/Shaders/Math/CommonVertexShaderMath.hlsli>
 
 struct VSInput
 {
@@ -26,107 +29,6 @@ struct PSOutput
     float4 Roughness : SV_Target4;
     float4 Emissive : SV_Target5;
 };
-
-struct ConstBuff_Frame
-{
-    float4x4 ViewMatrix;
-    float4x4 ProjectionMatrix;
-
-    bool bHasAmbientLight;
-    float3 AmbientColor;
-    float AmbientIntensity;
-
-    float3 DirectionalColor;
-    uint bHasDirectionalLight;
-    float3 DirectionalDir;
-    float DirectionalIntensity;
-
-    float3 CameraPosition;
-    int2 ViewportSize;
-};
-
-struct ConstBuff_PointLight
-{
-    float4x4 ModelMatrix;
-
-    float3 Position;
-    float3 DiffuseColor;
-    float3 SpecularColor;
-
-    float Distance;
-    float ShadowMapProjectionFarPlane;
-
-    float AttenuationLinear;
-    float AttenuationQuad;
-    float AttenuationConstant;
-};
-
-struct ConstBuff_TexturedMesh
-{
-    bool bHasNormalMap;
-
-    float4x4 ModelMatrix;
-    float3x3 NormalMatrix;
-};
-
-float3 CalculateWorldPosition(float4x4 ModelMatrix, float3 VertexPosition)
-{
-    float4 HomoWorldPos = mul(ModelMatrix, float4(VertexPosition, 1.0f));
-
-    return HomoWorldPos.xyz / HomoWorldPos.w;
-}
-
-float4 CalculateNDC(float4x4 ModelMatrix, float4x4 ViewMatrix, float4x4 ProjectionMatrix, float3 VertexPosition)
-{
-    return mul(
-        ProjectionMatrix,
-        mul(
-            ViewMatrix,
-            mul(
-                ModelMatrix,
-                float4(VertexPosition, 1.0f)
-            )
-        )
-    );
-}
-
-float3 CalculateNormal(float3 BaseNormal, float3x3 NormalMatrix)
-{
-    return normalize(
-        mul(
-            NormalMatrix,
-            BaseNormal
-        )
-    );
-}
-
-float3 CalculateTangent(float3 BaseTangent, float3 TransformedNormal, float3x3 NormalMatrix)
-{
-    float3 Tangent = normalize(
-        mul(
-            NormalMatrix,
-            BaseTangent
-        )
-    );
-
-    // Gram-Schmidt process
-    Tangent = normalize(
-        Tangent - dot(Tangent, TransformedNormal) * TransformedNormal
-    );
-
-    return Tangent;
-}
-
-float3x3 CreateTBNMatrix(float3 Normal, float3 Tangent)
-{
-    float3 Bitangent = cross(Normal, Tangent);
-
-    return transpose(float3x3(
-        Tangent,
-        Bitangent,
-        Normal
-    ));
-}
 
 // 0 - diffuse
 // 1 - metallic
