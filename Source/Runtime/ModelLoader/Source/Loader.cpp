@@ -355,6 +355,8 @@ namespace krendrr::Runtime::ModelLoader
             nvtx3::scoped_range AssimpSceneLoadingRange {"Assimp scene loading"};
 
             unsigned Flags = aiProcess_Triangulate
+                | aiProcess_GenNormals
+                | aiProcess_FindInvalidData
                 | aiProcess_CalcTangentSpace
                 | aiProcess_JoinIdenticalVertices
                 | aiProcess_SortByPType

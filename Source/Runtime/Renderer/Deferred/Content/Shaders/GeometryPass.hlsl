@@ -12,8 +12,9 @@ struct PSInput
     float4 NDC : SV_POSITION;
     float3 WorldPosition : WORLD_POSITION;
     float2 Uv: UV;
-    float3 VertexWorldNormal : NORMAL;
-    nointerpolation float3x3 TBNMatrix : TBN_MATRIX;
+
+    float3 Normal : NORMAL;
+    float3x3 TBNMatrix : TBN;
 };
 
 struct PSOutput
@@ -120,11 +121,11 @@ float3x3 CreateTBNMatrix(float3 Normal, float3 Tangent)
 {
     float3 Bitangent = cross(Normal, Tangent);
 
-    return float3x3(
+    return transpose(float3x3(
         Tangent,
         Bitangent,
         Normal
-    );
+    ));
 }
 
 // 0 - diffuse
@@ -148,9 +149,9 @@ PSInput VS_Main(VSInput Input)
     Output.Uv = Input.Uv;
     Output.WorldPosition = CalculateWorldPosition(TexturedMeshData.ModelMatrix, Input.Position);
 
-    Output.VertexWorldNormal = CalculateNormal(Input.Normal, TexturedMeshData.NormalMatrix);
-    float3 Tangent = CalculateTangent(Input.Tangent, Output.VertexWorldNormal, TexturedMeshData.NormalMatrix);
-    Output.TBNMatrix = CreateTBNMatrix(Output.VertexWorldNormal, Tangent);
+    Output.Normal = CalculateNormal(Input.Normal, TexturedMeshData.NormalMatrix);
+    float3 Tangent = CalculateTangent(Input.Tangent, Output.Normal, TexturedMeshData.NormalMatrix);
+    Output.TBNMatrix = CreateTBNMatrix(Output.Normal, Tangent);
 
     return Output;
 }
@@ -160,29 +161,29 @@ PSOutput PS_Main(PSInput Input)
     PSOutput Output = (PSOutput)0;
 
     Output.Diffuse = float4(TexturedMeshTextures[0].Sample(DefaultSampler, Input.Uv).rgb, 1.0f);
+
     Output.WorldPosition = float4(Input.WorldPosition, 1.0f);
-
-    if(TexturedMeshData.bHasNormalMap)
-    {
-        float3 SampledNormal = TexturedMeshTextures[3].Sample(PointSampler, Input.Uv).rgb;
-        SampledNormal = normalize(SampledNormal * 2.0f - 1.0f);
-
-        Output.WorldNormal = float4(mul(Input.TBNMatrix, SampledNormal), 1.0f);
-
-
-        // Convert from DirectX normal map to OpenGl normal map (left handed system to right handed system)
-        //Output.WorldNormal.z = -Output.WorldNormal.z;
-    }
-    else
-    {
-        Output.WorldNormal = float4(Input.VertexWorldNormal, 1.0f);
-    }
 
     Output.Metallic = float4(TexturedMeshTextures[1].Sample(DefaultSampler, Input.Uv).r, 0.0f, 0.0f, 1.0f);
     Output.Roughness = float4(TexturedMeshTextures[2].Sample(DefaultSampler, Input.Uv).r, 0.0f, 0.0f, 1.0f);
 
     Output.Emissive = TexturedMeshTextures[4].Sample(DefaultSampler, Input.Uv);
     Output.Emissive.a = length(Output.Emissive.rgb) == 0.0f ? 0.f : 1.f;
+
+    if(TexturedMeshData.bHasNormalMap)
+    {
+        float3 SampledNormal = TexturedMeshTextures[3].Sample(DefaultSampler, Input.Uv).rgb;
+        SampledNormal = normalize(SampledNormal * 2.0f - 1.0f);
+
+        Output.WorldNormal = float4(mul(Input.TBNMatrix, SampledNormal), 1.0f);
+
+        // Convert from DirectX normal map to OpenGl normal map (left handed system to right handed system)
+        //Output.WorldNormal.z = -Output.WorldNormal.z;
+    }
+    else
+    {
+        Output.WorldNormal = float4(Input.Normal, 1.0f);
+    }
 
     return Output;
 }

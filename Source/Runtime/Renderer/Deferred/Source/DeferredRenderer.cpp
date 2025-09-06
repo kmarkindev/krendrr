@@ -335,7 +335,7 @@ bool DeferredRenderer::GeometryPass(const Core::SceneView& SceneView)
     }
 
     // TMP: temporary way of quickly showing GBuffer values in window
-    RtvHandles[0] = SceneView.GetRenderTargetHandle();
+    RtvHandles[2] = SceneView.GetRenderTargetHandle();
 
     const D3D12_CPU_DESCRIPTOR_HANDLE DsvHandle = GBuffer.CpuDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 
