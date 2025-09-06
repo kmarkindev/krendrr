@@ -70,7 +70,10 @@ bool DeferredRenderer::Render(const std::span<Core::SceneView>& SceneViews)
         if (!GeometryPass(SceneView))
             return false;
 
-        if (!TransitionGBufferFromPresentToReadState())
+        if (!TransitionGBufferFromRenderTargetToReadState())
+            return false;
+
+        if (!PrepareLightPassData(SceneView))
             return false;
 
         if (!AmbientDirectionalLightPass(SceneView))
@@ -82,13 +85,19 @@ bool DeferredRenderer::Render(const std::span<Core::SceneView>& SceneViews)
         if (!PointLightVolumesPass(SceneView))
             return false;
 
+        if (!TransitionLightPassFromRenderTargetToReadState())
+            return false;
+
         if (!PostProcessingPass(SceneView))
+            return false;
+
+        if (!TransitionLightPassFromReadToRenderTargetState())
             return false;
 
         if (!PostRender(SceneView))
             return false;
 
-        if (!TransitionGBufferFromReadToPresentState())
+        if (!TransitionGBufferFromReadToRenderTargetState())
             return false;
 
         if (!WaitDirectQueue())
@@ -338,9 +347,6 @@ bool DeferredRenderer::GeometryPass(const Core::SceneView& SceneView)
         RtvHandles[i] = CD3DX12_CPU_DESCRIPTOR_HANDLE{GBuffer.CpuRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), i, RtvHandleIncrement};
     }
 
-    // TMP: temporary way of quickly showing GBuffer values in window
-    RtvHandles[0] = SceneView.GetRenderTargetHandle();
-
     const D3D12_CPU_DESCRIPTOR_HANDLE DsvHandle = GBuffer.CpuDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 
     auto& CommandAllocator = GeometryPassData.DrawCommandAllocator;
@@ -537,9 +543,207 @@ bool DeferredRenderer::GeometryPass(const Core::SceneView& SceneView)
     return true;
 }
 
+bool DeferredRenderer::PrepareLightPassData(const Core::SceneView& SceneView)
+{
+    const glm::ivec2 ViewportSize = SceneView.GetViewportSize();
+
+    if (LightPassData.Size == SceneView.GetViewportSize())
+        return true;
+
+    LightPassData.Size = ViewportSize;
+
+    // Create or resize color texture
+    {
+        const CD3DX12_HEAP_PROPERTIES HeapProperties {D3D12_HEAP_TYPE_DEFAULT};
+        const CD3DX12_RESOURCE_DESC ResourceDesc = CD3DX12_RESOURCE_DESC::Tex2D(LightPassData.COLOR_TEXTURE_FORMAT, ViewportSize.x, ViewportSize.y, 1);
+
+        const D3D12_CLEAR_VALUE ClearValue = {
+            .Format = LightPassData.COLOR_TEXTURE_FORMAT,
+            .Color = {
+                0.f, 0.f, 0.f, 1.f
+            }
+        };
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateCommittedResource(
+                    &HeapProperties,
+                    D3D12_HEAP_FLAG_NONE,
+                    &ResourceDesc,
+                    D3D12_RESOURCE_STATE_RENDER_TARGET,
+                    &ClearValue,
+                    IID_PPV_ARGS(&LightPassData.ColorTexture)
+                ),
+            "Can't create light pass color texture"
+        )
+    }
+
+    // Create RTV heap and handle
+    {
+        D3D12_DESCRIPTOR_HEAP_DESC HeapDesc = {
+            .Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+            .NumDescriptors = 1,
+        };
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(&LightPassData.CpuRtvHeap)),
+            "Failed to create cpu rtv descriptor heap"
+        )
+    }
+
+    // Create SRV heap and handle
+    {
+        D3D12_DESCRIPTOR_HEAP_DESC HeapDesc = {
+            .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+            .NumDescriptors = 1,
+        };
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(&LightPassData.CpuSrvHeap)),
+            "Failed to create cpu srv descriptor heap"
+        )
+    }
+
+    // Create command list and allocators
+    {
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&LightPassData.RenderTargetToReadTransitionAllocator)),
+            "Failed to create command allocator"
+        )
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&LightPassData.ReadToRenderTargetTransitionAllocator)),
+            "Failed to create command allocator"
+        )
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+                    LightPassData.RenderTargetToReadTransitionAllocator.Get(), nullptr, IID_PPV_ARGS(&LightPassData.TransitionCommandList)),
+            "Failed to create command list"
+        )
+
+        CHECKED_S(LightPassData.TransitionCommandList->Close());
+    }
+
+    return true;
+}
+
+bool DeferredRenderer::TransitionLightPassFromRenderTargetToReadState()
+{
+    CD3DX12_RESOURCE_BARRIER Barrier = CD3DX12_RESOURCE_BARRIER::Transition(GBuffer.DiffuseTexture.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_GENERIC_READ);
+
+    CHECKED_S(LightPassData.RenderTargetToReadTransitionAllocator->Reset());
+    CHECKED_S(LightPassData.TransitionCommandList->Reset(LightPassData.RenderTargetToReadTransitionAllocator.Get(), nullptr))
+
+    LightPassData.TransitionCommandList->ResourceBarrier(1, &Barrier);
+    CHECKED_S(LightPassData.TransitionCommandList->Close());
+
+    ID3D12CommandList* CommandLists[] = {LightPassData.TransitionCommandList.Get()};
+    RenderApi->GetDirectQueue()
+        ->ExecuteCommandLists(1, CommandLists);
+
+    return true;
+}
+
+bool DeferredRenderer::TransitionLightPassFromReadToRenderTargetState()
+{
+    CD3DX12_RESOURCE_BARRIER Barrier = CD3DX12_RESOURCE_BARRIER::Transition(GBuffer.DiffuseTexture.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+    CHECKED_S(LightPassData.RenderTargetToReadTransitionAllocator->Reset());
+    CHECKED_S(LightPassData.TransitionCommandList->Reset(LightPassData.RenderTargetToReadTransitionAllocator.Get(), nullptr))
+
+    LightPassData.TransitionCommandList->ResourceBarrier(1, &Barrier);
+    CHECKED_S(LightPassData.TransitionCommandList->Close());
+
+    ID3D12CommandList* CommandLists[] = {LightPassData.TransitionCommandList.Get()};
+    RenderApi->GetDirectQueue()
+        ->ExecuteCommandLists(1, CommandLists);
+
+    return true;
+}
+
+bool DeferredRenderer::InitAmbientDirectionalLightPass()
+{
+    // TODO: Create PSO, Root, command list and allocator
+}
+
 bool DeferredRenderer::AmbientDirectionalLightPass(const Core::SceneView& SceneView)
 {
     nvtx3::scoped_range PassRange {"Ambient & Directional Light Pass"};
+
+    auto& CommandList = AmbientDirectionalLightPassData.CommandList;
+    auto& CommandAllocator = AmbientDirectionalLightPassData.CommandAllocator;
+
+    CHECKED_S(CommandAllocator->Reset());
+    CHECKED_S(CommandList->Reset(CommandAllocator.Get(), AmbientDirectionalLightPassData.PipelineState.Get()));
+
+    // Copy GBuffer descriptors
+    {
+        // TODO:
+    }
+
+    // Setup Render target
+    {
+        constexpr static FLOAT ClearColor[4] = {0.f, 0.f, 0.f, 1.f};
+        CommandList->ClearRenderTargetView(LightPassData.CpuRtvHeap->GetCPUDescriptorHandleForHeapStart(), ClearColor, 0, nullptr);
+
+        D3D12_CPU_DESCRIPTOR_HANDLE RtvHandle = LightPassData.CpuRtvHeap->GetCPUDescriptorHandleForHeapStart();
+        D3D12_CPU_DESCRIPTOR_HANDLE DsvHandle = GBuffer.CpuDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+        CommandList->OMSetRenderTargets(1, &RtvHandle, true, &DsvHandle);
+
+        D3D12_VIEWPORT Viewport = SceneView.GetD3dViewport();
+        CommandList->RSSetViewports(1, &Viewport);
+
+        static const D3D12_RECT ScissorRect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
+        CommandList->RSSetScissorRects(1, &ScissorRect);
+    }
+
+    // Setup Root Params
+    {
+        CommandList->SetGraphicsRootSignature(AmbientDirectionalLightPassData.RootSignature.Get());
+
+        CommandList->SetDescriptorHeaps(1, AmbientDirectionalLightPassData.GpuDescriptorHeap.GetAddressOf());
+        CommandList->SetGraphicsRootDescriptorTable(0, AmbientDirectionalLightPassData.GpuDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+
+        CommandList->SetGraphicsRootConstantBufferView(1, FrameData.ConstantBuffer->GetGPUVirtualAddress());
+    }
+
+    // Setup fullscreen quad mesh
+    {
+        const D3D12_VERTEX_BUFFER_VIEW VertexBufferView = FullscreenQuadMesh->GetVertexBufferView();
+        CommandList->IASetVertexBuffers(0, 1, &VertexBufferView);
+
+        if (FullscreenQuadMesh->IsUsingIndices())
+        {
+            const D3D12_INDEX_BUFFER_VIEW IndexBufferView = FullscreenQuadMesh->GetIndexBufferView();
+            CommandList->IASetIndexBuffer(&IndexBufferView);
+        }
+
+        CommandList->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    }
+
+    // Draw
+    {
+        if (FullscreenQuadMesh->IsUsingIndices())
+        {
+            CommandList->DrawIndexedInstanced(FullscreenQuadMesh->GetPrimitivesCount(), 1, 0, 0, 0);
+        }
+        else
+        {
+            CommandList->DrawInstanced(FullscreenQuadMesh->GetPrimitivesCount(), 1, 0, 0);
+        }
+    }
+
+    CHECKED_S(CommandList->Close());
+
+    ID3D12CommandList* CommandLists[] = {CommandList.Get()};
+    RenderApi->GetDirectQueue()
+        ->ExecuteCommandLists(1, CommandLists);
 
     return true;
 }
@@ -983,7 +1187,7 @@ bool DeferredRenderer::InitGBufferForView(const Core::SceneView& SceneView)
     return true;
 }
 
-bool DeferredRenderer::TransitionGBufferFromPresentToReadState()
+bool DeferredRenderer::TransitionGBufferFromRenderTargetToReadState()
 {
     const std::array Barriers = {
         CD3DX12_RESOURCE_BARRIER::Transition(GBuffer.DiffuseTexture.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_GENERIC_READ),
@@ -1007,7 +1211,7 @@ bool DeferredRenderer::TransitionGBufferFromPresentToReadState()
     return true;
 }
 
-bool DeferredRenderer::TransitionGBufferFromReadToPresentState()
+bool DeferredRenderer::TransitionGBufferFromReadToRenderTargetState()
 {
     const std::array Barriers = {
         CD3DX12_RESOURCE_BARRIER::Transition(GBuffer.DiffuseTexture.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_RENDER_TARGET),

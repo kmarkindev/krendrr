@@ -83,8 +83,8 @@ namespace krendrr::Runtime::Renderer::Deferred
 
         // Called every time we need to update GBuffer, so it has same size as scene view
         bool InitGBufferForView(const Core::SceneView& SceneView);
-        bool TransitionGBufferFromPresentToReadState();
-        bool TransitionGBufferFromReadToPresentState();
+        bool TransitionGBufferFromRenderTargetToReadState();
+        bool TransitionGBufferFromReadToRenderTargetState();
 
         // Make sure our C++ <-> HLSL types have same sizes
         static_assert(sizeof(float) == 4);
@@ -151,12 +151,39 @@ namespace krendrr::Runtime::Renderer::Deferred
         bool InitializeGeometryPass();
         bool GeometryPass(const Core::SceneView& SceneView);
 
+        struct LightPassData
+        {
+            glm::ivec2 Size {-1, -1};
+
+            constexpr static DXGI_FORMAT COLOR_TEXTURE_FORMAT = DXGI_FORMAT_R16G16B16A16_FLOAT;
+            Microsoft::WRL::ComPtr<ID3D12Resource> ColorTexture {};
+
+            Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CpuRtvHeap {};
+            Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CpuSrvHeap {};
+
+            Microsoft::WRL::ComPtr<ID3D12CommandAllocator> RenderTargetToReadTransitionAllocator {};
+            Microsoft::WRL::ComPtr<ID3D12CommandAllocator> ReadToRenderTargetTransitionAllocator {};
+            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> TransitionCommandList {};
+        };
+        LightPassData LightPassData {};
+
+        bool PrepareLightPassData(const Core::SceneView& SceneView);
+        bool TransitionLightPassFromRenderTargetToReadState();
+        bool TransitionLightPassFromReadToRenderTargetState();
+
         struct AmbientDirectionalLightPassData
         {
+            Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineState {};
+            Microsoft::WRL::ComPtr<ID3D12RootSignature> RootSignature {};
 
+            Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CommandAllocator {};
+            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> CommandList {};
+
+            Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> GpuDescriptorHeap {};
         };
         AmbientDirectionalLightPassData AmbientDirectionalLightPassData {};
 
+        bool InitAmbientDirectionalLightPass();
         bool AmbientDirectionalLightPass(const Core::SceneView& SceneView);
 
         struct PointLightShadowCubeMapData
