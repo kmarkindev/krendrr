@@ -306,6 +306,8 @@ bool DeferredRenderer::InitializeGeometryPass()
                 ->CreateGraphicsPipelineState(&PsoDesc, IID_PPV_ARGS(&GeometryPassData.PipelineState)),
             "Failed to create PSO"
         )
+
+        GeometryPassData.PipelineState->SetName(L"Geometry Pass PSO");
     }
 
     // Create GPU srv heap for textured mesh texture handles
@@ -821,6 +823,8 @@ bool DeferredRenderer::InitAmbientDirectionalLightPass()
                 ->CreateGraphicsPipelineState(&PsoDesc, IID_PPV_ARGS(&AmbientDirectionalLightPassData.PipelineState)),
             "Failed to create PSO"
         )
+
+        AmbientDirectionalLightPassData.PipelineState->SetName(L"Ambient Directional Pass PSO");
     }
 
     // Create command list and allocator
@@ -1073,6 +1077,8 @@ bool DeferredRenderer::InitPostProcessingPass()
                 ->CreateGraphicsPipelineState(&PsoDesc, IID_PPV_ARGS(&PostProcessingPassData.PipelineState)),
             "Failed to create PSO"
         )
+
+        PostProcessingPassData.PipelineState->SetName(L"Post Processing Pass PSO");
     }
 
     // Create command list and allocator
