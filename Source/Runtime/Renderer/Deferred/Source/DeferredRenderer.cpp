@@ -1353,6 +1353,7 @@ bool DeferredRenderer::InitPointLightVolumePass()
         RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 
         auto DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+        DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
         DepthStencilState.StencilEnable = true;
         DepthStencilState.StencilWriteMask = 0xff;
         DepthStencilState.StencilReadMask = 0x00;
@@ -1409,6 +1410,7 @@ bool DeferredRenderer::InitPointLightVolumePass()
         RasterizerState.CullMode = D3D12_CULL_MODE_FRONT;
 
         auto DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+        DepthStencilState.DepthEnable = false;
         DepthStencilState.StencilEnable = true;
         DepthStencilState.StencilWriteMask = 0x00;
         DepthStencilState.StencilReadMask = 0xff;
@@ -1448,7 +1450,7 @@ bool DeferredRenderer::InitPointLightVolumePass()
             .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
             .NumRenderTargets = 1,
             .RTVFormats = {
-                DXGI_FORMAT_R8G8B8A8_UNORM,
+                DXGI_FORMAT_R16G16B16A16_FLOAT,
             },
             .DSVFormat = Core::PointLight::DEPTH_STENCIL_FORMAT,
             .SampleDesc = {
@@ -1597,9 +1599,28 @@ bool DeferredRenderer::PointLightVolumesPass(const Core::SceneView& SceneView)
         }
     }
 
+    CommandList->SetPipelineState(PointLightVolumePassData.ColorPipelineState.Get());
+    CommandList->OMSetStencilRef(1);
+
     // Draw color based on stencil buffers
     {
+        for (const auto& PointLight : Scene->GetPointLights())
+        {
+            CommandList->SetGraphicsRootConstantBufferView(2, PointLight->GetConstantBufferGpuHandle());
 
+            D3D12_CPU_DESCRIPTOR_HANDLE RtvHandle = LightPassData.CpuRtvHeap->GetCPUDescriptorHandleForHeapStart();
+            D3D12_CPU_DESCRIPTOR_HANDLE DsvHandle = PointLight->GetDepthStencilVolumeDsvHandle();
+            CommandList->OMSetRenderTargets(1, &RtvHandle, true, &DsvHandle);
+
+            if (SphereMesh->IsUsingIndices())
+            {
+                CommandList->DrawIndexedInstanced(SphereMesh->GetPrimitivesCount(), 1, 0, 0, 0);
+            }
+            else
+            {
+                CommandList->DrawInstanced(SphereMesh->GetPrimitivesCount(), 1, 0, 0);
+            }
+        }
     }
 
     CHECKED_S(CommandList->Close())

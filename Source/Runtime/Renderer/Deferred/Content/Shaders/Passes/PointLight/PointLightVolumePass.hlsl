@@ -16,5 +16,37 @@ float4 VS_Main(VSInput Input) : SV_POSITION
 
 float4 PS_Main(float4 SvPosition : SV_POSITION) : SV_TARGET0
 {
-    return float4(0.5f, 0.5f, 0.5f, 1.0f);
+    float3 DiffuseColor = GetGBufferDiffuseColor(SvPosition);
+    float3 WorldPosition = GetGBufferWorldPosition(SvPosition);
+    float3 WorldNormal = GetGBufferNormal(SvPosition);
+    float Metallic = GetGBufferMetallic(SvPosition);
+    float Roughness = GetGBufferRoughness(SvPosition);
+
+    float3 LightDirection = normalize(WorldPosition - PointLightData.Position);
+    float PointLightDistance = length(PointLightData.Position - WorldPosition);
+
+    float Attenuation = 1.0 / (
+        PointLightData.AttenuationConstant + PointLightData.AttenuationLinear * PointLightDistance + PointLightData.AttenuationQuad * (PointLightDistance * PointLightDistance)
+    );
+
+    float3 LightColor = float3(0.f, 0.f, 0.f);
+
+    // Diffuse
+    {
+        float DiffuseScale = max(0.0f, dot(-LightDirection, WorldNormal));
+
+        LightColor += max(0.0f, PointLightData.DiffuseColor * DiffuseScale * Attenuation);
+    }
+
+    // Specular
+    {
+        // TODO:
+    }
+
+    // Shadow
+    {
+
+    }
+
+    return float4(DiffuseColor * LightColor, 1.f);
 }
