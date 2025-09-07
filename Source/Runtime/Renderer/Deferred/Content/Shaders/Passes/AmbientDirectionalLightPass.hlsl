@@ -13,13 +13,11 @@ float4 VS_Main(VSInput Input) : SV_POSITION
 
 float4 PS_Main(float4 PixelPosition : SV_POSITION) : SV_TARGET0
 {
-    float2 Uv = CalculateScreenUv(FrameData.ViewportSize, PixelPosition);
-
-    float3 DiffuseColor = GetGBufferDiffuseColor(DefaultSampler, Uv);
-    float3 WorldPosition = GetGBufferWorldPosition(DefaultSampler, Uv);
-    float3 WorldNormal = GetGBufferNormal(DefaultSampler, Uv);
-    float Metallic = GetGBufferMetallic(DefaultSampler, Uv);
-    float Roughness = GetGBufferRoughness(DefaultSampler, Uv);
+    float3 DiffuseColor = GetGBufferDiffuseColor(PixelPosition);
+    float3 WorldPosition = GetGBufferWorldPosition(PixelPosition);
+    float3 WorldNormal = GetGBufferNormal(PixelPosition);
+    float Metallic = GetGBufferMetallic(PixelPosition);
+    float Roughness = GetGBufferRoughness(PixelPosition);
 
     float3 CameraDirection = normalize(FrameData.CameraPosition - WorldPosition);
 

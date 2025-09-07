@@ -1,3 +1,5 @@
+#ifndef __INCLUDE_COMMON_VERTEX_SHADER_MATH__
+#define __INCLUDE_COMMON_VERTEX_SHADER_MATH__
 
 float3 CalculateWorldPosition(float4x4 ModelMatrix, float3 VertexPosition)
 {
@@ -57,3 +59,5 @@ float3x3 CreateTBNMatrix(float3 Normal, float3 Tangent)
         Normal
     ));
 }
+
+#endif

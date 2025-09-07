@@ -1,3 +1,8 @@
+#ifndef __INCLUDE_GBUFFER__
+#define __INCLUDE_GBUFFER__
+
+#include <krendrr_runtime_renderer_deferred/Shaders/Math/CommonScreenSpaceMath.hlsli>
+
 Texture2D GBufferDiffuseTexture : register(t0);
 Texture2D GBufferWorldPositionTexture : register(t1);
 Texture2D GBufferWorldNormalTexture : register(t2);
@@ -5,32 +10,34 @@ Texture2D GBufferMetallicTexture : register(t3);
 Texture2D GBufferRoughnessTexture : register(t4);
 Texture2D GBufferEmissiveTexture : register(t5);
 
-float3 GetGBufferDiffuseColor(SamplerState Sampler, float2 Uv)
+float3 GetGBufferDiffuseColor(float4 SvPosition)
 {
-    return GBufferDiffuseTexture.Sample(Sampler, Uv).rgb;
+    return LoadTextureBySvPosition(GBufferDiffuseTexture, SvPosition).rgb;
 }
 
-float3 GetGBufferWorldPosition(SamplerState Sampler, float2 Uv)
+float3 GetGBufferWorldPosition(float4 SvPosition)
 {
-    return GBufferWorldPositionTexture.Sample(Sampler, Uv).rgb;
+    return LoadTextureBySvPosition(GBufferWorldPositionTexture, SvPosition).rgb;
 }
 
-float3 GetGBufferNormal(SamplerState Sampler, float2 Uv)
+float3 GetGBufferNormal(float4 SvPosition)
 {
-    return GBufferWorldNormalTexture.Sample(Sampler, Uv).rgb;
+    return LoadTextureBySvPosition(GBufferWorldNormalTexture, SvPosition).rgb;
 }
 
-float GetGBufferMetallic(SamplerState Sampler, float2 Uv)
+float GetGBufferMetallic(float4 SvPosition)
 {
-    return GBufferMetallicTexture.Sample(Sampler, Uv).r;
+    return LoadTextureBySvPosition(GBufferMetallicTexture, SvPosition).r;
 }
 
-float GetGBufferRoughness(SamplerState Sampler, float2 Uv)
+float GetGBufferRoughness(float4 SvPosition)
 {
-    return GBufferRoughnessTexture.Sample(Sampler, Uv).r;
+    return LoadTextureBySvPosition(GBufferRoughnessTexture, SvPosition).r;
 }
 
-float4 GetGBufferEmissive(SamplerState Sampler, float2 Uv)
+float4 GetGBufferEmissive(float4 SvPosition)
 {
-    return GBufferEmissiveTexture.Sample(Sampler, Uv).rgba;
+    return LoadTextureBySvPosition(GBufferEmissiveTexture, SvPosition).rgba;
 }
+
+#endif

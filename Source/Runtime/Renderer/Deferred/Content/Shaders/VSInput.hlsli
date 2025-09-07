@@ -1,3 +1,6 @@
+#ifndef __INCLUDE_VS_INPUT__
+#define __INCLUDE_VS_INPUT__
+
 struct VSInput
 {
     float3 Position : POSITION;
@@ -5,3 +8,5 @@ struct VSInput
     float3 Normal : NORMAL;
     float3 Tangent : TANGENT;
 };
+
+#endif

@@ -1,3 +1,6 @@
+#ifndef __INCLUDE_CONST_BUFFER_POINT_LIGHT__
+#define __INCLUDE_CONST_BUFFER_POINT_LIGHT__
+
 struct ConstBuff_PointLight
 {
     float4x4 ModelMatrix;
@@ -13,3 +16,5 @@ struct ConstBuff_PointLight
     float AttenuationQuad;
     float AttenuationConstant;
 };
+
+#endif

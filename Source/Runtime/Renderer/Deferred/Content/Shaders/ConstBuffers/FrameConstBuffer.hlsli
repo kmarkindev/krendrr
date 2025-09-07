@@ -1,3 +1,6 @@
+#ifndef __INCLUDE_CONST_BUFFER_FRAME__
+#define __INCLUDE_CONST_BUFFER_FRAME__
+
 struct ConstBuff_Frame
 {
     float4x4 ViewMatrix;
@@ -15,3 +18,5 @@ struct ConstBuff_Frame
     float3 CameraPosition;
     int2 ViewportSize;
 };
+
+#endif

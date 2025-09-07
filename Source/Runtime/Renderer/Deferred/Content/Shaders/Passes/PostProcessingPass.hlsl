@@ -16,8 +16,8 @@ float4 PS_Main(float4 PixelPosition : SV_POSITION) : SV_TARGET0
 {
     float2 Uv = CalculateScreenUv(FrameData.ViewportSize, PixelPosition);
 
-    float3 LightPassColor = LightPassColorTexture.Sample(DefaultSampler, Uv).rgb;
-    float4 EmissiveColor = GetGBufferEmissive(DefaultSampler, Uv);
+    float3 LightPassColor = LoadTextureBySvPosition(LightPassColorTexture, PixelPosition).rgb;
+    float4 EmissiveColor = GetGBufferEmissive(PixelPosition);
 
     float3 LdrColor;
 
