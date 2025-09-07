@@ -21,5 +21,21 @@ float4 PS_Main(float4 PixelPosition : SV_POSITION) : SV_TARGET0
     float Metallic = GetGBufferMetallic(DefaultSampler, Uv);
     float Roughness = GetGBufferRoughness(DefaultSampler, Uv);
 
-    return float4(DiffuseColor / 2.0f, 1.0f);
+    float3 CameraDirection = normalize(FrameData.CameraPosition - WorldPosition);
+
+    float3 FinalColor = float3(0.f, 0.f, 0.f);
+
+    if(FrameData.bHasAmbientLight)
+    {
+        float3 AmbientColor = FrameData.AmbientColor * FrameData.AmbientIntensity;
+
+        FinalColor += DiffuseColor * AmbientColor;
+    }
+
+    if(FrameData.bHasDirectionalLight)
+    {
+        // TODO:
+    }
+
+    return float4(FinalColor, 1.0f);
 }
