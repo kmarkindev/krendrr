@@ -51,6 +51,12 @@ bool DeferredRenderer::Initialize(std::shared_ptr<RenderApi::Core::RenderApi> Ne
     if (!InitPostProcessingPass())
         return false;
 
+    if (!InitPointLightShadowCubeMapPass())
+        return false;
+
+    if (!InitPointLightVolumePass())
+        return false;
+
     if (!WaitDirectQueue())
         return false;
 
@@ -944,9 +950,297 @@ bool DeferredRenderer::AmbientDirectionalLightPass(const Core::SceneView& SceneV
     return true;
 }
 
+bool DeferredRenderer::InitPointLightShadowCubeMapPass()
+{
+    // Create Root
+    {
+        CD3DX12_ROOT_PARAMETER RootParams[4] {};
+
+        // Frame constant buffer
+        RootParams[0].InitAsConstantBufferView(0);
+
+        // Point light constant buffer
+        RootParams[1].InitAsConstantBufferView(1);
+
+        // Mesh constant buffer
+        RootParams[2].InitAsConstantBufferView(2);
+
+        // View Projection matrix for cube map face
+        RootParams[3].InitAsConstants(16, 3);
+
+        const auto& StaticSamplers = GetCommonStaticSamplers();
+
+        CD3DX12_ROOT_SIGNATURE_DESC RootSignatureDesc {};
+        RootSignatureDesc.Init(
+            std::size(RootParams),
+            RootParams,
+            StaticSamplers.size(),
+            StaticSamplers.data(),
+            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
+        );
+
+        Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureBlob {};
+        Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureErrorBlob {};
+
+        HRESULT RootSigSerResult = D3D12SerializeRootSignature(&RootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &RootSignatureBlob, &RootSignatureErrorBlob);
+        if (FAILED(RootSigSerResult))
+        {
+            std::string error (static_cast<const char*>(RootSignatureErrorBlob->GetBufferPointer()), RootSignatureErrorBlob->GetBufferSize());
+            __debugbreak();
+            return false;
+        }
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateRootSignature(
+                    0,
+                    RootSignatureBlob->GetBufferPointer(),
+                    RootSignatureBlob->GetBufferSize(),
+                    IID_PPV_ARGS(&PointLightShadowCubeMapData.RootSignature)
+                ),
+            "Can't create root signature"
+        )
+    }
+
+    // Load Shaders
+    Microsoft::WRL::ComPtr<ID3DBlob> VertexShader {};
+    Microsoft::WRL::ComPtr<ID3DBlob> PixelShader {};
+    {
+        Microsoft::WRL::ComPtr<ID3DBlob> CompilationErrorBlob {};
+
+        RenderApi::Core::ContentFolderD3dInclude VertexShaderInclude {};
+
+        HRESULT VSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/Shadow/PointLightShadowCubemapPass.hlsl",
+            nullptr, &VertexShaderInclude, "VS_Main", "vs_5_1",
+            RenderApi->GetShaderCompileFlags(), 0, &VertexShader, &CompilationErrorBlob);
+
+        if(FAILED(VSCompileResult) || CompilationErrorBlob != nullptr)
+        {
+            std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
+            // TODO: log error
+
+            __debugbreak();
+
+            return false;
+        }
+
+        RenderApi::Core::ContentFolderD3dInclude PixelShaderInclude {};
+
+        HRESULT PSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/Shadow/PointLightShadowCubemapPass.hlsl",
+            nullptr, &PixelShaderInclude, "PS_Main", "ps_5_1",
+            RenderApi->GetShaderCompileFlags(), 0, &PixelShader, &CompilationErrorBlob);
+
+        if(FAILED(PSCompileResult) || CompilationErrorBlob != nullptr)
+        {
+            std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
+            // TODO: log error
+
+            __debugbreak();
+
+            return false;
+        }
+    }
+
+    // Create PSO
+    {
+        auto RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+        RasterizerState.FrontCounterClockwise = true;
+        RasterizerState.CullMode = D3D12_CULL_MODE_FRONT;
+
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC PsoDesc {
+            .pRootSignature = PointLightShadowCubeMapData.RootSignature.Get(),
+            .VS = CD3DX12_SHADER_BYTECODE(VertexShader.Get()),
+            .PS = CD3DX12_SHADER_BYTECODE(PixelShader.Get()),
+            .BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
+            .SampleMask = UINT_MAX,
+            .RasterizerState = RasterizerState,
+            .DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT),
+            .InputLayout = {
+                .pInputElementDescs = RenderApi->GetCommonMeshBufferLayout().Layout.data(),
+                .NumElements = static_cast<UINT>(RenderApi->GetCommonMeshBufferLayout().Layout.size())
+            },
+            .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+            .NumRenderTargets = 1,
+            .RTVFormats = {
+                Core::PointLight::CUBE_MAP_FORMAT,
+            },
+            .DSVFormat = Core::PointLight::DEPTH_STENCIL_FORMAT,
+            .SampleDesc = {
+                .Count = 1
+            }
+        };
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateGraphicsPipelineState(&PsoDesc, IID_PPV_ARGS(&PointLightShadowCubeMapData.PipelineState)),
+            "Failed to create PSO"
+        )
+
+        PointLightShadowCubeMapData.PipelineState->SetName(L"Point Light Shadow Cube Map Pass PSO");
+    }
+
+    // Create command list and allocator
+    {
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&PointLightShadowCubeMapData.CommandAllocator)),
+            "Failed to create command allocator"
+        )
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+                    PointLightShadowCubeMapData.CommandAllocator.Get(), nullptr, IID_PPV_ARGS(&PointLightShadowCubeMapData.CommandList)),
+            "Failed to create command list"
+        )
+
+        CHECKED_S(PointLightShadowCubeMapData.CommandList->Close());
+    }
+
+    return true;
+}
+
 bool DeferredRenderer::PointLightShadowCubeMapsPass()
 {
     nvtx3::scoped_range PassRange {"Point Light Shadow Cube Maps Pass"};
+
+    auto& CommandAllocator = PointLightShadowCubeMapData.CommandAllocator;
+    auto& CommandList = PointLightShadowCubeMapData.CommandList;
+
+    CHECKED_S(CommandAllocator->Reset());
+    CHECKED_S(CommandList->Reset(CommandAllocator.Get(), PointLightShadowCubeMapData.PipelineState.Get()));
+
+    // Transition to present state
+    {
+        for(const auto& PointLight : Scene->GetPointLights())
+        {
+            if (!PointLight->CastsShadows())
+                continue;
+
+            PointLight->TransitionShadowCubeMapFromReadToRenderTarget(CommandList.Get());
+        }
+    }
+
+    // Prepare command list for rendering
+    {
+        CommandList->SetGraphicsRootSignature(PointLightShadowCubeMapData.RootSignature.Get());
+        CommandList->SetGraphicsRootConstantBufferView(0, FrameData.ConstantBuffer->GetGPUVirtualAddress());
+
+        const D3D12_VIEWPORT Viewport = CD3DX12_VIEWPORT(
+            0.f,
+            0.f,
+            Core::PointLight::SHADOW_MAP_SIZE,
+            Core::PointLight::SHADOW_MAP_SIZE
+        );
+        CommandList->RSSetViewports(1, &Viewport);
+
+        const CD3DX12_RECT ScissorRect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
+        CommandList->RSSetScissorRects(1, &ScissorRect);
+
+        CommandList->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    }
+
+    // Render shadow maps
+    {
+        for(const auto& PointLight : Scene->GetPointLights())
+        {
+            if (!PointLight->CastsShadows())
+                continue;
+
+            CommandList->SetGraphicsRootConstantBufferView(1, PointLight->GetConstantBufferGpuHandle());
+
+            const glm::mat4 ProjectionMatrix = glm::perspective(
+                glm::radians(90.f),
+                1.0f,
+                1.0f,
+                PointLight->GetShadowFarDistance()
+            );
+            const std::array ShadowViewMatrices = {
+                glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{1, 0, 0}, {0, 1, 0}),
+                glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{-1, 0, 0}, {0, 1, 0}),
+                glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{0, 1, 0}, {0, 0, -1}),
+                glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{0, -1, 0}, {0, 0, 1}),
+                glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{0, 0, 1}, {0, 1, 0}),
+                glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{0, 0, -1}, {0, 1, 0}),
+            };
+
+            // Render each side of point light
+            for (int i = 0; i < 6; ++i)
+            {
+                D3D12_CPU_DESCRIPTOR_HANDLE RtvHandle = PointLight->GetShadowCubeMapRtvHandle(i);
+                D3D12_CPU_DESCRIPTOR_HANDLE DsvHandle = PointLight->GetShadowCubeMapDsvHandle(i);
+                CommandList->OMSetRenderTargets(1, &RtvHandle, true, &DsvHandle);
+
+                FLOAT ClearColor[4] = {1.f, 1.f, 1.f, 1.f};
+                CommandList->ClearRenderTargetView(RtvHandle, ClearColor, 0, nullptr);
+
+                CommandList->ClearDepthStencilView(DsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0, 0, nullptr);
+
+                glm::mat4 ViewProjectionMatrix = ProjectionMatrix * ShadowViewMatrices[i];
+
+                CommandList->SetGraphicsRoot32BitConstants(3, 16, &ViewProjectionMatrix[0][0], 0);
+
+                for (const auto& TexturedMesh : Scene->GetTexturedMeshes())
+                {
+                    auto Mesh = TexturedMesh->GetMesh();
+
+                    CommandList->SetGraphicsRootConstantBufferView(2, TexturedMesh->GetConstantBufferGpuAddress());
+
+                    // Set up mesh
+                    {
+                        D3D12_VERTEX_BUFFER_VIEW VertexBufferView = Mesh->GetVertexBufferView();
+                        CommandList->IASetVertexBuffers(0, 1, &VertexBufferView);
+
+                        if (Mesh->IsUsingIndices())
+                        {
+                            D3D12_INDEX_BUFFER_VIEW IndexBufferView = Mesh->GetIndexBufferView();
+                            CommandList->IASetIndexBuffer(&IndexBufferView);
+                        }
+                        else
+                        {
+                            CommandList->IASetIndexBuffer(nullptr);
+                        }
+                    }
+
+                    // Draw
+                    {
+                        if (Mesh->IsUsingIndices())
+                        {
+                            CommandList->DrawIndexedInstanced(Mesh->GetPrimitivesCount(), 1, 0, 0, 0);
+                        }
+                        else
+                        {
+                            CommandList->DrawInstanced(Mesh->GetPrimitivesCount(), 1, 0, 0);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Transition to back read state
+    {
+        for(const auto& PointLight : Scene->GetPointLights())
+        {
+            if (!PointLight->CastsShadows())
+                continue;
+
+            PointLight->TransitionShadowCubeMapFromRenderTargetToRead(CommandList.Get());
+        }
+    }
+
+    CHECKED_S(CommandList->Close());
+
+    ID3D12CommandList* CommandLists[] = {CommandList.Get()};
+    RenderApi->GetDirectQueue()
+        ->ExecuteCommandLists(1, CommandLists);
+
+    return true;
+}
+
+bool DeferredRenderer::InitPointLightVolumePass()
+{
+
 
     return true;
 }
@@ -1322,6 +1616,16 @@ bool DeferredRenderer::PreRender(const Core::SceneView& SceneView)
 
     RenderApi->GetDirectQueue()
         ->ExecuteCommandLists(1, CommandLists);
+
+    // Initialize Point Lights for shadow mapping if enabled
+    for (const auto& PointLight : Scene->GetPointLights())
+    {
+        if (!PointLight->CastsShadows())
+            continue;
+
+        if (!PointLight->HasShadowResources())
+            PointLight->CreateShadowCubeMapResource(*RenderApi);
+    }
 
     return true;
 }

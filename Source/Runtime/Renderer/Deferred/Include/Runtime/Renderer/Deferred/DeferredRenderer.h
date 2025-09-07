@@ -192,10 +192,15 @@ namespace krendrr::Runtime::Renderer::Deferred
 
         struct PointLightShadowCubeMapData
         {
+            Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineState {};
+            Microsoft::WRL::ComPtr<ID3D12RootSignature> RootSignature {};
 
+            Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CommandAllocator {};
+            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> CommandList {};
         };
-        PointLightShadowCubeMapData PointLightShadowCubeMap {};
+        PointLightShadowCubeMapData PointLightShadowCubeMapData {};
 
+        bool InitPointLightShadowCubeMapPass();
         bool PointLightShadowCubeMapsPass();
 
         struct PointLightVolumePassData
@@ -204,6 +209,7 @@ namespace krendrr::Runtime::Renderer::Deferred
         };
         PointLightVolumePassData PointLightVolumePass{};
 
+        bool InitPointLightVolumePass();
         bool PointLightVolumesPass(const Core::SceneView& SceneView);
 
         struct PostProcessingPassData

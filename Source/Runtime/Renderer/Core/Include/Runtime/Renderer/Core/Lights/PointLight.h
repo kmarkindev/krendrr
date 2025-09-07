@@ -12,6 +12,10 @@ namespace krendrr::Runtime::Renderer::Core
     {
     public:
 
+        constexpr inline static unsigned SHADOW_MAP_SIZE = 1024;
+        constexpr inline static DXGI_FORMAT CUBE_MAP_FORMAT = DXGI_FORMAT_R16G16B16A16_FLOAT;
+        constexpr inline static DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
         [[nodiscard]] const glm::vec3& GetPosition() const;
         void SetPosition(const glm::vec3& NewPosition);
 
@@ -29,9 +33,18 @@ namespace krendrr::Runtime::Renderer::Core
 
         [[nodiscard]] bool CastsShadows() const;
         void SetCastsShadows(bool NewCastsShadows);
+        [[nodiscard]] float GetShadowFarDistance() const;
+        bool HasShadowResources() const;
+        bool CreateShadowCubeMapResource(const RenderApi::Core::RenderApi& RenderApi);
+        D3D12_CPU_DESCRIPTOR_HANDLE GetShadowCubeMapSrvHandle() const;
+        D3D12_CPU_DESCRIPTOR_HANDLE GetShadowCubeMapRtvHandle(int FaceIndex) const;
+        D3D12_CPU_DESCRIPTOR_HANDLE GetShadowCubeMapDsvHandle(int FaceIndex) const;
+        void TransitionShadowCubeMapFromRenderTargetToRead(ID3D12GraphicsCommandList* CommandList);
+        void TransitionShadowCubeMapFromReadToRenderTarget(ID3D12GraphicsCommandList* CommandList);
 
         bool UpdateConstantBuffer(const RenderApi::Core::RenderApi& RenderApi);
-        D3D12_CPU_DESCRIPTOR_HANDLE GetConstantBufferHandle() const;
+
+        D3D12_GPU_VIRTUAL_ADDRESS GetConstantBufferGpuHandle() const;
 
     private:
 
@@ -48,8 +61,6 @@ namespace krendrr::Runtime::Renderer::Core
 
         struct alignas(256) ConstBuff_PointLight
         {
-            glm::mat4 ModelMatrix {};
-
             glm::vec4 Position {};
 
             glm::vec4 DiffuseColor {};
@@ -66,6 +77,13 @@ namespace krendrr::Runtime::Renderer::Core
         Microsoft::WRL::ComPtr<ID3D12Resource> ConstantBuffer {};
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CpuSrvHeap {};
 
+        Microsoft::WRL::ComPtr<ID3D12Resource> ShadowCubeMap {};
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> ShadowCubeMapSrvHeap {};
+        unsigned RtvIncrementSize {};
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> ShadowCubeMapFacesRtvHeap {};
+        Microsoft::WRL::ComPtr<ID3D12Resource> ShadowMapDepthStencil {};
+        unsigned DsvIncrementSize {};
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> ShadowMapDepthDsvHeap {};
     };
 }
 

@@ -22,6 +22,17 @@ float4 CalculateNDC(float4x4 ModelMatrix, float4x4 ViewMatrix, float4x4 Projecti
     );
 }
 
+float4 CalculateNDC(float4x4 ModelMatrix, float4x4 ViewProjectionMatrix, float3 VertexPosition)
+{
+    return mul(
+        ViewProjectionMatrix,
+        mul(
+            ModelMatrix,
+            float4(VertexPosition, 1.0f)
+        )
+    );
+}
+
 float3 CalculateNormal(float3 BaseNormal, float3x3 NormalMatrix)
 {
     return normalize(
