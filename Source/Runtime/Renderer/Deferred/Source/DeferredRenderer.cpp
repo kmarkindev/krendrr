@@ -1010,7 +1010,7 @@ bool DeferredRenderer::InitPointLightShadowCubeMapPass()
 
         RenderApi::Core::ContentFolderD3dInclude VertexShaderInclude {};
 
-        HRESULT VSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/Shadow/PointLightShadowCubemapPass.hlsl",
+        HRESULT VSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/PointLight/PointLightShadowCubemapPass.hlsl",
             nullptr, &VertexShaderInclude, "VS_Main", "vs_5_1",
             RenderApi->GetShaderCompileFlags(), 0, &VertexShader, &CompilationErrorBlob);
 
@@ -1026,7 +1026,7 @@ bool DeferredRenderer::InitPointLightShadowCubeMapPass()
 
         RenderApi::Core::ContentFolderD3dInclude PixelShaderInclude {};
 
-        HRESULT PSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/Shadow/PointLightShadowCubemapPass.hlsl",
+        HRESULT PSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/PointLight/PointLightShadowCubemapPass.hlsl",
             nullptr, &PixelShaderInclude, "PS_Main", "ps_5_1",
             RenderApi->GetShaderCompileFlags(), 0, &PixelShader, &CompilationErrorBlob);
 
@@ -1064,7 +1064,7 @@ bool DeferredRenderer::InitPointLightShadowCubeMapPass()
             .RTVFormats = {
                 Core::PointLight::CUBE_MAP_FORMAT,
             },
-            .DSVFormat = Core::PointLight::DEPTH_STENCIL_FORMAT,
+            .DSVFormat = Core::PointLight::CUBE_MAP_DEPTH_STENCIL_FORMAT,
             .SampleDesc = {
                 .Count = 1
             }
@@ -1240,7 +1240,263 @@ bool DeferredRenderer::PointLightShadowCubeMapsPass()
 
 bool DeferredRenderer::InitPointLightVolumePass()
 {
+    // Create Root
+    {
+        CD3DX12_ROOT_PARAMETER RootParams[3] {};
 
+        // Descriptor table with GBuffer textures
+        CD3DX12_DESCRIPTOR_RANGE GBufferAndLightPassTexturesRange {};
+        GBufferAndLightPassTexturesRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, GBuffer.TEXTURES_COUNT, 0);
+
+        RootParams[0].InitAsDescriptorTable(1, &GBufferAndLightPassTexturesRange);
+
+        // Frame constant buffer
+        RootParams[1].InitAsConstantBufferView(0);
+
+        // Point Light constant buffer
+        RootParams[2].InitAsConstantBufferView(1);
+
+        const auto& StaticSamplers = GetCommonStaticSamplers();
+
+        CD3DX12_ROOT_SIGNATURE_DESC RootSignatureDesc {};
+        RootSignatureDesc.Init(
+            std::size(RootParams),
+            RootParams,
+            StaticSamplers.size(),
+            StaticSamplers.data(),
+            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
+        );
+
+        Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureBlob {};
+        Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureErrorBlob {};
+
+        HRESULT RootSigSerResult = D3D12SerializeRootSignature(&RootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &RootSignatureBlob, &RootSignatureErrorBlob);
+        if (FAILED(RootSigSerResult))
+        {
+            std::string error (static_cast<const char*>(RootSignatureErrorBlob->GetBufferPointer()), RootSignatureErrorBlob->GetBufferSize());
+            __debugbreak();
+            return false;
+        }
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateRootSignature(
+                    0,
+                    RootSignatureBlob->GetBufferPointer(),
+                    RootSignatureBlob->GetBufferSize(),
+                    IID_PPV_ARGS(&PointLightVolumePassData.RootSignature)
+                ),
+            "Can't create root signature"
+        )
+    }
+
+    // Load Shaders
+    Microsoft::WRL::ComPtr<ID3DBlob> VertexShader {};
+    Microsoft::WRL::ComPtr<ID3DBlob> PixelShader {};
+    Microsoft::WRL::ComPtr<ID3DBlob> EmptyPixelShader {};
+    {
+        Microsoft::WRL::ComPtr<ID3DBlob> CompilationErrorBlob {};
+
+        RenderApi::Core::ContentFolderD3dInclude VertexShaderInclude {};
+
+        HRESULT VSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/PointLight/PointLightVolumePass.hlsl",
+            nullptr, &VertexShaderInclude, "VS_Main", "vs_5_1",
+            RenderApi->GetShaderCompileFlags(), 0, &VertexShader, &CompilationErrorBlob);
+
+        if(FAILED(VSCompileResult) || CompilationErrorBlob != nullptr)
+        {
+            std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
+            // TODO: log error
+
+            __debugbreak();
+
+            return false;
+        }
+
+        RenderApi::Core::ContentFolderD3dInclude PixelShaderInclude {};
+
+        HRESULT PSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/PointLight/PointLightVolumePass.hlsl",
+            nullptr, &PixelShaderInclude, "PS_Main", "ps_5_1",
+            RenderApi->GetShaderCompileFlags(), 0, &PixelShader, &CompilationErrorBlob);
+
+        if(FAILED(PSCompileResult) || CompilationErrorBlob != nullptr)
+        {
+            std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
+            // TODO: log error
+
+            __debugbreak();
+
+            return false;
+        }
+
+        RenderApi::Core::ContentFolderD3dInclude EmptyPixelShaderInclude {};
+
+        HRESULT EmptyPSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/PointLight/EmptyPS.hlsl",
+            nullptr, &EmptyPixelShaderInclude, "PS_Main", "ps_5_1",
+            RenderApi->GetShaderCompileFlags(), 0, &EmptyPixelShader, &CompilationErrorBlob);
+
+        if(FAILED(PSCompileResult) || CompilationErrorBlob != nullptr)
+        {
+            std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
+            // TODO: log error
+
+            __debugbreak();
+
+            return false;
+        }
+    }
+
+    // Create PSO for depth stencil part
+    {
+        auto RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+        RasterizerState.FrontCounterClockwise = true;
+        RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+
+        auto DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+        DepthStencilState.StencilEnable = true;
+        DepthStencilState.StencilWriteMask = 0xff;
+        DepthStencilState.StencilReadMask = 0x00;
+        DepthStencilState.BackFace = {
+            .StencilFailOp = D3D12_STENCIL_OP_KEEP,
+            .StencilDepthFailOp = D3D12_STENCIL_OP_INCR,
+            .StencilPassOp = D3D12_STENCIL_OP_KEEP,
+            .StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS
+        };
+        DepthStencilState.FrontFace = {
+            .StencilFailOp = D3D12_STENCIL_OP_KEEP,
+            .StencilDepthFailOp = D3D12_STENCIL_OP_DECR,
+            .StencilPassOp = D3D12_STENCIL_OP_KEEP,
+            .StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS
+        };
+
+        auto BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+        BlendState.RenderTarget[0].RenderTargetWriteMask = 0x00;
+
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC PsoDesc {
+            .pRootSignature = PointLightVolumePassData.RootSignature.Get(),
+            .VS = CD3DX12_SHADER_BYTECODE(VertexShader.Get()),
+            .PS = CD3DX12_SHADER_BYTECODE(EmptyPixelShader.Get()),
+            .BlendState = BlendState,
+            .SampleMask = UINT_MAX,
+            .RasterizerState = RasterizerState,
+            .DepthStencilState = DepthStencilState,
+            .InputLayout = {
+                .pInputElementDescs = RenderApi->GetCommonMeshBufferLayout().Layout.data(),
+                .NumElements = static_cast<UINT>(RenderApi->GetCommonMeshBufferLayout().Layout.size())
+            },
+            .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+            .NumRenderTargets = 0,
+            .RTVFormats = {},
+            .DSVFormat = Core::PointLight::DEPTH_STENCIL_FORMAT,
+            .SampleDesc = {
+                .Count = 1
+            }
+        };
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateGraphicsPipelineState(&PsoDesc, IID_PPV_ARGS(&PointLightVolumePassData.StencilPipelineState)),
+            "Failed to create PSO"
+        )
+
+        PointLightVolumePassData.StencilPipelineState->SetName(L"Point Light Stencil PSO");
+    }
+
+    // Create PSO for color part
+    {
+        auto RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+        RasterizerState.FrontCounterClockwise = true;
+        RasterizerState.CullMode = D3D12_CULL_MODE_FRONT;
+
+        auto DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+        DepthStencilState.StencilEnable = true;
+        DepthStencilState.StencilWriteMask = 0x00;
+        DepthStencilState.StencilReadMask = 0xff;
+        DepthStencilState.BackFace = {
+            .StencilFailOp = D3D12_STENCIL_OP_KEEP,
+            .StencilDepthFailOp = D3D12_STENCIL_OP_KEEP,
+            .StencilPassOp = D3D12_STENCIL_OP_KEEP,
+            .StencilFunc = D3D12_COMPARISON_FUNC_EQUAL
+        };
+
+        auto BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+        BlendState.RenderTarget[0] = {
+            .BlendEnable = true,
+            .LogicOpEnable = false,
+            .SrcBlend = D3D12_BLEND_ONE,
+            .DestBlend = D3D12_BLEND_ONE,
+            .BlendOp = D3D12_BLEND_OP_ADD,
+            .SrcBlendAlpha = D3D12_BLEND_ONE,
+            .DestBlendAlpha = D3D12_BLEND_ONE,
+            .BlendOpAlpha = D3D12_BLEND_OP_MAX,
+            .LogicOp = D3D12_LOGIC_OP_NOOP,
+            .RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL
+        };
+
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC PsoDesc {
+            .pRootSignature = PointLightVolumePassData.RootSignature.Get(),
+            .VS = CD3DX12_SHADER_BYTECODE(VertexShader.Get()),
+            .PS = CD3DX12_SHADER_BYTECODE(PixelShader.Get()),
+            .BlendState = BlendState,
+            .SampleMask = UINT_MAX,
+            .RasterizerState = RasterizerState,
+            .DepthStencilState = DepthStencilState,
+            .InputLayout = {
+                .pInputElementDescs = RenderApi->GetCommonMeshBufferLayout().Layout.data(),
+                .NumElements = static_cast<UINT>(RenderApi->GetCommonMeshBufferLayout().Layout.size())
+            },
+            .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+            .NumRenderTargets = 1,
+            .RTVFormats = {
+                DXGI_FORMAT_R8G8B8A8_UNORM,
+            },
+            .DSVFormat = Core::PointLight::DEPTH_STENCIL_FORMAT,
+            .SampleDesc = {
+                .Count = 1
+            }
+        };
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateGraphicsPipelineState(&PsoDesc, IID_PPV_ARGS(&PointLightVolumePassData.ColorPipelineState)),
+            "Failed to create PSO"
+        )
+
+        PointLightVolumePassData.ColorPipelineState->SetName(L"Point Light Color PSO");
+    }
+
+    // Create command list and allocator
+    {
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&PointLightVolumePassData.CommandAllocator)),
+            "Failed to create command allocator"
+        )
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+                    PointLightVolumePassData.CommandAllocator.Get(), nullptr, IID_PPV_ARGS(&PointLightVolumePassData.CommandList)),
+            "Failed to create command list"
+        )
+
+        CHECKED_S(PointLightVolumePassData.CommandList->Close());
+    }
+
+    // Create GPU descriptors heap
+    {
+        D3D12_DESCRIPTOR_HEAP_DESC HeapDesc = {
+            .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+            .NumDescriptors = GBuffer.TEXTURES_COUNT,
+            .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+        };
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(&PointLightVolumePassData.GpuDescriptorHeap)),
+            "Failed to create descriptor heap"
+        )
+    }
 
     return true;
 }
@@ -1248,6 +1504,109 @@ bool DeferredRenderer::InitPointLightVolumePass()
 bool DeferredRenderer::PointLightVolumesPass(const Core::SceneView& SceneView)
 {
     nvtx3::scoped_range PassRange {"Point Light Volumes Pass"};
+
+    auto& CommandAllocator = PointLightVolumePassData.CommandAllocator;
+    auto& CommandList = PointLightVolumePassData.CommandList;
+
+    CHECKED_S(CommandAllocator->Reset());
+    CHECKED_S(CommandList->Reset(CommandAllocator.Get(), PointLightVolumePassData.StencilPipelineState.Get()));
+
+    // Fill GBuffer descriptors
+    {
+        RenderApi->GetDevice()
+            ->CopyDescriptorsSimple(
+                GBuffer.TEXTURES_COUNT,
+                PointLightVolumePassData.GpuDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+                GBuffer.CpuSrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
+            );
+    }
+
+    // Prepare point light depth stencil buffers
+    {
+        CD3DX12_RESOURCE_BARRIER ResourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
+                GBuffer.DepthStencilTexture.Get(),
+                D3D12_RESOURCE_STATE_DEPTH_WRITE,
+                D3D12_RESOURCE_STATE_COPY_SOURCE
+            );
+
+        CommandList->ResourceBarrier(1, &ResourceBarrier);
+
+        for (const auto& PointLight : Scene->GetPointLights())
+        {
+            PointLight->PrepareDepthStencilForVolumeRendering(
+                *RenderApi,
+                SceneView.GetViewportSize(),
+                CommandList.Get(),
+                GBuffer.DepthStencilTexture.Get()
+            );
+        }
+
+        ResourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
+                GBuffer.DepthStencilTexture.Get(),
+                D3D12_RESOURCE_STATE_COPY_SOURCE,
+                D3D12_RESOURCE_STATE_DEPTH_WRITE
+            );
+
+        CommandList->ResourceBarrier(1, &ResourceBarrier);
+    }
+
+    // Set up command list
+    {
+        CommandList->SetGraphicsRootSignature(PointLightVolumePassData.RootSignature.Get());
+        CommandList->SetDescriptorHeaps(1, PointLightVolumePassData.GpuDescriptorHeap.GetAddressOf());
+
+        CommandList->SetGraphicsRootDescriptorTable(0, PointLightVolumePassData.GpuDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+        CommandList->SetGraphicsRootConstantBufferView(1, FrameData.ConstantBuffer->GetGPUVirtualAddress());
+
+        D3D12_VERTEX_BUFFER_VIEW VertexBufferView = SphereMesh->GetVertexBufferView();
+        CommandList->IASetVertexBuffers(0, 1, &VertexBufferView);
+
+        if (SphereMesh->IsUsingIndices())
+        {
+            D3D12_INDEX_BUFFER_VIEW IndexBufferView = SphereMesh->GetIndexBufferView();
+            CommandList->IASetIndexBuffer(&IndexBufferView);
+        }
+
+        CommandList->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        D3D12_VIEWPORT Viewport = SceneView.GetD3dViewport();
+        CommandList->RSSetViewports(1, &Viewport);
+
+        D3D12_RECT Scissors = D3D12_RECT(0, 0, LONG_MAX, LONG_MAX);
+        CommandList->RSSetScissorRects(1, &Scissors);
+    }
+
+    // Fill stencil buffers
+    {
+        for (const auto& PointLight : Scene->GetPointLights())
+        {
+            CommandList->SetGraphicsRootConstantBufferView(2, PointLight->GetConstantBufferGpuHandle());
+
+            D3D12_CPU_DESCRIPTOR_HANDLE DsvHandle = PointLight->GetDepthStencilVolumeDsvHandle();
+            CommandList->OMSetRenderTargets(0, nullptr, false, &DsvHandle);
+
+            if (SphereMesh->IsUsingIndices())
+            {
+                CommandList->DrawIndexedInstanced(SphereMesh->GetPrimitivesCount(), 1, 0, 0, 0);
+            }
+            else
+            {
+                CommandList->DrawInstanced(SphereMesh->GetPrimitivesCount(), 1, 0, 0);
+            }
+        }
+    }
+
+    // Draw color based on stencil buffers
+    {
+
+    }
+
+    CHECKED_S(CommandList->Close())
+
+    ID3D12CommandList* CommandLists[] = {CommandList.Get()};
+    RenderApi->GetDirectQueue()
+        ->ExecuteCommandLists(1, CommandLists);
 
     return true;
 }
@@ -1620,9 +1979,6 @@ bool DeferredRenderer::PreRender(const Core::SceneView& SceneView)
     // Initialize Point Lights for shadow mapping if enabled
     for (const auto& PointLight : Scene->GetPointLights())
     {
-        if (!PointLight->CastsShadows())
-            continue;
-
         if (!PointLight->HasShadowResources())
             PointLight->CreateShadowCubeMapResource(*RenderApi);
     }

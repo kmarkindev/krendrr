@@ -205,9 +205,17 @@ namespace krendrr::Runtime::Renderer::Deferred
 
         struct PointLightVolumePassData
         {
+            Microsoft::WRL::ComPtr<ID3D12PipelineState> StencilPipelineState {};
+            Microsoft::WRL::ComPtr<ID3D12PipelineState> ColorPipelineState {};
 
+            Microsoft::WRL::ComPtr<ID3D12RootSignature> RootSignature {};
+
+            Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CommandAllocator {};
+            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> CommandList {};
+
+            Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> GpuDescriptorHeap {};
         };
-        PointLightVolumePassData PointLightVolumePass{};
+        PointLightVolumePassData PointLightVolumePassData{};
 
         bool InitPointLightVolumePass();
         bool PointLightVolumesPass(const Core::SceneView& SceneView);

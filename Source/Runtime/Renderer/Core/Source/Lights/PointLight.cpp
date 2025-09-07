@@ -76,17 +76,11 @@ namespace krendrr::Runtime::Renderer::Core
 
     bool PointLight::HasShadowResources() const
     {
-        return CastsShadows() && ShadowCubeMap != nullptr;
+        return ShadowCubeMap != nullptr;
     }
 
     bool PointLight::CreateShadowCubeMapResource(const RenderApi::Core::RenderApi& RenderApi)
     {
-        if (!CastsShadows())
-        {
-            // TODO: log error
-            return false;
-        }
-
         if (HasShadowResources())
             return true;
 
@@ -186,7 +180,7 @@ namespace krendrr::Runtime::Renderer::Core
         {
             CD3DX12_HEAP_PROPERTIES HeapProperties {D3D12_HEAP_TYPE_DEFAULT};
             CD3DX12_RESOURCE_DESC ResourceDesc = CD3DX12_RESOURCE_DESC::Tex2D(
-                DEPTH_STENCIL_FORMAT,
+                CUBE_MAP_DEPTH_STENCIL_FORMAT,
                 SHADOW_MAP_SIZE,
                 SHADOW_MAP_SIZE,
                 6,
@@ -197,7 +191,7 @@ namespace krendrr::Runtime::Renderer::Core
             );
 
             D3D12_CLEAR_VALUE OptimizedClearValue = {
-                .Format = DEPTH_STENCIL_FORMAT,
+                .Format = CUBE_MAP_DEPTH_STENCIL_FORMAT,
                 .DepthStencil = {
                     .Depth = 1.f,
                     .Stencil = 0
@@ -222,7 +216,7 @@ namespace krendrr::Runtime::Renderer::Core
         {
             D3D12_DESCRIPTOR_HEAP_DESC HeapDesc = {
                 .Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
-                .NumDescriptors = 6
+                .NumDescriptors = 7
             };
 
             CHECKED(
@@ -237,7 +231,7 @@ namespace krendrr::Runtime::Renderer::Core
             for (unsigned i = 0; i < 6; ++i)
             {
                 D3D12_DEPTH_STENCIL_VIEW_DESC DsvDesc = {
-                    .Format = DEPTH_STENCIL_FORMAT,
+                    .Format = CUBE_MAP_DEPTH_STENCIL_FORMAT,
                     .ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY,
                     .Texture2DArray = {
                         .MipSlice = 0,
@@ -279,6 +273,15 @@ namespace krendrr::Runtime::Renderer::Core
         };
     }
 
+    D3D12_CPU_DESCRIPTOR_HANDLE PointLight::GetDepthStencilVolumeDsvHandle() const
+    {
+        return CD3DX12_CPU_DESCRIPTOR_HANDLE {
+            ShadowMapDepthDsvHeap->GetCPUDescriptorHandleForHeapStart(),
+            6,
+            DsvIncrementSize
+        };
+    }
+
     void PointLight::TransitionShadowCubeMapFromRenderTargetToRead(ID3D12GraphicsCommandList* CommandList)
     {
         CD3DX12_RESOURCE_BARRIER ResourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
@@ -301,6 +304,81 @@ namespace krendrr::Runtime::Renderer::Core
         CommandList->ResourceBarrier(1, &ResourceBarrier);
     }
 
+    bool PointLight::PrepareDepthStencilForVolumeRendering(const RenderApi::Core::RenderApi& RenderApi, glm::ivec2 ViewportSize,
+        ID3D12GraphicsCommandList* CommandList, ID3D12Resource* GBufferDepth)
+    {
+        // Create DepthStencil for Volume rendering
+        if (DepthStencilSize != ViewportSize)
+        {
+            CD3DX12_HEAP_PROPERTIES HeapProperties {D3D12_HEAP_TYPE_DEFAULT};
+            CD3DX12_RESOURCE_DESC ResourceDesc = CD3DX12_RESOURCE_DESC::Tex2D(
+                DEPTH_STENCIL_FORMAT,
+                ViewportSize.x,
+                ViewportSize.y,
+                1,
+                1,
+                1,
+                0,
+                D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
+            );
+
+            D3D12_CLEAR_VALUE OptimizedClearValue = {
+                .Format = DEPTH_STENCIL_FORMAT,
+                .DepthStencil = {
+                    .Depth = 1.f,
+                    .Stencil = 0
+                }
+            };
+
+            CHECKED(
+                RenderApi.GetDevice()
+                    ->CreateCommittedResource(
+                        &HeapProperties,
+                        D3D12_HEAP_FLAG_NONE,
+                        &ResourceDesc,
+                        D3D12_RESOURCE_STATE_DEPTH_WRITE,
+                        &OptimizedClearValue,
+                        IID_PPV_ARGS(&DepthStencilTexture)
+                    ),
+                "Can't create resource"
+            )
+
+            DepthStencilSize = ViewportSize;
+
+            CD3DX12_CPU_DESCRIPTOR_HANDLE DsvHandle {
+                ShadowMapDepthDsvHeap->GetCPUDescriptorHandleForHeapStart(),
+                6,
+                DsvIncrementSize
+            };
+
+            RenderApi.GetDevice()
+                ->CreateDepthStencilView(DepthStencilTexture.Get(), nullptr, DsvHandle);
+        }
+
+        // Update depth from GBuffer
+        {
+            CD3DX12_RESOURCE_BARRIER ResourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
+                DepthStencilTexture.Get(),
+                D3D12_RESOURCE_STATE_DEPTH_WRITE,
+                D3D12_RESOURCE_STATE_COPY_DEST
+            );
+
+            CommandList->ResourceBarrier(1, &ResourceBarrier);
+
+            CommandList->CopyResource(DepthStencilTexture.Get(), GBufferDepth);
+
+            ResourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
+                DepthStencilTexture.Get(),
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                D3D12_RESOURCE_STATE_DEPTH_WRITE
+            );
+
+            CommandList->ResourceBarrier(1, &ResourceBarrier);
+        }
+
+        return true;
+    }
+
     bool PointLight::UpdateConstantBuffer(const RenderApi::Core::RenderApi& RenderApi)
     {
         // Create buffer if not created
@@ -316,6 +394,7 @@ namespace krendrr::Runtime::Renderer::Core
         CHECKED_S(ConstantBuffer->Map(0, nullptr, reinterpret_cast<void**>(&Buffer)))
 
         *Buffer = {
+            .ModelMatrix = glm::scale(glm::translate(glm::mat4(1.0f), Position), {Distance, Distance, Distance}),
             .Position = glm::vec4(Position, 0.f),
             .DiffuseColor = glm::vec4(Color, 0.f),
             .SpecularColor = Color,
@@ -323,7 +402,8 @@ namespace krendrr::Runtime::Renderer::Core
             .ShadowMapProjectionFarPlane = GetShadowFarDistance(),
             .AttenuationLinear = AttenuationLinear,
             .AttenuationQuad = AttenuationQuad,
-            .AttenuationConstant = AttenuationConstant
+            .AttenuationConstant = AttenuationConstant,
+            .bCastsShadow = CastsShadows()
         };
 
         ConstantBuffer->Unmap(0, nullptr);
