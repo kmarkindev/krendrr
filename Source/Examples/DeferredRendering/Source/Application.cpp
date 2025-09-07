@@ -25,8 +25,10 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize(const R
 
     RenderApi = std::make_shared<Runtime::RenderApi::Core::RenderApi>();
     const bool bRenderApiInitResult = RenderApi->Initialize({
-        .Debug = Runtime::RenderApi::Core::RenderApi::InitParams::Debug::DebugLayerWithGpuBasedValidation,
-        .bEnableShadersDebug = true
+        /*.Debug = Runtime::RenderApi::Core::RenderApi::InitParams::Debug::DebugLayerWithGpuBasedValidation,
+        .bEnableShadersDebug = true*/
+        .Debug = Runtime::RenderApi::Core::RenderApi::InitParams::Debug::None,
+        .bEnableShadersDebug = false
     });
 
     if (!bRenderApiInitResult)

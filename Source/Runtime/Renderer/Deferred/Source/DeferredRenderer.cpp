@@ -48,6 +48,9 @@ bool DeferredRenderer::Initialize(std::shared_ptr<RenderApi::Core::RenderApi> Ne
     if (!InitAmbientDirectionalLightPass())
         return false;
 
+    if (!InitPostProcessingPass())
+        return false;
+
     if (!WaitDirectQueue())
         return false;
 
@@ -206,10 +209,13 @@ bool DeferredRenderer::InitializeGeometryPass()
         Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureBlob {};
         Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureErrorBlob {};
 
-        CHECKED(
-            D3D12SerializeRootSignature(&RootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &RootSignatureBlob, &RootSignatureErrorBlob),
-            "Can't serialize root signature"
-        )
+        HRESULT RootSigSerResult = D3D12SerializeRootSignature(&RootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &RootSignatureBlob, &RootSignatureErrorBlob);
+        if (FAILED(RootSigSerResult))
+        {
+            std::string error (static_cast<const char*>(RootSignatureErrorBlob->GetBufferPointer()), RootSignatureErrorBlob->GetBufferSize());
+            __debugbreak();
+            return false;
+        }
 
         CHECKED(
             RenderApi->GetDevice()
@@ -701,11 +707,11 @@ bool DeferredRenderer::InitAmbientDirectionalLightPass()
     {
         CD3DX12_ROOT_PARAMETER RootParams[2] {};
 
-        // Descriptor table with textured mesh textures
-        CD3DX12_DESCRIPTOR_RANGE TexturedMeshTexturesRange {};
-        TexturedMeshTexturesRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, GBuffer.TEXTURES_COUNT, 0);
+        // Descriptor table with GBuffer textures
+        CD3DX12_DESCRIPTOR_RANGE GBufferTexturesRange {};
+        GBufferTexturesRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, GBuffer.TEXTURES_COUNT, 0);
 
-        RootParams[0].InitAsDescriptorTable(1, &TexturedMeshTexturesRange);
+        RootParams[0].InitAsDescriptorTable(1, &GBufferTexturesRange);
 
         // Frame constant buffer
         RootParams[1].InitAsConstantBufferView(0);
@@ -724,10 +730,13 @@ bool DeferredRenderer::InitAmbientDirectionalLightPass()
         Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureBlob {};
         Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureErrorBlob {};
 
-        CHECKED(
-            D3D12SerializeRootSignature(&RootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &RootSignatureBlob, &RootSignatureErrorBlob),
-            "Can't serialize root signature"
-        )
+        HRESULT RootSigSerResult = D3D12SerializeRootSignature(&RootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &RootSignatureBlob, &RootSignatureErrorBlob);
+        if (FAILED(RootSigSerResult))
+        {
+            std::string error (static_cast<const char*>(RootSignatureErrorBlob->GetBufferPointer()), RootSignatureErrorBlob->GetBufferSize());
+            __debugbreak();
+            return false;
+        }
 
         CHECKED(
             RenderApi->GetDevice()
@@ -945,9 +954,254 @@ bool DeferredRenderer::PointLightVolumesPass(const Core::SceneView& SceneView)
     return true;
 }
 
+bool DeferredRenderer::InitPostProcessingPass()
+{
+    // Create Root
+    {
+        CD3DX12_ROOT_PARAMETER RootParams[2] {};
+
+        // Descriptor table with GBuffer textures
+        CD3DX12_DESCRIPTOR_RANGE GBufferAndLightPassTexturesRange {};
+        GBufferAndLightPassTexturesRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, GBuffer.TEXTURES_COUNT + 1, 0);
+
+        RootParams[0].InitAsDescriptorTable(1, &GBufferAndLightPassTexturesRange);
+
+        // Frame constant buffer
+        RootParams[1].InitAsConstantBufferView(0);
+
+        const auto& StaticSamplers = GetCommonStaticSamplers();
+
+        CD3DX12_ROOT_SIGNATURE_DESC RootSignatureDesc {};
+        RootSignatureDesc.Init(
+            std::size(RootParams),
+            RootParams,
+            StaticSamplers.size(),
+            StaticSamplers.data(),
+            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
+        );
+
+        Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureBlob {};
+        Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureErrorBlob {};
+
+        HRESULT RootSigSerResult = D3D12SerializeRootSignature(&RootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &RootSignatureBlob, &RootSignatureErrorBlob);
+        if (FAILED(RootSigSerResult))
+        {
+            std::string error (static_cast<const char*>(RootSignatureErrorBlob->GetBufferPointer()), RootSignatureErrorBlob->GetBufferSize());
+            __debugbreak();
+            return false;
+        }
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateRootSignature(
+                    0,
+                    RootSignatureBlob->GetBufferPointer(),
+                    RootSignatureBlob->GetBufferSize(),
+                    IID_PPV_ARGS(&PostProcessingPassData.RootSignature)
+                ),
+            "Can't create root signature"
+        )
+    }
+
+    // Load Shaders
+    Microsoft::WRL::ComPtr<ID3DBlob> VertexShader {};
+    Microsoft::WRL::ComPtr<ID3DBlob> PixelShader {};
+    {
+        Microsoft::WRL::ComPtr<ID3DBlob> CompilationErrorBlob {};
+
+        RenderApi::Core::ContentFolderD3dInclude VertexShaderInclude {};
+
+        HRESULT VSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/PostProcessingPass.hlsl",
+            nullptr, &VertexShaderInclude, "VS_Main", "vs_5_1",
+            RenderApi->GetShaderCompileFlags(), 0, &VertexShader, &CompilationErrorBlob);
+
+        if(FAILED(VSCompileResult) || CompilationErrorBlob != nullptr)
+        {
+            std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
+            // TODO: log error
+
+            __debugbreak();
+
+            return false;
+        }
+
+        RenderApi::Core::ContentFolderD3dInclude PixelShaderInclude {};
+
+        HRESULT PSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/PostProcessingPass.hlsl",
+            nullptr, &PixelShaderInclude, "PS_Main", "ps_5_1",
+            RenderApi->GetShaderCompileFlags(), 0, &PixelShader, &CompilationErrorBlob);
+
+        if(FAILED(PSCompileResult) || CompilationErrorBlob != nullptr)
+        {
+            std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
+            // TODO: log error
+
+            __debugbreak();
+
+            return false;
+        }
+    }
+
+    // Create PSO
+    {
+        auto RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+        RasterizerState.FrontCounterClockwise = true;
+
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC PsoDesc {
+            .pRootSignature = PostProcessingPassData.RootSignature.Get(),
+            .VS = CD3DX12_SHADER_BYTECODE(VertexShader.Get()),
+            .PS = CD3DX12_SHADER_BYTECODE(PixelShader.Get()),
+            .BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
+            .SampleMask = UINT_MAX,
+            .RasterizerState = RasterizerState,
+            .InputLayout = {
+                .pInputElementDescs = RenderApi->GetCommonMeshBufferLayout().Layout.data(),
+                .NumElements = static_cast<UINT>(RenderApi->GetCommonMeshBufferLayout().Layout.size())
+            },
+            .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+            .NumRenderTargets = 1,
+            .RTVFormats = {
+                DXGI_FORMAT_R8G8B8A8_UNORM,
+            },
+            .SampleDesc = {
+                .Count = 1
+            }
+        };
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateGraphicsPipelineState(&PsoDesc, IID_PPV_ARGS(&PostProcessingPassData.PipelineState)),
+            "Failed to create PSO"
+        )
+    }
+
+    // Create command list and allocator
+    {
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&PostProcessingPassData.CommandAllocator)),
+            "Failed to create command allocator"
+        )
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+                    PostProcessingPassData.CommandAllocator.Get(), nullptr, IID_PPV_ARGS(&PostProcessingPassData.CommandList)),
+            "Failed to create command list"
+        )
+
+        CHECKED_S(PostProcessingPassData.CommandList->Close());
+    }
+
+    // Create GPU SRV heap
+    {
+        D3D12_DESCRIPTOR_HEAP_DESC HeapDesc = {
+            .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+            .NumDescriptors = GBuffer.TEXTURES_COUNT + 1,
+            .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+        };
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(&PostProcessingPassData.GpuDescriptorHeap)),
+            "Failed to create descriptor heap"
+        )
+    }
+
+    return true;
+}
+
 bool DeferredRenderer::PostProcessingPass(const Core::SceneView& SceneView)
 {
     nvtx3::scoped_range PassRange {"Post Processing Pass"};
+
+    auto& CommandList = PostProcessingPassData.CommandList;
+    auto& CommandAllocator = PostProcessingPassData.CommandAllocator;
+
+    CHECKED_S(CommandAllocator->Reset());
+    CHECKED_S(CommandList->Reset(CommandAllocator.Get(), PostProcessingPassData.PipelineState.Get()));
+
+    // Copy GBuffer descriptors
+    {
+        RenderApi->GetDevice()
+            ->CopyDescriptorsSimple(
+                GBuffer.TEXTURES_COUNT,
+                PostProcessingPassData.GpuDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+                GBuffer.CpuSrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
+            );
+
+        RenderApi->GetDevice()
+            ->CopyDescriptorsSimple(
+                1,
+                CD3DX12_CPU_DESCRIPTOR_HANDLE
+                {
+                    PostProcessingPassData.GpuDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+                    GBuffer.TEXTURES_COUNT,
+                    RenderApi->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)
+                },
+                LightPassData.CpuSrvHeap->GetCPUDescriptorHandleForHeapStart(),
+                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
+            );
+    }
+
+    // Setup Render target
+    {
+        const D3D12_CPU_DESCRIPTOR_HANDLE RtvHandle = SceneView.GetRenderTargetHandle();
+
+        constexpr static FLOAT ClearColor[4] = {0.f, 0.f, 0.f, 1.f};
+        CommandList->ClearRenderTargetView(RtvHandle, ClearColor, 0, nullptr);
+
+        CommandList->OMSetRenderTargets(1, &RtvHandle, true, nullptr);
+
+        D3D12_VIEWPORT Viewport = SceneView.GetD3dViewport();
+        CommandList->RSSetViewports(1, &Viewport);
+
+        static const D3D12_RECT ScissorRect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
+        CommandList->RSSetScissorRects(1, &ScissorRect);
+    }
+
+    // Setup Root Params
+    {
+        CommandList->SetGraphicsRootSignature(PostProcessingPassData.RootSignature.Get());
+
+        CommandList->SetDescriptorHeaps(1, PostProcessingPassData.GpuDescriptorHeap.GetAddressOf());
+        CommandList->SetGraphicsRootDescriptorTable(0, PostProcessingPassData.GpuDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+
+        CommandList->SetGraphicsRootConstantBufferView(1, FrameData.ConstantBuffer->GetGPUVirtualAddress());
+    }
+
+    // Setup fullscreen quad mesh
+    {
+        const D3D12_VERTEX_BUFFER_VIEW VertexBufferView = FullscreenQuadMesh->GetVertexBufferView();
+        CommandList->IASetVertexBuffers(0, 1, &VertexBufferView);
+
+        if (FullscreenQuadMesh->IsUsingIndices())
+        {
+            const D3D12_INDEX_BUFFER_VIEW IndexBufferView = FullscreenQuadMesh->GetIndexBufferView();
+            CommandList->IASetIndexBuffer(&IndexBufferView);
+        }
+
+        CommandList->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    }
+
+    // Draw
+    {
+        if (FullscreenQuadMesh->IsUsingIndices())
+        {
+            CommandList->DrawIndexedInstanced(FullscreenQuadMesh->GetPrimitivesCount(), 1, 0, 0, 0);
+        }
+        else
+        {
+            CommandList->DrawInstanced(FullscreenQuadMesh->GetPrimitivesCount(), 1, 0, 0);
+        }
+    }
+
+    CHECKED_S(CommandList->Close());
+
+    ID3D12CommandList* CommandLists[] = {CommandList.Get()};
+    RenderApi->GetDirectQueue()
+        ->ExecuteCommandLists(1, CommandLists);
 
     return true;
 }

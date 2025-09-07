@@ -142,7 +142,7 @@ namespace krendrr::Runtime::Renderer::Deferred
             Microsoft::WRL::ComPtr<ID3D12RootSignature> RootSignature {};
             Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineState {};
 
-            constexpr inline static unsigned PARALLEL_DRAWS_COUNT_ALLOWED = 500;
+            constexpr inline static unsigned PARALLEL_DRAWS_COUNT_ALLOWED = 1000;
             Microsoft::WRL::ComPtr<ID3D12CommandAllocator> DrawCommandAllocator {};
             Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> DrawCommandList {};
 
@@ -208,12 +208,18 @@ namespace krendrr::Runtime::Renderer::Deferred
 
         struct PostProcessingPassData
         {
+            Microsoft::WRL::ComPtr<ID3D12RootSignature> RootSignature {};
+            Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineState {};
 
+            Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CommandAllocator {};
+            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> CommandList {};
+
+            Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> GpuDescriptorHeap {};
         };
         PostProcessingPassData PostProcessingPassData {};
 
+        bool InitPostProcessingPass();
         bool PostProcessingPass(const Core::SceneView& SceneView);
-
     };
 }
 
