@@ -17,7 +17,25 @@ float4 PS_Main(float4 PixelPosition : SV_POSITION) : SV_TARGET0
     float2 Uv = CalculateScreenUv(FrameData.ViewportSize, PixelPosition);
 
     float3 LightPassColor = LightPassColorTexture.Sample(DefaultSampler, Uv).rgb;
-    float4 Emissive = GetGBufferEmissive(DefaultSampler, Uv);
+    float4 EmissiveColor = GetGBufferEmissive(DefaultSampler, Uv);
 
-    return float4(LightPassColor, 1.0f);
+    float3 LdrColor;
+
+    if(EmissiveColor.a > 0.f)
+    {
+        LdrColor = EmissiveColor.rgb;
+    }
+    else
+    {
+        float3 HdrColor = LightPassColor;
+
+        // Reinhard tone mapping
+        LdrColor = HdrColor / (HdrColor + 1.0f);
+    }
+
+    // Gamma Correction
+    float Gamma = 2.2f;
+    float3 GammaCorrectedColor = pow(abs(LdrColor), 1.0f / Gamma);
+
+    return float4(GammaCorrectedColor, 1.0f);
 }
