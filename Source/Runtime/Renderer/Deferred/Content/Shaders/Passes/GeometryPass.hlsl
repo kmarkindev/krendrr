@@ -1,16 +1,10 @@
+#include <krendrr_runtime_renderer_Deferred/Shaders/VSInput.hlsli>
 #include <krendrr_runtime_renderer_deferred/Shaders/ConstBuffers/FrameConstBuffer.hlsli>
 #include <krendrr_runtime_renderer_deferred/Shaders/ConstBuffers/TexturedMeshConstBuffer.hlsli>
 #include <krendrr_runtime_renderer_deferred/Shaders/Math/CommonVertexShaderMath.hlsli>
+#include <krendrr_runtime_renderer_Deferred/Shaders/StaticSamplers.hlsli>
 
-struct VSInput
-{
-    float3 Position : POSITION;
-    float2 Uv : UV;
-    float3 Normal : NORMAL;
-    float3 Tangent : TANGENT;
-};
-
-struct PSInput
+struct VSOutput
 {
     float4 NDC : SV_POSITION;
     float3 WorldPosition : WORLD_POSITION;
@@ -37,15 +31,12 @@ struct PSOutput
 // 4 - emissive
 Texture2D TexturedMeshTextures[5] : register(t0);
 
-SamplerState DefaultSampler : register(s0);
-SamplerState PointSampler : register(s1);
-
 ConstantBuffer<ConstBuff_Frame> FrameData : register(b0);
 ConstantBuffer<ConstBuff_TexturedMesh> TexturedMeshData : register(b1);
 
-PSInput VS_Main(VSInput Input)
+VSOutput VS_Main(VSInput Input)
 {
-    PSInput Output = (PSInput)0;
+    VSOutput Output = (VSOutput)0;
 
     Output.NDC = CalculateNDC(TexturedMeshData.ModelMatrix, FrameData.ViewMatrix, FrameData.ProjectionMatrix, Input.Position);
     Output.Uv = Input.Uv;
@@ -58,7 +49,7 @@ PSInput VS_Main(VSInput Input)
     return Output;
 }
 
-PSOutput PS_Main(PSInput Input)
+PSOutput PS_Main(VSOutput Input)
 {
     PSOutput Output = (PSOutput)0;
 

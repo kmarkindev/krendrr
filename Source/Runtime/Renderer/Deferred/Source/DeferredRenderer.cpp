@@ -42,6 +42,12 @@ bool DeferredRenderer::Initialize(std::shared_ptr<RenderApi::Core::RenderApi> Ne
     if (!InitializeGeometryPass())
         return false;
 
+    if (!InitLightPass())
+        return false;
+
+    if (!InitAmbientDirectionalLightPass())
+        return false;
+
     if (!WaitDirectQueue())
         return false;
 
@@ -186,16 +192,14 @@ bool DeferredRenderer::InitializeGeometryPass()
         // Textured mesh constant buffer
         RootParams[2].InitAsConstantBufferView(1);
 
-        CD3DX12_STATIC_SAMPLER_DESC StaticSamplers[2] {};
-        StaticSamplers[0].Init(0); // Anisotropic
-        StaticSamplers[1].Init(1, D3D12_FILTER_MIN_MAG_MIP_POINT); // Point
+        const auto& StaticSamplers = GetCommonStaticSamplers();
 
         CD3DX12_ROOT_SIGNATURE_DESC RootSignatureDesc {};
         RootSignatureDesc.Init(
             std::size(RootParams),
             RootParams,
-            std::size(StaticSamplers),
-            StaticSamplers,
+            StaticSamplers.size(),
+            StaticSamplers.data(),
             D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
         );
 
@@ -420,11 +424,15 @@ bool DeferredRenderer::GeometryPass(const Core::SceneView& SceneView)
         {
             if (DrawIndex + 1 == GeometryPassData.PARALLEL_DRAWS_COUNT_ALLOWED)
             {
-                ExecuteCommandList();
+                if (!ExecuteCommandList())
+                    return false;
+
                 WaitDirectQueue();
 
                 DrawIndex = -1;
-                ResetCommandList();
+
+                if (!ResetCommandList())
+                    return false;
             }
             DrawIndex += 1;
         }
@@ -538,7 +546,37 @@ bool DeferredRenderer::GeometryPass(const Core::SceneView& SceneView)
     }
 
     if (DrawIndex >= 0)
-        ExecuteCommandList();
+        if (!ExecuteCommandList())
+            return false;
+
+    return true;
+}
+
+bool DeferredRenderer::InitLightPass()
+{
+    // Create command list and allocators
+    {
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&LightPassData.RenderTargetToReadTransitionAllocator)),
+            "Failed to create command allocator"
+        )
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&LightPassData.ReadToRenderTargetTransitionAllocator)),
+            "Failed to create command allocator"
+        )
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+                    LightPassData.RenderTargetToReadTransitionAllocator.Get(), nullptr, IID_PPV_ARGS(&LightPassData.TransitionCommandList)),
+            "Failed to create command list"
+        )
+
+        CHECKED_S(LightPassData.TransitionCommandList->Close());
+    }
 
     return true;
 }
@@ -555,7 +593,16 @@ bool DeferredRenderer::PrepareLightPassData(const Core::SceneView& SceneView)
     // Create or resize color texture
     {
         const CD3DX12_HEAP_PROPERTIES HeapProperties {D3D12_HEAP_TYPE_DEFAULT};
-        const CD3DX12_RESOURCE_DESC ResourceDesc = CD3DX12_RESOURCE_DESC::Tex2D(LightPassData.COLOR_TEXTURE_FORMAT, ViewportSize.x, ViewportSize.y, 1);
+        const CD3DX12_RESOURCE_DESC ResourceDesc = CD3DX12_RESOURCE_DESC::Tex2D(
+            LightPassData.COLOR_TEXTURE_FORMAT,
+            ViewportSize.x,
+            ViewportSize.y,
+            1,
+            1,
+            1,
+            0,
+            D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
+        );
 
         const D3D12_CLEAR_VALUE ClearValue = {
             .Format = LightPassData.COLOR_TEXTURE_FORMAT,
@@ -590,6 +637,9 @@ bool DeferredRenderer::PrepareLightPassData(const Core::SceneView& SceneView)
                 ->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(&LightPassData.CpuRtvHeap)),
             "Failed to create cpu rtv descriptor heap"
         )
+
+        RenderApi->GetDevice()
+            ->CreateRenderTargetView(LightPassData.ColorTexture.Get(), nullptr, LightPassData.CpuRtvHeap->GetCPUDescriptorHandleForHeapStart());
     }
 
     // Create SRV heap and handle
@@ -604,30 +654,9 @@ bool DeferredRenderer::PrepareLightPassData(const Core::SceneView& SceneView)
                 ->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(&LightPassData.CpuSrvHeap)),
             "Failed to create cpu srv descriptor heap"
         )
-    }
 
-    // Create command list and allocators
-    {
-        CHECKED(
-            RenderApi->GetDevice()
-                ->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&LightPassData.RenderTargetToReadTransitionAllocator)),
-            "Failed to create command allocator"
-        )
-
-        CHECKED(
-            RenderApi->GetDevice()
-                ->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&LightPassData.ReadToRenderTargetTransitionAllocator)),
-            "Failed to create command allocator"
-        )
-
-        CHECKED(
-            RenderApi->GetDevice()
-                ->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
-                    LightPassData.RenderTargetToReadTransitionAllocator.Get(), nullptr, IID_PPV_ARGS(&LightPassData.TransitionCommandList)),
-            "Failed to create command list"
-        )
-
-        CHECKED_S(LightPassData.TransitionCommandList->Close());
+        RenderApi->GetDevice()
+            ->CreateShaderResourceView(LightPassData.ColorTexture.Get(), nullptr, LightPassData.CpuSrvHeap->GetCPUDescriptorHandleForHeapStart());
     }
 
     return true;
@@ -635,7 +664,7 @@ bool DeferredRenderer::PrepareLightPassData(const Core::SceneView& SceneView)
 
 bool DeferredRenderer::TransitionLightPassFromRenderTargetToReadState()
 {
-    CD3DX12_RESOURCE_BARRIER Barrier = CD3DX12_RESOURCE_BARRIER::Transition(GBuffer.DiffuseTexture.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_GENERIC_READ);
+    CD3DX12_RESOURCE_BARRIER Barrier = CD3DX12_RESOURCE_BARRIER::Transition(LightPassData.ColorTexture.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_GENERIC_READ);
 
     CHECKED_S(LightPassData.RenderTargetToReadTransitionAllocator->Reset());
     CHECKED_S(LightPassData.TransitionCommandList->Reset(LightPassData.RenderTargetToReadTransitionAllocator.Get(), nullptr))
@@ -652,9 +681,8 @@ bool DeferredRenderer::TransitionLightPassFromRenderTargetToReadState()
 
 bool DeferredRenderer::TransitionLightPassFromReadToRenderTargetState()
 {
-    CD3DX12_RESOURCE_BARRIER Barrier = CD3DX12_RESOURCE_BARRIER::Transition(GBuffer.DiffuseTexture.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    CD3DX12_RESOURCE_BARRIER Barrier = CD3DX12_RESOURCE_BARRIER::Transition(LightPassData.ColorTexture.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-    CHECKED_S(LightPassData.RenderTargetToReadTransitionAllocator->Reset());
     CHECKED_S(LightPassData.TransitionCommandList->Reset(LightPassData.RenderTargetToReadTransitionAllocator.Get(), nullptr))
 
     LightPassData.TransitionCommandList->ResourceBarrier(1, &Barrier);
@@ -669,7 +697,157 @@ bool DeferredRenderer::TransitionLightPassFromReadToRenderTargetState()
 
 bool DeferredRenderer::InitAmbientDirectionalLightPass()
 {
-    // TODO: Create PSO, Root, command list and allocator
+    // Create Root
+    {
+        CD3DX12_ROOT_PARAMETER RootParams[2] {};
+
+        // Descriptor table with textured mesh textures
+        CD3DX12_DESCRIPTOR_RANGE TexturedMeshTexturesRange {};
+        TexturedMeshTexturesRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, GBuffer.TEXTURES_COUNT, 0);
+
+        RootParams[0].InitAsDescriptorTable(1, &TexturedMeshTexturesRange);
+
+        // Frame constant buffer
+        RootParams[1].InitAsConstantBufferView(0);
+
+        const auto& StaticSamplers = GetCommonStaticSamplers();
+
+        CD3DX12_ROOT_SIGNATURE_DESC RootSignatureDesc {};
+        RootSignatureDesc.Init(
+            std::size(RootParams),
+            RootParams,
+            StaticSamplers.size(),
+            StaticSamplers.data(),
+            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
+        );
+
+        Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureBlob {};
+        Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureErrorBlob {};
+
+        CHECKED(
+            D3D12SerializeRootSignature(&RootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &RootSignatureBlob, &RootSignatureErrorBlob),
+            "Can't serialize root signature"
+        )
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateRootSignature(
+                    0,
+                    RootSignatureBlob->GetBufferPointer(),
+                    RootSignatureBlob->GetBufferSize(),
+                    IID_PPV_ARGS(&AmbientDirectionalLightPassData.RootSignature)
+                ),
+            "Can't create root signature"
+        )
+    }
+
+    // Load Shaders
+    Microsoft::WRL::ComPtr<ID3DBlob> VertexShader {};
+    Microsoft::WRL::ComPtr<ID3DBlob> PixelShader {};
+    {
+        Microsoft::WRL::ComPtr<ID3DBlob> CompilationErrorBlob {};
+
+        RenderApi::Core::ContentFolderD3dInclude VertexShaderInclude {};
+
+        HRESULT VSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/AmbientDirectionalLightPass.hlsl",
+            nullptr, &VertexShaderInclude, "VS_Main", "vs_5_1",
+            RenderApi->GetShaderCompileFlags(), 0, &VertexShader, &CompilationErrorBlob);
+
+        if(FAILED(VSCompileResult) || CompilationErrorBlob != nullptr)
+        {
+            std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
+            // TODO: log error
+
+            __debugbreak();
+
+            return false;
+        }
+
+        RenderApi::Core::ContentFolderD3dInclude PixelShaderInclude {};
+
+        HRESULT PSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/AmbientDirectionalLightPass.hlsl",
+            nullptr, &PixelShaderInclude, "PS_Main", "ps_5_1",
+            RenderApi->GetShaderCompileFlags(), 0, &PixelShader, &CompilationErrorBlob);
+
+        if(FAILED(PSCompileResult) || CompilationErrorBlob != nullptr)
+        {
+            std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
+            // TODO: log error
+
+            __debugbreak();
+
+            return false;
+        }
+    }
+
+
+    // Create PSO
+    {
+        auto RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+        RasterizerState.FrontCounterClockwise = true;
+
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC PsoDesc {
+            .pRootSignature = AmbientDirectionalLightPassData.RootSignature.Get(),
+            .VS = CD3DX12_SHADER_BYTECODE(VertexShader.Get()),
+            .PS = CD3DX12_SHADER_BYTECODE(PixelShader.Get()),
+            .BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
+            .SampleMask = UINT_MAX,
+            .RasterizerState = RasterizerState,
+            .InputLayout = {
+                .pInputElementDescs = RenderApi->GetCommonMeshBufferLayout().Layout.data(),
+                .NumElements = static_cast<UINT>(RenderApi->GetCommonMeshBufferLayout().Layout.size())
+            },
+            .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+            .NumRenderTargets = 1,
+            .RTVFormats = {
+                DXGI_FORMAT_R16G16B16A16_FLOAT,
+            },
+            .SampleDesc = {
+                .Count = 1
+            }
+        };
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateGraphicsPipelineState(&PsoDesc, IID_PPV_ARGS(&AmbientDirectionalLightPassData.PipelineState)),
+            "Failed to create PSO"
+        )
+    }
+
+    // Create command list and allocator
+    {
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&AmbientDirectionalLightPassData.CommandAllocator)),
+            "Failed to create command allocator"
+        )
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+                    AmbientDirectionalLightPassData.CommandAllocator.Get(), nullptr, IID_PPV_ARGS(&AmbientDirectionalLightPassData.CommandList)),
+            "Failed to create command list"
+        )
+
+        CHECKED_S(AmbientDirectionalLightPassData.CommandList->Close());
+    }
+
+    // Create GPU SRV heap
+    {
+        D3D12_DESCRIPTOR_HEAP_DESC HeapDesc = {
+            .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+            .NumDescriptors = GBuffer.TEXTURES_COUNT,
+            .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+        };
+
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(&AmbientDirectionalLightPassData.GpuDescriptorHeap)),
+            "Failed to create descriptor heap"
+        )
+    }
+
+    return true;
 }
 
 bool DeferredRenderer::AmbientDirectionalLightPass(const Core::SceneView& SceneView)
@@ -684,7 +862,13 @@ bool DeferredRenderer::AmbientDirectionalLightPass(const Core::SceneView& SceneV
 
     // Copy GBuffer descriptors
     {
-        // TODO:
+        RenderApi->GetDevice()
+            ->CopyDescriptorsSimple(
+                GBuffer.TEXTURES_COUNT,
+                AmbientDirectionalLightPassData.GpuDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+                GBuffer.CpuSrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
+            );
     }
 
     // Setup Render target
@@ -692,9 +876,8 @@ bool DeferredRenderer::AmbientDirectionalLightPass(const Core::SceneView& SceneV
         constexpr static FLOAT ClearColor[4] = {0.f, 0.f, 0.f, 1.f};
         CommandList->ClearRenderTargetView(LightPassData.CpuRtvHeap->GetCPUDescriptorHandleForHeapStart(), ClearColor, 0, nullptr);
 
-        D3D12_CPU_DESCRIPTOR_HANDLE RtvHandle = LightPassData.CpuRtvHeap->GetCPUDescriptorHandleForHeapStart();
-        D3D12_CPU_DESCRIPTOR_HANDLE DsvHandle = GBuffer.CpuDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-        CommandList->OMSetRenderTargets(1, &RtvHandle, true, &DsvHandle);
+        const D3D12_CPU_DESCRIPTOR_HANDLE RtvHandle = LightPassData.CpuRtvHeap->GetCPUDescriptorHandleForHeapStart();
+        CommandList->OMSetRenderTargets(1, &RtvHandle, true, nullptr);
 
         D3D12_VIEWPORT Viewport = SceneView.GetD3dViewport();
         CommandList->RSSetViewports(1, &Viewport);
@@ -821,7 +1004,7 @@ bool DeferredRenderer::InitBasicMeshes()
 
     ModelLoader::LoadResult UnitSphereLoadResult = ModelLoader::LoadModel(
         "../Content/krendrr_runtime_renderer_deferred/UnitIcoSphere.obj",
-        *RenderApi.get(),
+        *RenderApi,
         {
             .ThreadPool = &RenderThreadPool
         }
@@ -861,6 +1044,8 @@ bool DeferredRenderer::InitPrePostRender()
 
 bool DeferredRenderer::PreRender(const Core::SceneView& SceneView)
 {
+    CHECKED_S(PrePostRenderData.CommandAllocator->Reset());
+
     CHECKED(
         PrePostRenderData.CommandList->Reset(PrePostRenderData.CommandAllocator.Get(), nullptr),
         "Can't reset command list"
@@ -917,6 +1102,22 @@ bool DeferredRenderer::WaitDirectQueue()
     )
 
     return true;
+}
+
+const std::array<CD3DX12_STATIC_SAMPLER_DESC, 2>& DeferredRenderer::GetCommonStaticSamplers()
+{
+    bool bInitialized = false;
+    static std::array<CD3DX12_STATIC_SAMPLER_DESC, 2> StaticSamplers{};
+
+    if (!bInitialized)
+    {
+        StaticSamplers[0].Init(0); // Anisotropic
+        StaticSamplers[1].Init(1, D3D12_FILTER_MIN_MAG_MIP_POINT); // Point
+
+        bInitialized = true;
+    }
+
+    return StaticSamplers;
 }
 
 bool DeferredRenderer::InitEmptyTexture()
@@ -1119,17 +1320,16 @@ bool DeferredRenderer::InitGBufferForView(const Core::SceneView& SceneView)
     {
         D3D12_DESCRIPTOR_HEAP_DESC HeapDesc = {
             .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-            .NumDescriptors = 6,
-            .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
+            .NumDescriptors = GBuffer.TEXTURES_COUNT,
         };
 
         CHECKED(
             RenderApi->GetDevice()
-                ->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(&GBuffer.GpuSrvDescriptorHeap)),
-            "Can't create gpu srv descriptor heap for gbuffer"
+                ->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(&GBuffer.CpuSrvDescriptorHeap)),
+            "Can't create cpu srv descriptor heap for gbuffer"
         )
 
-        CD3DX12_CPU_DESCRIPTOR_HANDLE Handle {GBuffer.GpuSrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart()};
+        CD3DX12_CPU_DESCRIPTOR_HANDLE Handle {GBuffer.CpuSrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart()};
         const unsigned IncrementSize = RenderApi->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         for (const auto & Texture: Textures)
         {

@@ -47,6 +47,8 @@ namespace krendrr::Runtime::Renderer::Deferred
 
         bool WaitDirectQueue();
 
+        const std::array<CD3DX12_STATIC_SAMPLER_DESC, 2>& GetCommonStaticSamplers();
+
         // Used when there is no texture in TexturedMesh. It is filled with 0s
         Microsoft::WRL::ComPtr<ID3D12Resource> EmptyTexture {};
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CpuEmptyTextureHeap {};
@@ -67,7 +69,7 @@ namespace krendrr::Runtime::Renderer::Deferred
 
             // Descriptors follow same order as textures are declared in this struct
             Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CpuRtvDescriptorHeap {};
-            Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> GpuSrvDescriptorHeap {};
+            Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CpuSrvDescriptorHeap {};
             inline constexpr static unsigned TEXTURES_COUNT = 6;
 
             // Contains only one descriptor
@@ -157,9 +159,10 @@ namespace krendrr::Runtime::Renderer::Deferred
 
             constexpr static DXGI_FORMAT COLOR_TEXTURE_FORMAT = DXGI_FORMAT_R16G16B16A16_FLOAT;
             Microsoft::WRL::ComPtr<ID3D12Resource> ColorTexture {};
-
             Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CpuRtvHeap {};
             Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CpuSrvHeap {};
+
+            Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> GpuSrvRenderHeap {};
 
             Microsoft::WRL::ComPtr<ID3D12CommandAllocator> RenderTargetToReadTransitionAllocator {};
             Microsoft::WRL::ComPtr<ID3D12CommandAllocator> ReadToRenderTargetTransitionAllocator {};
@@ -167,6 +170,7 @@ namespace krendrr::Runtime::Renderer::Deferred
         };
         LightPassData LightPassData {};
 
+        bool InitLightPass();
         bool PrepareLightPassData(const Core::SceneView& SceneView);
         bool TransitionLightPassFromRenderTargetToReadState();
         bool TransitionLightPassFromReadToRenderTargetState();
