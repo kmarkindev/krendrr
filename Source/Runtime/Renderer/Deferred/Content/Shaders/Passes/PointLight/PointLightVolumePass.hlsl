@@ -46,6 +46,7 @@ float4 PS_Main(float4 SvPosition : SV_POSITION) : SV_TARGET0
     }
 
     // Shadow
+    if(PointLightData.bCastsShadow)
     {
         float ShadowMapDepthDistance = ShadowCubeMap.Sample(DefaultSampler, LightDirection).r * PointLightData.ShadowMapProjectionFarPlane;
         float ShadowBias = max(0.05 * (1.0 - dot(WorldNormal, LightDirection)), 0.005);
