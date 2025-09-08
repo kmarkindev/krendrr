@@ -2,7 +2,7 @@
 
 ![](/Media/room.gif)
 
-PS. This room's window NEEDS antialiasing
+PS. This room's window NEEDS antialiasing, lol
 
 ### Sponza
 
@@ -50,3 +50,11 @@ Use Visual Studio Installer to install Windows SDK 10.0.x and Clang 19.1.5 with 
 CMake presets:
 - win-clang-cl-debug
 - win-clang-cl-release
+
+## Tools
+
+![](/Media/nsight_systems.png)
+
+![](/Media/rd1.png)
+
+![](/Media/rd2.png)
