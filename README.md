@@ -1,5 +1,33 @@
 # krendrr
 
+![](/Media/room.gif)
+
+PS. This room's window NEEDS antialiasing
+
+### Sponza
+
+![](/Media/sponza.png)
+
+400 meshes, 200 FPS, 1 dynamic (green) and 1 static (red) point light
+
+### Futuristic Room
+
+![](/Media/room.png)
+
+50 meshes, 500 FPS, 1 dynamic point light
+
+## ToDo
+
+- Refactoring for deferred renderer class
+- PBR
+- Jobify model loading even more
+- Jobify renderer (geometry pass, shadow map pass)
+- Better PFC for shadow mapping
+- Anti-Aliasing
+- SSAO
+- Integrate spdlog, replace all TODO with logs
+- Support for Clang and GCC on Windows
+- Assets system
 
 ## Building
 
@@ -15,19 +43,10 @@ CMake presets:
 - win-msvc-debug
 - win-msvc-release
 
-### (Currently not working) Windows build using Clang-cl
+### (WIP) Windows build using Clang-cl
 
 Use Visual Studio Installer to install Windows SDK 10.0.x and Clang 19.1.5 with MSBuild support (clang-cl)
 
 CMake presets:
 - win-clang-cl-debug
 - win-clang-cl-release
-
-### Notes on CMake
-
-- All non-third party and non-custom target names start with krendrr_ prefix
-- krendrr target name always includes path to the target in Source folder
-- Third party targets should not be linked into krendrr targets directly. 
-Instead, a library target with krendrr_ prefix should be created and then used for linking 
-- Prefer using add_krendrr_library instead of creating targets manually
-
