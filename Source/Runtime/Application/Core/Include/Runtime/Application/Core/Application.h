@@ -1,11 +1,13 @@
 #pragma once
-#include "Events/QuitEvent.h"
+
+#include <memory>
 
 namespace krendrr::Runtime::Application::Core
 {
     class KeyEvent;
     class MouseMoveEvent;
     class MouseWheelEvent;
+    class QuitEvent;
     class StartupArgs;
 
     /**
@@ -18,12 +20,12 @@ namespace krendrr::Runtime::Application::Core
      * IMPLEMENT_ENTRY_POINT(YourInheritedClass)
      *
      * Base Application class does nothing and just ticks infinitely.
+     *
+     * It is created inside shared_ptr by platform code.
      */
-    class Application
+    class Application : public std::enable_shared_from_this<Application>
     {
     public:
-
-        explicit Application(const StartupArgs& Args);
 
         /**
          * Called by platform specific code as fast as possible.
@@ -37,7 +39,7 @@ namespace krendrr::Runtime::Application::Core
          *
          * Returning false means there was an error, and we need to shut down
          */
-        virtual bool Initialize();
+        virtual bool Initialize(const StartupArgs& Args);
 
         /**
          * Called by platform specific code after there was an error or shutdown request.

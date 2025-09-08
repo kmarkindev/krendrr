@@ -1,7 +1,12 @@
 #pragma once
 
-#include <complex.h>
 #include <span>
+#include <memory>
+
+namespace krendrr::Runtime::RenderApi::Core
+{
+    class RenderApi;
+}
 
 namespace krendrr::Runtime::Renderer::Core
 {
@@ -22,7 +27,7 @@ namespace krendrr::Runtime::Renderer::Core
     {
     public:
 
-        virtual bool Initialize(std::shared_ptr<Core::Scene> NewScene) = 0;
+        virtual bool Initialize(std::shared_ptr<RenderApi::Core::RenderApi> NewRenderApi, std::shared_ptr<Core::Scene> NewScene) = 0;
 
         virtual bool Render(const std::span<SceneView>& SceneViews) = 0;
 

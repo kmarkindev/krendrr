@@ -45,6 +45,19 @@
         },
 
         {
+            "name": "base-clang-cl",
+            "hidden": true,
+            "description": "Base for all Clang-cl presets",
+            "generator": "Visual Studio 17 2022",
+            "cacheVariables": {
+                "CMAKE_CXX_COMPILER": "clang-cl",
+                "CMAKE_C_COMPILER": "clang-cl",
+                "CMAKE_GENERATOR_TOOLSET": "ClangCL,host=x64",
+                "CMAKE_GENERATOR_PLATFORM": "x64,version=10.0"
+            }
+        },
+
+        {
             "name": "win-msvc-debug",
             "description": "Base preset for Debug build for Windows using MSVC. Inherit it to specify custom cache vars and env if needed.",
             "inherits": [
@@ -61,6 +74,27 @@
                 "base",
                 "base-win",
                 "base-msvc",
+                "base-release"
+            ]
+        },
+
+        {
+            "name": "win-clang-cl-debug",
+            "description": "Base preset for Debug build for Windows using ClangCL. Inherit it to specify custom cache vars and env if needed.",
+            "inherits": [
+                "base",
+                "base-win",
+                "base-clang-cl",
+                "base-debug"
+            ]
+        },
+        {
+            "name": "win-clang-cl-release",
+            "description": "Base preset for Release build for Windows using ClangCL. Inherit it to specify custom cache vars and env if needed.",
+            "inherits": [
+                "base",
+                "base-win",
+                "base-clang-cl",
                 "base-release"
             ]
         }

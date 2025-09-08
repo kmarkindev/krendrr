@@ -1,6 +1,8 @@
 #include "Runtime/Renderer/Core/TexturedMesh/TexturedMesh.h"
 
 #include "glm/gtc/quaternion.hpp"
+#include "Runtime/RenderApi/Core/ApiCallCheck.h"
+#include "Runtime/RenderApi/Core/ConstBufferHelper.h"
 
 namespace krendrr::Runtime::Renderer::Core
 {
@@ -100,5 +102,50 @@ namespace krendrr::Runtime::Renderer::Core
         ModelMatrix = glm::mat4_cast(Rotation) * ModelMatrix;
 
         return ModelMatrix;
+    }
+
+    glm::mat3 TexturedMesh::GetNormalMatrix() const
+    {
+        return glm::transpose(glm::inverse(glm::mat3(GetModelMatrix())));
+    }
+
+    bool TexturedMesh::UpdateConstantBuffer(const RenderApi::Core::RenderApi& RenderApi)
+    {
+        // Create buffer if not created
+        if (ConstantBuffer == nullptr)
+        {
+            if (!InitializeConstantBuffer<ConstBuff_TexturedMesh>(RenderApi, ConstantBuffer, CpuSrvHeap, L"Textured Mesh Constant Buffer"))
+                return false;
+        }
+
+        // Update buffer
+
+        ConstBuff_TexturedMesh* Buffer {};
+        CHECKED_S(ConstantBuffer->Map(0, nullptr, reinterpret_cast<void**>(&Buffer)))
+
+        *Buffer = {
+            .bHasNormalMap = HasTexture(NORMAL_TEXTURE_NAME),
+            .ModelMatrix = GetModelMatrix(),
+            .NormalMatrix = GetNormalMatrix(),
+        };
+
+        ConstantBuffer->Unmap(0, nullptr);
+
+        return true;
+    }
+
+    D3D12_CPU_DESCRIPTOR_HANDLE TexturedMesh::GetConstantBufferHandle() const
+    {
+        if (CpuSrvHeap == nullptr)
+            return {};
+
+        return CD3DX12_CPU_DESCRIPTOR_HANDLE {
+            CpuSrvHeap->GetCPUDescriptorHandleForHeapStart()
+        };
+    }
+
+    D3D12_GPU_VIRTUAL_ADDRESS TexturedMesh::GetConstantBufferGpuAddress() const
+    {
+        return ConstantBuffer->GetGPUVirtualAddress();
     }
 }

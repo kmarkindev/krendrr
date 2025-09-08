@@ -12,6 +12,7 @@
 #include "Runtime/Application/Windows/WindowsWindow.h"
 #include "SDL3/SDL_events.h"
 #include "SDL3/SDL_init.h"
+#include "SDL3/SDL_oldnames.h"
 
 krendrr::Runtime::Application::Core::Window* TryGetEventWindow(const SDL_Event& Event)
 {
@@ -48,11 +49,13 @@ int main(int Argc, char** Argv)
 
     krendrr::Runtime::Application::Core::StartupArgs StartupArgs {Argc, Argv};
 
-    std::unique_ptr<krendrr::Runtime::Application::Core::Application> Application { krendrr::Runtime::Application::Core::ConstructApplicationInstance(StartupArgs) };
+    std::shared_ptr<krendrr::Runtime::Application::Core::Application> Application {
+        krendrr::Runtime::Application::Core::ConstructApplicationInstance()
+    };
 
     {
         nvtx3::scoped_range WindowsApplicationInitialization {"Windows: Application Initialization"};
-        if (!Application->Initialize())
+        if (!Application->Initialize(StartupArgs))
             return -1;
     }
 
@@ -140,6 +143,14 @@ int main(int Argc, char** Argv)
 
                         break;
 
+                    }
+                    case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+                    {
+                        krendrr::Runtime::Application::Core::Window* Window = TryGetEventWindow(SdlEvent);
+                        if (Window)
+                            Window->HandleWindowSizeChanged();
+
+                        break;
                     }
                     default:
                         break;

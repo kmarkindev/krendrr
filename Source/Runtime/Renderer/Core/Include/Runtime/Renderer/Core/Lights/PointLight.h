@@ -1,12 +1,23 @@
 #pragma once
 
-#include "glm/vec3.hpp"
+#include <wrl/client.h>
+#include "glm/fwd.hpp"
+#include "glm/detail/type_quat.hpp"
+#include <d3dx12/d3dx12.h>
+#include "Runtime/RenderApi/Core/RenderApi.h"
 
 namespace krendrr::Runtime::Renderer::Core
 {
     class PointLight
     {
     public:
+
+        constexpr inline static unsigned SHADOW_MAP_SIZE = 1024;
+        constexpr inline static DXGI_FORMAT CUBE_MAP_FORMAT = DXGI_FORMAT_R16G16B16A16_FLOAT;
+        constexpr inline static DXGI_FORMAT CUBE_MAP_DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
+        constexpr inline static DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
 
         [[nodiscard]] const glm::vec3& GetPosition() const;
         void SetPosition(const glm::vec3& NewPosition);
@@ -25,6 +36,22 @@ namespace krendrr::Runtime::Renderer::Core
 
         [[nodiscard]] bool CastsShadows() const;
         void SetCastsShadows(bool NewCastsShadows);
+        [[nodiscard]] float GetShadowFarDistance() const;
+        bool HasShadowResources() const;
+        bool CreateShadowCubeMapResource(const RenderApi::Core::RenderApi& RenderApi);
+        D3D12_CPU_DESCRIPTOR_HANDLE GetShadowCubeMapSrvHandle() const;
+        D3D12_CPU_DESCRIPTOR_HANDLE GetShadowCubeMapRtvHandle(int FaceIndex) const;
+        D3D12_CPU_DESCRIPTOR_HANDLE GetShadowCubeMapDsvHandle(int FaceIndex) const;
+        void TransitionShadowCubeMapFromRenderTargetToRead(ID3D12GraphicsCommandList* CommandList);
+        void TransitionShadowCubeMapFromReadToRenderTarget(ID3D12GraphicsCommandList* CommandList);
+
+        bool PrepareDepthStencilForVolumeRendering(const RenderApi::Core::RenderApi& RenderApi, glm::ivec2 ViewportSize,
+            ID3D12GraphicsCommandList* CommandList, ID3D12Resource* GBufferDepth);
+        D3D12_CPU_DESCRIPTOR_HANDLE GetDepthStencilVolumeDsvHandle() const;
+
+        bool UpdateConstantBuffer(const RenderApi::Core::RenderApi& RenderApi);
+
+        D3D12_GPU_VIRTUAL_ADDRESS GetConstantBufferGpuHandle() const;
 
     private:
 
@@ -38,6 +65,39 @@ namespace krendrr::Runtime::Renderer::Core
         float AttenuationLinear {0.002f};
         float AttenuationQuad {0.0001f};
         float AttenuationConstant {1.f};
+
+        struct alignas(256) ConstBuff_PointLight
+        {
+            glm::mat4 ModelMatrix {};
+
+            glm::vec4 Position {};
+
+            glm::vec4 DiffuseColor {};
+
+            glm::vec3 SpecularColor {};
+            float Distance {};
+
+            float ShadowMapProjectionFarPlane {};
+            float AttenuationLinear {};
+            float AttenuationQuad {};
+            float AttenuationConstant {};
+
+            std::uint32_t bCastsShadow {};
+        };
+
+        Microsoft::WRL::ComPtr<ID3D12Resource> ConstantBuffer {};
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CpuSrvHeap {};
+
+        Microsoft::WRL::ComPtr<ID3D12Resource> ShadowCubeMap {};
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> ShadowCubeMapSrvHeap {};
+        unsigned RtvIncrementSize {};
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> ShadowCubeMapFacesRtvHeap {};
+        Microsoft::WRL::ComPtr<ID3D12Resource> ShadowMapDepthStencil {};
+        unsigned DsvIncrementSize {};
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> ShadowMapDepthDsvHeap {};
+
+        glm::ivec2 DepthStencilSize {-1, -1};
+        Microsoft::WRL::ComPtr<ID3D12Resource> DepthStencilTexture {};
     };
 }
 

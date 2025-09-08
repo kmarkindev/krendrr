@@ -2,7 +2,9 @@
 
 #include <string_view>
 #include <vector>
+#include "Runtime/RenderApi/Core/RenderApi.h"
 #include "Runtime/Renderer/Core/TexturedMesh/TexturedMesh.h"
+#include "Runtime/ThreadPool/ThreadPool.h"
 
 namespace krendrr::Runtime::ModelLoader
 {
@@ -16,11 +18,18 @@ namespace krendrr::Runtime::ModelLoader
          */
         bool bFlipNormals = false;
 
+        /**
+         * Convert between left <-> right handed system for mesh normals and tangents
+         */
+        bool bNegateNormalZ = false;
+
         std::string_view DiffuseTextureName {"diffuse"};
         std::string_view MetallicTextureName {"metallic"};
         std::string_view RoughnessTextureName {"roughness"};
         std::string_view NormalTextureName {"normal"};
         std::string_view EmissiveTextureName {"emissive"};
+
+        ThreadPool::ThreadPool* ThreadPool {};
     };
 
     struct LoadResult
@@ -28,16 +37,11 @@ namespace krendrr::Runtime::ModelLoader
         bool bSuccess {};
         std::vector<std::shared_ptr<Renderer::Core::TexturedMesh>> TexturedMeshes {};
 
-        LoadResult()
-            : bSuccess(false), TexturedMeshes{}
-        {
-        }
-
         [[nodiscard]] bool HasLoadedAtLeastOne() const
         {
             return bSuccess && !TexturedMeshes.empty();
         }
     };
 
-    LoadResult LoadModel(const std::string_view& ModelFileName, const LoadParams& Params = {});
+    LoadResult LoadModel(const std::string_view& ModelFileName, const RenderApi::Core::RenderApi& RenderApi, const LoadParams& Params = {});
 }

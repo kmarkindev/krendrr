@@ -1,5 +1,6 @@
 #pragma once
-
+#include <array>
+#include <dxgi1_6.h>
 #include "Runtime/Application/Core/Window.h"
 #include "SDL3/SDL_video.h"
 
@@ -9,28 +10,42 @@ namespace krendrr::Runtime::Application::Windows
     {
     public:
 
+        constexpr static int SWAP_CHAIN_BUFFER_COUNT = 2;
         constexpr static const char* SLD_WINDOW_OBJECT_PROPERTY = "window_object";
 
-        explicit WindowsWindow(Core::Application* Application);
+        bool Initialize(const std::shared_ptr<RenderApi::Core::RenderApi>& NewRenderApi, const InitializeParams& Params) override;
 
-        bool Initialize(const InitializeParams& Params) override;
-
-        bool Close() override;
+        bool Destroy() override;
 
         [[nodiscard]] bool IsValid() const override;
-
-        [[nodiscard]] bool CreateAndBindGlContext() override;
 
         ~WindowsWindow() override;
 
         [[nodiscard]] glm::ivec2 GetSize() const override;
 
-        void Swap() override;
+        bool Swap() override;
+
+        void HandleWindowSizeChanged() override;
+
+        WindowRenderData GetCurrentRenderTargetView() const override;
 
     private:
 
-        SDL_Window* Window {};
+        std::shared_ptr<RenderApi::Core::RenderApi> RenderApi {};
 
+        int DescriptorIncrementSize {-1};
+
+        SDL_Window* Window {};
+        HWND WindowHandle {};
+
+        Microsoft::WRL::ComPtr<IDXGISwapChain4> SwapChain {};
+        int SwapChainBufferIndex {};
+
+        std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, SWAP_CHAIN_BUFFER_COUNT> RenderTargets {};
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> RtvCpuDescriptorHeap {};
+
+        bool CreateUpdateSwapChain();
+        bool CreateUpdateRenderTargets();
     };
 }
 

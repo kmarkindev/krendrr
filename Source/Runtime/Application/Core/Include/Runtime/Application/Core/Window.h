@@ -1,6 +1,9 @@
 #pragma once
 
+#include <memory>
 #include <string_view>
+
+#include "Runtime/RenderApi/Core/RenderApi.h"
 #include "glm/vec2.hpp"
 
 namespace krendrr::Runtime::Application::Core
@@ -29,17 +32,13 @@ namespace krendrr::Runtime::Application::Core
             glm::ivec2 Size {};
         };
 
-        explicit Window(Application* Application);
-
-        [[nodiscard]] Application* GetApplication() const;
-
         virtual ~Window() = default;
 
-        static Window* Create(Application* Application, const InitializeParams& Params);
+        static Window* Create(const std::shared_ptr<RenderApi::Core::RenderApi>& RenderApi, const InitializeParams& Params);
 
-        virtual bool Initialize(const InitializeParams& Params) = 0;
+        virtual bool Initialize(const std::shared_ptr<RenderApi::Core::RenderApi>& RenderApi, const InitializeParams& Params) = 0;
 
-        virtual bool Close() = 0;
+        virtual bool Destroy() = 0;
 
         /**
          * Checks if this object holds valid window.
@@ -47,19 +46,25 @@ namespace krendrr::Runtime::Application::Core
          */
         [[nodiscard]] virtual bool IsValid() const = 0;
 
-        /**
-         * Creates (if was not created) and bind OpenGL context to this window
-         */
-        virtual bool CreateAndBindGlContext() = 0;
-
         [[nodiscard]] virtual glm::ivec2 GetSize() const = 0;
 
-        virtual void Swap() = 0;
+        virtual bool Swap() = 0;
 
-    private:
+        virtual void HandleWindowSizeChanged() = 0;
 
-        Application* ParentApplication {};
+        struct WindowRenderData
+        {
+            ID3D12Resource* WindowRenderTarget {};
+            D3D12_CPU_DESCRIPTOR_HANDLE Handle {};
+        };
 
+        /**
+         * Returns Render Target View in D3D12_RESOURCE_STATE_PRESENT
+         * Note: After Swap, buffer may change, so do not forget to update your SceneView objects
+         * Important: returned pointer and handle may become invalid in the next Application Tick because of window resize.
+         *  You should get new pointer every new tick. DO NOT create ComPtr for returned resource. It should be treated like weak pointer.
+         */
+        virtual WindowRenderData GetCurrentRenderTargetView() const = 0;
     };
 }
 

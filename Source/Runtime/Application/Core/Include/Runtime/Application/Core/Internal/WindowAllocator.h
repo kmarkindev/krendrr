@@ -5,7 +5,7 @@ namespace krendrr::Runtime::Application::Core
     class Application;
     class Window;
 
-    Window* ConstructWindowInstance(Application* Application);
+    Window* ConstructWindowInstance();
 }
 
 /**
@@ -14,8 +14,8 @@ namespace krendrr::Runtime::Application::Core
 #define IMPLEMENT_WINDOW_ALLOCATOR(WindowType) \
 namespace krendrr::Runtime::Application::Core \
 { \
-    Window* ConstructWindowInstance(Application* Application) \
+    Window* ConstructWindowInstance() \
     { \
-        return new WindowType {Application}; \
+        return new WindowType {}; \
     } \
 } \

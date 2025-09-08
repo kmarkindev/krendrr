@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Event.h"
+#include <string_view>
 
 namespace krendrr::Runtime::Application::Core
 {
