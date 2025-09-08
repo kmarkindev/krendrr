@@ -26,10 +26,13 @@ VSOutput VS_Main(VSInput Input)
     Output.NDC = CalculateNDC(TexturedMeshData.ModelMatrix, MatrixData.FaceViewProjectionMatrix, Input.Position);
     Output.WorldPosition = CalculateWorldPosition(TexturedMeshData.ModelMatrix, Input.Position);
 
+    Output.NDC.x *= -1.f;
+
     return Output;
 }
 
 float4 PS_Main(VSOutput Input) : SV_TARGET0
 {
-    return length(Input.WorldPosition - PointLightData.Position) / PointLightData.ShadowMapProjectionFarPlane;
+    float ShadowValue = abs(length(Input.WorldPosition - PointLightData.Position) / PointLightData.ShadowMapProjectionFarPlane);
+    return float4(ShadowValue, ShadowValue, ShadowValue, 1.0f);
 }

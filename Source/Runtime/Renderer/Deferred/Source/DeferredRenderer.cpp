@@ -65,6 +65,12 @@ bool DeferredRenderer::Initialize(std::shared_ptr<RenderApi::Core::RenderApi> Ne
 
 bool DeferredRenderer::Render(const std::span<Core::SceneView>& SceneViews)
 {
+    if (Scene->GetPointLights().size() > PointLightVolumePassData.MAX_DYNAMIC_POINT_LIGHTS_COUNT)
+    {
+        // TODO: add error log
+        return false;
+    }
+
     for (const Core::SceneView& SceneView : SceneViews)
     {
         if (!UpdateFrameDataConstantBuffer(SceneView))
@@ -1044,7 +1050,6 @@ bool DeferredRenderer::InitPointLightShadowCubeMapPass()
     // Create PSO
     {
         auto RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-        RasterizerState.FrontCounterClockwise = true;
         RasterizerState.CullMode = D3D12_CULL_MODE_FRONT;
 
         D3D12_GRAPHICS_PIPELINE_STATE_DESC PsoDesc {
@@ -1149,12 +1154,13 @@ bool DeferredRenderer::PointLightShadowCubeMapsPass()
 
             CommandList->SetGraphicsRootConstantBufferView(1, PointLight->GetConstantBufferGpuHandle());
 
-            const glm::mat4 ProjectionMatrix = glm::perspective(
+            glm::mat4 ProjectionMatrix = glm::perspective(
                 glm::radians(90.f),
                 1.0f,
                 1.0f,
                 PointLight->GetShadowFarDistance()
             );
+
             const std::array ShadowViewMatrices = {
                 glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{1, 0, 0}, {0, 1, 0}),
                 glm::lookAt(PointLight->GetPosition(), PointLight->GetPosition() + glm::vec3{-1, 0, 0}, {0, 1, 0}),
@@ -1242,7 +1248,7 @@ bool DeferredRenderer::InitPointLightVolumePass()
 {
     // Create Root
     {
-        CD3DX12_ROOT_PARAMETER RootParams[3] {};
+        CD3DX12_ROOT_PARAMETER RootParams[4] {};
 
         // Descriptor table with GBuffer textures
         CD3DX12_DESCRIPTOR_RANGE GBufferAndLightPassTexturesRange {};
@@ -1255,6 +1261,12 @@ bool DeferredRenderer::InitPointLightVolumePass()
 
         // Point Light constant buffer
         RootParams[2].InitAsConstantBufferView(1);
+
+        // Shadow Cube Map
+        CD3DX12_DESCRIPTOR_RANGE ShadowCubeMapRange {};
+        ShadowCubeMapRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 6);
+
+        RootParams[3].InitAsDescriptorTable(1, &ShadowCubeMapRange);
 
         const auto& StaticSamplers = GetCommonStaticSamplers();
 
@@ -1489,7 +1501,7 @@ bool DeferredRenderer::InitPointLightVolumePass()
     {
         D3D12_DESCRIPTOR_HEAP_DESC HeapDesc = {
             .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-            .NumDescriptors = GBuffer.TEXTURES_COUNT,
+            .NumDescriptors = GBuffer.TEXTURES_COUNT + PointLightVolumePassData.MAX_DYNAMIC_POINT_LIGHTS_COUNT,
             .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
         };
 
@@ -1604,9 +1616,35 @@ bool DeferredRenderer::PointLightVolumesPass(const Core::SceneView& SceneView)
 
     // Draw color based on stencil buffers
     {
+        int PointLightIndex = 0;
+
         for (const auto& PointLight : Scene->GetPointLights())
         {
             CommandList->SetGraphicsRootConstantBufferView(2, PointLight->GetConstantBufferGpuHandle());
+
+            const unsigned SrvIncrement = RenderApi->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+            CD3DX12_CPU_DESCRIPTOR_HANDLE CpuShadowCubeMapSrvHandle {
+                PointLightVolumePassData.GpuDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+                static_cast<int>(GBuffer.TEXTURES_COUNT) + PointLightIndex,
+                SrvIncrement
+            };
+
+            RenderApi->GetDevice()
+                ->CopyDescriptorsSimple(
+                    1,
+                    CpuShadowCubeMapSrvHandle,
+                    PointLight->GetShadowCubeMapSrvHandle(),
+                    D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
+                );
+
+            CD3DX12_GPU_DESCRIPTOR_HANDLE GpuShadowCubeMapSrvHandle {
+                PointLightVolumePassData.GpuDescriptorHeap->GetGPUDescriptorHandleForHeapStart(),
+                static_cast<int>(GBuffer.TEXTURES_COUNT) + PointLightIndex,
+                SrvIncrement
+            };
+
+            CommandList->SetGraphicsRootDescriptorTable(3, GpuShadowCubeMapSrvHandle);
 
             D3D12_CPU_DESCRIPTOR_HANDLE RtvHandle = LightPassData.CpuRtvHeap->GetCPUDescriptorHandleForHeapStart();
             D3D12_CPU_DESCRIPTOR_HANDLE DsvHandle = PointLight->GetDepthStencilVolumeDsvHandle();
@@ -1620,6 +1658,8 @@ bool DeferredRenderer::PointLightVolumesPass(const Core::SceneView& SceneView)
             {
                 CommandList->DrawInstanced(SphereMesh->GetPrimitivesCount(), 1, 0, 0);
             }
+
+            ++PointLightIndex;
         }
     }
 

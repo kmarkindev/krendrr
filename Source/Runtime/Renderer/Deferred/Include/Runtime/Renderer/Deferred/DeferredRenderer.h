@@ -205,6 +205,10 @@ namespace krendrr::Runtime::Renderer::Deferred
 
         struct PointLightVolumePassData
         {
+            // TODO: uncap this, by implementing static cubemaps
+            // (baked before rendering starts. e.g. during renderer init or when point light is rendered for the first time)
+            constexpr static inline unsigned MAX_DYNAMIC_POINT_LIGHTS_COUNT = 10;
+
             Microsoft::WRL::ComPtr<ID3D12PipelineState> StencilPipelineState {};
             Microsoft::WRL::ComPtr<ID3D12PipelineState> ColorPipelineState {};
 

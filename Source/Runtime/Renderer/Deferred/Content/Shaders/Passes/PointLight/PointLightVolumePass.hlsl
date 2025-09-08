@@ -9,6 +9,8 @@
 ConstantBuffer<ConstBuff_Frame> FrameData : register(b0);
 ConstantBuffer<ConstBuff_PointLight> PointLightData : register(b1);
 
+TextureCube ShadowCubeMap : register(t6);
+
 float4 VS_Main(VSInput Input) : SV_POSITION
 {
     return CalculateNDC(PointLightData.ModelMatrix, FrameData.ViewMatrix, FrameData.ProjectionMatrix, Input.Position);
@@ -45,7 +47,14 @@ float4 PS_Main(float4 SvPosition : SV_POSITION) : SV_TARGET0
 
     // Shadow
     {
+        float ShadowMapDepthDistance = ShadowCubeMap.Sample(DefaultSampler, LightDirection).r * PointLightData.ShadowMapProjectionFarPlane;
+        float ShadowBias = max(0.05 * (1.0 - dot(WorldNormal, LightDirection)), 0.005);
 
+        float ShadowValue = ShadowMapDepthDistance - ShadowBias <= PointLightDistance ? 1.f : 0.f;
+
+        // TODO: add PFC
+
+        LightColor *= 1.0f - ShadowValue;
     }
 
     return float4(DiffuseColor * LightColor, 1.f);
