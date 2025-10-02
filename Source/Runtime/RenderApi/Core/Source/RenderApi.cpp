@@ -61,6 +61,11 @@ namespace krendrr::Runtime::RenderApi::Core
         return D3dCopyCommandQueue;
     }
 
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> RenderApi::GetComputeQueue() const
+    {
+        return D3dComputeCommandQueue;
+    }
+
     Microsoft::WRL::ComPtr<IDXGIFactory6> RenderApi::GetDXGIFactory() const
     {
         return DxgiFactory;
@@ -260,6 +265,20 @@ namespace krendrr::Runtime::RenderApi::Core
             )
 
             D3dCopyCommandQueue->SetName(L"Copy Command Queue");
+        }
+
+        // Compute
+        {
+            D3D12_COMMAND_QUEUE_DESC QueueDesc = {};
+            QueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+            QueueDesc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
+
+            CHECKED(
+                D3dDevice->CreateCommandQueue(&QueueDesc, IID_PPV_ARGS(&D3dComputeCommandQueue)),
+                "Failed to create Compute command queue"
+            )
+
+            D3dComputeCommandQueue->SetName(L"Compute Command Queue");
         }
 
         return true;

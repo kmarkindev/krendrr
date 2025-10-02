@@ -3,7 +3,6 @@
 #include <dxgi1_6.h>
 #include <array>
 #include <span>
-
 #include "d3dx12/d3dx12.h"
 
 namespace krendrr::Runtime::RenderApi::Core
@@ -55,6 +54,8 @@ namespace krendrr::Runtime::RenderApi::Core
         // thread-safe
         [[nodiscard]] Microsoft::WRL::ComPtr<ID3D12CommandQueue> GetCopyQueue() const;
         // thread-safe
+        [[nodiscard]] Microsoft::WRL::ComPtr<ID3D12CommandQueue> GetComputeQueue() const;
+        // thread-safe
         [[nodiscard]] Microsoft::WRL::ComPtr<IDXGIFactory6> GetDXGIFactory() const;
 
         [[nodiscard]] bool IsShadersDebugEnabled() const;
@@ -93,6 +94,7 @@ namespace krendrr::Runtime::RenderApi::Core
         Microsoft::WRL::ComPtr<ID3D12Device> D3dDevice {};
         Microsoft::WRL::ComPtr<ID3D12CommandQueue> D3dDirectCommandQueue {};
         Microsoft::WRL::ComPtr<ID3D12CommandQueue> D3dCopyCommandQueue {};
+        Microsoft::WRL::ComPtr<ID3D12CommandQueue> D3dComputeCommandQueue {};
         Microsoft::WRL::ComPtr<IDXGIFactory6> DxgiFactory {};
 
         bool bShadersDebugEnabled {};
