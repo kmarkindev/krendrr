@@ -53,8 +53,9 @@ Texture::TextureLoadOperation Texture::Load(const RenderApi::Core::RenderApi& Re
         return {};
     }
 
+    Size = glm::uvec2(Width, Height);
+
     // Note: stbi returns channels only as 8-bit components, so make sure we use 8 bit per channel when specifying texture format
-    DXGI_FORMAT Format {};
     switch (Channels)
     {
         case 1:
@@ -79,19 +80,16 @@ Texture::TextureLoadOperation Texture::Load(const RenderApi::Core::RenderApi& Re
             return {};
     }
 
-    std::size_t Levels = Params.MipMapsCount;
-    if(Levels == 0)
+    MipsCount = Params.MipMapsCount;
+    if(MipsCount == 0)
     {
         // calculate how many mip maps we need to generate for the full chain
-        Levels = std::floor(std::log2(Width)) + 1;
+        MipsCount = std::floor(std::log2(Width)) + 1;
     }
 
-    // Generate Mip Maps
-    {
-        // TODO: generate mipmaps
-        // Set levels to 1 since we don't generate mipmaps
-        Levels = 1;
-    }
+    // Mips are not supported for non-square textures, or when size is not power of 2
+    if (Size.x != Size.y || std::sqrt(Size.x) != std::floor(std::sqrt(Size.x)))
+        MipsCount = 1;
 
     // Set up upload buffer
     const std::size_t TextureBufferSize = Width * Height * Channels;
@@ -102,7 +100,7 @@ Texture::TextureLoadOperation Texture::Load(const RenderApi::Core::RenderApi& Re
 
     // Create texture buffer
 
-    const CD3DX12_RESOURCE_DESC ResourceDesc = CD3DX12_RESOURCE_DESC::Tex2D(Format, Width, Height, 1, Levels);
+    const CD3DX12_RESOURCE_DESC ResourceDesc = CD3DX12_RESOURCE_DESC::Tex2D(Format, Width, Height, 1, MipsCount, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
     const CD3DX12_HEAP_PROPERTIES HeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 
     CHECKED(
@@ -168,6 +166,26 @@ D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetTextureHandle() const
 D3D12_GPU_VIRTUAL_ADDRESS Texture::GetTextureGpuAddress() const
 {
     return TextureBuffer->GetGPUVirtualAddress();
+}
+
+Microsoft::WRL::ComPtr<ID3D12Resource> Texture::GetResource() const
+{
+    return TextureBuffer;
+}
+
+DXGI_FORMAT Texture::GetFormat() const
+{
+    return Format;
+}
+
+glm::uvec2 Texture::GetSize() const
+{
+    return Size;
+}
+
+unsigned Texture::GetMipsCount() const
+{
+    return MipsCount;
 }
 
 bool Texture::CheckLoaded() const

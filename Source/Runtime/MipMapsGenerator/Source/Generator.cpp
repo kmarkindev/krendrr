@@ -4,20 +4,21 @@
 #include "Runtime/RenderApi/Core/ApiCallCheck.h"
 #include <d3dcompiler.h>
 #include <algorithm>
+#include <cmath>
 
 namespace krendrr::Runtime::MipMapsGenerator
 {
 
-    bool Generator::GenerateMipMaps(RenderApi::Core::RenderApi& RenderApi, const std::span<TextureToProcess>& TexturesToProcess)
+    bool Generator::GenerateMipMaps(const RenderApi::Core::RenderApi& RenderApi, const std::span<TextureToProcess>& TexturesToProcess)
     {
         // Allocate everything if not allocated
         if (!ComputePipelineState)
         {
-            CD3DX12_ROOT_PARAMETER RootParams[3] {};
+            CD3DX12_ROOT_PARAMETER RootParams[2] {};
 
             CD3DX12_DESCRIPTOR_RANGE Ranges[2] {};
             Ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
-            Ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1);
+            Ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 1);
 
             RootParams[0].InitAsDescriptorTable(2, Ranges);
             RootParams[1].InitAsConstants(3, 0);
@@ -57,8 +58,8 @@ namespace krendrr::Runtime::MipMapsGenerator
                 {
                     Microsoft::WRL::ComPtr<ID3DBlob> CompilationErrorBlob {};
 
-                    HRESULT VSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_mip_maps_generator/Shaders/GenerateMips.hlsl",
-                        nullptr, nullptr, "Main", "vs_5_1",
+                    HRESULT VSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_mipmapsgenerator/Shaders/GenerateMips.hlsl",
+                        nullptr, nullptr, "Main", "cs_5_1",
                         RenderApi.GetShaderCompileFlags(), 0, &Shader, &CompilationErrorBlob);
 
                     if(FAILED(VSCompileResult) || CompilationErrorBlob != nullptr)
@@ -75,7 +76,7 @@ namespace krendrr::Runtime::MipMapsGenerator
 
             D3D12_COMPUTE_PIPELINE_STATE_DESC PsoDesc {
                 .pRootSignature = ComputeRootSignature.Get(),
-                .CS = CD3DX12_SHADER_BYTECODE {},
+                .CS = CD3DX12_SHADER_BYTECODE {Shader.Get()},
             };
 
             CHECKED(
@@ -101,6 +102,7 @@ namespace krendrr::Runtime::MipMapsGenerator
         }
 
         const unsigned DescriptorOffset = RenderApi.GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        constexpr unsigned DescriptorsPerInvocation = 2;
 
         // Create descriptors
         {
@@ -111,7 +113,7 @@ namespace krendrr::Runtime::MipMapsGenerator
                 for (int i = 0; i < TexturesToProcess.size(); i++)
                 {
                     const TextureToProcess& Texture = TexturesToProcess[i];
-                    InvocationsCount += Texture.MipMapCount;
+                    InvocationsCount += Texture.MipMapCount - 1; // -1 since to not include mip map 0
                 }
 
                 if (InvocationsCount == 0)
@@ -122,7 +124,7 @@ namespace krendrr::Runtime::MipMapsGenerator
 
                 D3D12_DESCRIPTOR_HEAP_DESC HeapDesc {
                     .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-                    .NumDescriptors = InvocationsCount * 2, // one SRV and UAV handle for each invocation
+                    .NumDescriptors = InvocationsCount * DescriptorsPerInvocation, // two UAV handles for each invocation
                     .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
                 };
 
@@ -133,8 +135,12 @@ namespace krendrr::Runtime::MipMapsGenerator
                 )
             }
 
+            CD3DX12_CPU_DESCRIPTOR_HANDLE Handle {
+                ComputeGpuSrvUavDescriptorHeap->GetCPUDescriptorHandleForHeapStart()
+            };
+
             // Then fill descriptors, texture by texture, mip level by mip level
-            for (int i = 0; i < TexturesToProcess.size(); i++)
+            for (unsigned i = 0; i < TexturesToProcess.size(); i++)
             {
                 const TextureToProcess& Texture = TexturesToProcess[i];
 
@@ -146,23 +152,17 @@ namespace krendrr::Runtime::MipMapsGenerator
 
                 for (unsigned mipIndex = 0; mipIndex < TexturesToProcess[i].MipMapCount - 1; mipIndex++)
                 {
-                    D3D12_UNORDERED_ACCESS_VIEW_DESC UavDesc = CD3DX12_UNORDERED_ACCESS_VIEW_DESC::Tex2D(Texture.Format, mipIndex + 1);
-
-                    CD3DX12_CPU_DESCRIPTOR_HANDLE Handle {
-                        ComputeGpuSrvUavDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
-                        i * 2,
-                        DescriptorOffset
-                    };
-
+                    D3D12_UNORDERED_ACCESS_VIEW_DESC ExistingMipLevelDesc = CD3DX12_UNORDERED_ACCESS_VIEW_DESC::Tex2D(Texture.Format, mipIndex);
                     RenderApi.GetDevice()
-                        ->CreateUnorderedAccessView(Texture.Resource, nullptr, &UavDesc, Handle);
-
-                    D3D12_SHADER_RESOURCE_VIEW_DESC SrvDesc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(Texture.Format, 1, 0);
+                        ->CreateUnorderedAccessView(Texture.Resource, nullptr, &ExistingMipLevelDesc, Handle);
 
                     Handle.Offset(1, DescriptorOffset);
 
+                    D3D12_UNORDERED_ACCESS_VIEW_DESC NonExistingMipLevelDesc = CD3DX12_UNORDERED_ACCESS_VIEW_DESC::Tex2D(Texture.Format, mipIndex + 1);
                     RenderApi.GetDevice()
-                        ->CreateShaderResourceView(Texture.Resource, &SrvDesc, Handle);
+                        ->CreateUnorderedAccessView(Texture.Resource, nullptr, &NonExistingMipLevelDesc, Handle);
+
+                    Handle.Offset(1, DescriptorOffset);
                 }
             }
         }
@@ -171,37 +171,52 @@ namespace krendrr::Runtime::MipMapsGenerator
         CHECKED_S(ComputeCommandList->Reset(ComputeCommandAllocator.Get(), ComputePipelineState.Get()));
 
         ComputeCommandList->SetComputeRootSignature(ComputeRootSignature.Get());
+        ComputeCommandList->SetDescriptorHeaps(1, ComputeGpuSrvUavDescriptorHeap.GetAddressOf());
+
+        CD3DX12_GPU_DESCRIPTOR_HANDLE Handle {
+            ComputeGpuSrvUavDescriptorHeap->GetGPUDescriptorHandleForHeapStart(),
+        };
 
         // Iterate texture resources, fill command list and execute it
+        for (int i = 0; i < TexturesToProcess.size(); i++)
         {
-            for (int i = 0; i < TexturesToProcess.size(); i++)
+            const TextureToProcess& Texture = TexturesToProcess[i];
+
+            auto InBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
+                Texture.Resource,
+                D3D12_RESOURCE_STATE_COMMON,
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+            );
+
+            ComputeCommandList->ResourceBarrier(1, &InBarrier);
+
+            for (unsigned mipIndex = 0; mipIndex < TexturesToProcess[i].MipMapCount - 1; mipIndex++)
             {
-                const TextureToProcess& Texture = TexturesToProcess[i];
+                ComputeCommandList->SetComputeRootDescriptorTable(0, Handle);
+                Handle.Offset(DescriptorsPerInvocation, DescriptorOffset);
 
-                for (unsigned mipIndex = 0; mipIndex < TexturesToProcess[i].MipMapCount - 1; mipIndex++)
-                {
-                    CD3DX12_GPU_DESCRIPTOR_HANDLE Handle {
-                        ComputeGpuSrvUavDescriptorHeap->GetGPUDescriptorHandleForHeapStart(),
-                        i * 2,
-                        DescriptorOffset
-                    };
-                    ComputeCommandList->SetComputeRootDescriptorTable(0, Handle);
+                uint32_t RootConstants[] = {
+                    Texture.MipZeroSize / static_cast<unsigned>(std::pow(2, mipIndex)),
+                    mipIndex,
+                    Texture.bShouldNormalize ? 1u : 0u
+                };
+                ComputeCommandList->SetComputeRoot32BitConstants(1, std::size(RootConstants), RootConstants, 0);
 
-                    uint32_t RootConstants[] = {
-                        Texture.MipZeroSize,
-                        mipIndex,
-                        Texture.bShouldNormalize ? 1u : 0u,
-                    };
-                    ComputeCommandList->SetComputeRoot32BitConstants(1, std::size(RootConstants), RootConstants, 0);
+                constexpr static unsigned THREAD_GROUP_SIZE = 32;
+                constexpr static unsigned PROCESS_BLOCK_SIZE = 2;
 
-                    constexpr static unsigned THREAD_GROUP_SIZE = 32;
-                    constexpr static unsigned PROCESS_BLOCK_SIZE = 2;
-
-                    // we iterate using 2x2 blocks, so reduce dispatch size here and in shader, thread each index as a step of 2
-                    unsigned DispatchSize = std::max(1u, (Texture.MipZeroSize % THREAD_GROUP_SIZE) / PROCESS_BLOCK_SIZE);
-                    ComputeCommandList->Dispatch(DispatchSize, DispatchSize, 1);
-                }
+                // we iterate using 2x2 blocks, so reduce dispatch size here and in shader, thread each index as a step of 2
+                unsigned DispatchSize = std::max(1u, (Texture.MipZeroSize / THREAD_GROUP_SIZE) / PROCESS_BLOCK_SIZE);
+                ComputeCommandList->Dispatch(DispatchSize, DispatchSize, 1);
             }
+
+            auto OutBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
+                Texture.Resource,
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                D3D12_RESOURCE_STATE_COMMON
+            );
+
+            ComputeCommandList->ResourceBarrier(1, &OutBarrier);
         }
 
         CHECKED_S(ComputeCommandList->Close());

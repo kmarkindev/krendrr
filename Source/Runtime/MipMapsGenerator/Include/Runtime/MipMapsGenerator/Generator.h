@@ -19,7 +19,7 @@ public:
     struct TextureToProcess
     {
         ID3D12Resource* Resource {};
-        DXGI_FORMAT Format;
+        DXGI_FORMAT Format {};
         unsigned MipZeroSize {};
         unsigned MipMapCount {};
         bool bShouldNormalize {};
@@ -31,7 +31,7 @@ public:
      *
      * Expects texture to have a square size, and the size should the power of 2.
      */
-    bool GenerateMipMaps(RenderApi::Core::RenderApi& RenderApi, const std::span<TextureToProcess>& TexturesToProcess);
+    bool GenerateMipMaps(const RenderApi::Core::RenderApi& RenderApi, const std::span<TextureToProcess>& TexturesToProcess);
 
 private:
 

@@ -4,6 +4,7 @@
 #include <wrl/client.h>
 #include <d3dx12/d3dx12.h>
 
+#include "glm/vec2.hpp"
 #include "Runtime/RenderApi/Core/RenderApi.h"
 
 namespace krendrr::Runtime::Renderer::Core
@@ -58,9 +59,18 @@ namespace krendrr::Runtime::Renderer::Core
         D3D12_CPU_DESCRIPTOR_HANDLE GetTextureHandle() const;
         D3D12_GPU_VIRTUAL_ADDRESS GetTextureGpuAddress() const;
 
+        Microsoft::WRL::ComPtr<ID3D12Resource> GetResource() const;
+        DXGI_FORMAT GetFormat() const;
+        glm::uvec2 GetSize() const;
+        unsigned GetMipsCount() const;
+
     private:
 
         bool CheckLoaded() const;
+
+        DXGI_FORMAT Format {};
+        glm::uvec2 Size {};
+        unsigned MipsCount {};
 
         Microsoft::WRL::ComPtr<ID3D12Resource> TextureBuffer {};
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CpuSrvHeap {};

@@ -10,4 +10,5 @@ target_link_libraries(${TARGET_NAME} PRIVATE
     krendrr::thirdparty::assimp
     krendrr::runtime::threadpool
     krendrr::thirdparty::nvtx
+    krendrr::runtime::mipmapsgenerator
 )

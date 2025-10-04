@@ -7,6 +7,9 @@
 #include <assimp/postprocess.h>
 #include <glm/fwd.hpp>
 #include <glm/vec2.hpp>
+
+#include "../../../../Build/win-msvc-debug/_deps/assimp-src/code/AssetLib/Blender/BlenderScene.h"
+#include "Runtime/MipMapsGenerator/Generator.h"
 #include "Runtime/RenderApi/Core/ApiCallCheck.h"
 #include "Runtime/Renderer/Core/TexturedMesh/Mesh.h"
 #include "Runtime/Renderer/Core/TexturedMesh/Texture.h"
@@ -18,6 +21,7 @@ namespace krendrr::Runtime::ModelLoader
     struct LoadData
     {
         std::unordered_map<std::string, std::shared_ptr<Renderer::Core::Texture>> TextureCache {};
+        std::vector<MipMapsGenerator::Generator::TextureToProcess> TexturesToGenerateMipMaps {};
         std::mutex TextureCacheMutex {};
 
         LoadResult Result {};
@@ -33,6 +37,7 @@ namespace krendrr::Runtime::ModelLoader
 
         std::mutex UploadBuffersMutex {};
         std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> UploadBuffers {};
+
     };
 
     void ProcessAiNodeJob(
@@ -257,6 +262,17 @@ namespace krendrr::Runtime::ModelLoader
 
                             TextureCacheLock.lock();
 
+                            if (Texture->GetMipsCount() > 1)
+                            {
+                                LoadData.TexturesToGenerateMipMaps.push_back({
+                                    .Resource = Texture->GetResource().Get(),
+                                    .Format = Texture->GetFormat(),
+                                    .MipZeroSize = Texture->GetSize().x,
+                                    .MipMapCount = Texture->GetMipsCount(),
+                                    .bShouldNormalize = Type == aiTextureType_NORMALS
+                                });
+                            }
+
                             LoadData.TextureCache.insert({TexturePath, Texture});
                         }
 
@@ -462,6 +478,29 @@ namespace krendrr::Runtime::ModelLoader
         {
             // TODO: add error log
             return {};
+        }
+
+        // Generate Mip Maps
+        if (!LoadData.TexturesToGenerateMipMaps.empty())
+        {
+            MipMapsGenerator::Generator Generator {};
+
+            if (!Generator.GenerateMipMaps(RenderApi, LoadData.TexturesToGenerateMipMaps))
+            {
+                // TODO: add error log
+                return {};
+            }
+
+            CHECKED(
+                RenderApi.GetComputeQueue()
+                    ->Signal(Fence.Get(), 2),
+                "Can't signal fence"
+            )
+
+            CHECKED(
+                Fence->SetEventOnCompletion(2, nullptr),
+                "Can't wait on fence"
+            )
         }
 
         // TODO: add success log
