@@ -7,8 +7,6 @@
 #include <assimp/postprocess.h>
 #include <glm/fwd.hpp>
 #include <glm/vec2.hpp>
-
-#include "../../../../Build/win-msvc-debug/_deps/assimp-src/code/AssetLib/Blender/BlenderScene.h"
 #include "Runtime/MipMapsGenerator/Generator.h"
 #include "Runtime/RenderApi/Core/ApiCallCheck.h"
 #include "Runtime/Renderer/Core/TexturedMesh/Mesh.h"
