@@ -195,18 +195,20 @@ namespace krendrr::Runtime::MipMapsGenerator
                 ComputeCommandList->SetComputeRootDescriptorTable(0, Handle);
                 Handle.Offset(DescriptorsPerInvocation, DescriptorOffset);
 
+                unsigned CurrentMipSize = Texture.MipZeroSize / static_cast<unsigned>(std::pow(2, mipIndex));
+
                 uint32_t RootConstants[] = {
-                    Texture.MipZeroSize / static_cast<unsigned>(std::pow(2, mipIndex)),
+                    CurrentMipSize,
                     mipIndex,
                     Texture.bShouldNormalize ? 1u : 0u
                 };
                 ComputeCommandList->SetComputeRoot32BitConstants(1, std::size(RootConstants), RootConstants, 0);
 
-                constexpr static unsigned THREAD_GROUP_SIZE = 32;
+                constexpr static unsigned THREAD_GROUP_SIZE = 8;
                 constexpr static unsigned PROCESS_BLOCK_SIZE = 2;
 
                 // we iterate using 2x2 blocks, so reduce dispatch size here and in shader, thread each index as a step of 2
-                unsigned DispatchSize = std::max(1u, (Texture.MipZeroSize / THREAD_GROUP_SIZE) / PROCESS_BLOCK_SIZE);
+                unsigned DispatchSize = std::max(1u, (CurrentMipSize / THREAD_GROUP_SIZE) / PROCESS_BLOCK_SIZE);
                 ComputeCommandList->Dispatch(DispatchSize, DispatchSize, 1);
             }
 

@@ -1,7 +1,3 @@
-
-RWTexture2D<float4> CurrentMip : register(u0);
-RWTexture2D<float4> NextMip : register(u1);
-
 struct ConstBuff_RootConstants
 {
     uint CurrentMipSize;
@@ -9,14 +5,23 @@ struct ConstBuff_RootConstants
     bool ShouldNormalize;
 };
 
+RWTexture2D<float4> CurrentMip : register(u0);
+RWTexture2D<float4> NextMip : register(u1);
+
 ConstantBuffer<ConstBuff_RootConstants> RootConstants : register(b0);
 
 // Each shader invokation processes 2x2 blocks of mip level N, to generate one pixel for mip level N+1.
-[numthreads(32, 32, 1)]
+// 8x8 is optimal here, since it fits 32 and 64 warp sizes and covers most mip map sizes
+[numthreads(8, 8, 1)]
 void Main(uint3 Id : SV_DispatchThreadID)
 {
     uint xIndex = Id.x * 2;
     uint yIndex = Id.y * 2;
+
+    // we process in blocks of 8x8, so in case current mip level has size less than 8x8 (like 4x4 and less),
+    // cancel shader invokations that are not inside provided mip level
+    if(xIndex + 1 > RootConstants.CurrentMipSize || yIndex + 1 > RootConstants.CurrentMipSize)
+        return;
 
     float4 tlPixel = CurrentMip.Load(int2(xIndex, yIndex));
     float4 trPixel = CurrentMip.Load(int2(xIndex + 1, yIndex));
