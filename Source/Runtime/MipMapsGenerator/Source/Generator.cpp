@@ -210,6 +210,11 @@ namespace krendrr::Runtime::MipMapsGenerator
                 // we iterate using 2x2 blocks, so reduce dispatch size here and in shader, thread each index as a step of 2
                 unsigned DispatchSize = std::max(1u, (CurrentMipSize / THREAD_GROUP_SIZE) / PROCESS_BLOCK_SIZE);
                 ComputeCommandList->Dispatch(DispatchSize, DispatchSize, 1);
+
+                // Each next CS invocation depends on data from previous invocation,
+                // so add a UAV barrier to restrict reads/writes while previous CS invocation is not done
+                auto UavBarrier = CD3DX12_RESOURCE_BARRIER::UAV(Texture.Resource);
+                ComputeCommandList->ResourceBarrier(1, &UavBarrier);
             }
 
             auto OutBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
