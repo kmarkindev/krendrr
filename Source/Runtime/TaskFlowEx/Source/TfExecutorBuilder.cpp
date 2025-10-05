@@ -14,7 +14,9 @@ namespace krendrr::Runtime::TaskFlowEx
 
         void on_entry(tf::WorkerView wv, tf::TaskView task_view) override
         {
-            JobRange.emplace(task_view.name(), nvtx3::rgb{0, 255, 0});
+            const auto& TaskName = task_view.name();
+
+            JobRange.emplace(TaskName.empty() ? "Unnamed Job" : TaskName, nvtx3::rgb{0, 255, 0});
         }
 
         void on_exit(tf::WorkerView wv, tf::TaskView task_view) override
@@ -31,7 +33,7 @@ namespace krendrr::Runtime::TaskFlowEx
     std::shared_ptr<tf::Executor> Builder::Build()
     {
         std::shared_ptr<tf::Executor> Executor = std::make_shared<tf::Executor>(
-            WorkersCount > 0 ? WorkersCount : std::thread::hardware_concurrency()
+            WorkersCount > 0 ? WorkersCount : std::thread::hardware_concurrency() - 1
         );
 
         if (bIsNvtxObserverAttached)

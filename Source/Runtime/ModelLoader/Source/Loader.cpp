@@ -437,6 +437,8 @@ namespace krendrr::Runtime::ModelLoader
             }
         }
 
+        // TODO: construct task graph (task flow) instead of vector of futures, then corun this task graph instead of locking of futures
+
         // Wait for all jobs to complete
         for (const auto & Future: Futures)
             Future.wait();
