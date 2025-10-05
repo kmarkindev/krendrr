@@ -132,6 +132,12 @@ namespace krendrr::Runtime::RenderApi::Core
         return *this;
     }
 
+    GraphicsPsoBuilder& GraphicsPsoBuilder::SetRenderTargets(std::initializer_list<DXGI_FORMAT> NewRenderTargetFormats, DXGI_FORMAT NewDepthStencilFormat)
+    {
+        const std::span Formats = NewRenderTargetFormats;
+        return SetRenderTargets(Formats, NewDepthStencilFormat);
+    }
+
     Microsoft::WRL::ComPtr<ID3D12PipelineState> GraphicsPsoBuilder::Build(const std::wstring_view& PsoName)
     {
         if (!RenderApi)

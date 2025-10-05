@@ -9,6 +9,7 @@
 #include "Runtime/RenderApi/Core/ApiCallCheck.h"
 #include "Runtime/RenderApi/Core/Builders/ConstBufferBuilder.h"
 #include "Runtime/RenderApi/Core/ContentFolderD3DInclude.h"
+#include "Runtime/RenderApi/Core/Builders/PsoBuilder.h"
 #include "Runtime/Renderer/Core/Lights/PointLight.h"
 
 namespace krendrr::Runtime::Renderer::Deferred
@@ -240,86 +241,23 @@ bool DeferredRenderer::InitializeGeometryPass()
         )
     }
 
-    // Load Shaders
-    Microsoft::WRL::ComPtr<ID3DBlob> VertexShader {};
-    Microsoft::WRL::ComPtr<ID3DBlob> PixelShader {};
-    {
-        Microsoft::WRL::ComPtr<ID3DBlob> CompilationErrorBlob {};
+    GeometryPassData.PipelineState = RenderApi::Core::GraphicsPsoBuilder::Create(RenderApi.get())
+        .SetRootSignature(GeometryPassData.RootSignature.Get())
+        .SetInputLayout(RenderApi->GetCommonMeshBufferLayout().Layout)
+        .SetVertexShader(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/GeometryPass.hlsl")
+        .SetPixelShader(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/GeometryPass.hlsl")
+        .SetRenderTargets({
+            DXGI_FORMAT_R8G8B8A8_UNORM,
+            DXGI_FORMAT_R32G32B32A32_FLOAT,
+            DXGI_FORMAT_R32G32B32A32_FLOAT,
+            DXGI_FORMAT_R8G8B8A8_UNORM,
+            DXGI_FORMAT_R8G8B8A8_UNORM,
+            DXGI_FORMAT_R8G8B8A8_UNORM
+        }, DXGI_FORMAT_D24_UNORM_S8_UINT)
+        .Build(L"Geometry Pass PSO");
 
-        RenderApi::Core::ContentFolderD3dInclude VertexShaderInclude {};
-
-        HRESULT VSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/GeometryPass.hlsl",
-            nullptr, &VertexShaderInclude, "VS_Main", "vs_5_1",
-            RenderApi->GetShaderCompileFlags(), 0, &VertexShader, &CompilationErrorBlob);
-
-        if(FAILED(VSCompileResult) || CompilationErrorBlob != nullptr)
-        {
-            std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
-            // TODO: log error
-
-            __debugbreak();
-
-            return false;
-        }
-
-        RenderApi::Core::ContentFolderD3dInclude PixelShaderInclude {};
-
-        HRESULT PSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/GeometryPass.hlsl",
-            nullptr, &PixelShaderInclude, "PS_Main", "ps_5_1",
-            RenderApi->GetShaderCompileFlags(), 0, &PixelShader, &CompilationErrorBlob);
-
-        if(FAILED(PSCompileResult) || CompilationErrorBlob != nullptr)
-        {
-            std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
-            // TODO: log error
-
-            __debugbreak();
-
-            return false;
-        }
-    }
-
-    // Create PSO
-    {
-        auto RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-        RasterizerState.FrontCounterClockwise = true;
-
-        D3D12_GRAPHICS_PIPELINE_STATE_DESC PsoDesc {
-            .pRootSignature = GeometryPassData.RootSignature.Get(),
-            .VS = CD3DX12_SHADER_BYTECODE(VertexShader.Get()),
-            .PS = CD3DX12_SHADER_BYTECODE(PixelShader.Get()),
-            .BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
-            .SampleMask = UINT_MAX,
-            .RasterizerState = RasterizerState,
-            .DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT),
-            .InputLayout = {
-                .pInputElementDescs = RenderApi->GetCommonMeshBufferLayout().Layout.data(),
-                .NumElements = static_cast<UINT>(RenderApi->GetCommonMeshBufferLayout().Layout.size())
-            },
-            .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
-            .NumRenderTargets = GBuffer.TEXTURES_COUNT,
-            .RTVFormats = {
-                DXGI_FORMAT_R8G8B8A8_UNORM,
-                DXGI_FORMAT_R32G32B32A32_FLOAT,
-                DXGI_FORMAT_R32G32B32A32_FLOAT,
-                DXGI_FORMAT_R8G8B8A8_UNORM,
-                DXGI_FORMAT_R8G8B8A8_UNORM,
-                DXGI_FORMAT_R8G8B8A8_UNORM,
-            },
-            .DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT,
-            .SampleDesc = {
-                .Count = 1
-            }
-        };
-
-        CHECKED(
-            RenderApi->GetDevice()
-                ->CreateGraphicsPipelineState(&PsoDesc, IID_PPV_ARGS(&GeometryPassData.PipelineState)),
-            "Failed to create PSO"
-        )
-
-        GeometryPassData.PipelineState->SetName(L"Geometry Pass PSO");
-    }
+    if (!GeometryPassData.PipelineState)
+        return false;
 
     // Create GPU srv heap for textured mesh texture handles
     {

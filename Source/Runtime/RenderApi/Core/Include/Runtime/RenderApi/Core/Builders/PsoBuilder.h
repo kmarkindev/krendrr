@@ -54,6 +54,7 @@ namespace krendrr::Runtime::RenderApi::Core
          * Required, no default value
          */
         GraphicsPsoBuilder& SetRenderTargets(std::span<const DXGI_FORMAT> NewRenderTargetFormats, DXGI_FORMAT NewDepthStencilFormat = DXGI_FORMAT_UNKNOWN);
+        GraphicsPsoBuilder& SetRenderTargets(std::initializer_list<DXGI_FORMAT> NewRenderTargetFormats, DXGI_FORMAT NewDepthStencilFormat = DXGI_FORMAT_UNKNOWN);
 
         /**
          * Use this function to change default blend state.
