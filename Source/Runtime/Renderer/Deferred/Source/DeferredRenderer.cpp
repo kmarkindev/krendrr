@@ -780,149 +780,56 @@ bool DeferredRenderer::AmbientDirectionalLightPass(const Core::SceneView& SceneV
 
 bool DeferredRenderer::InitPointLightShadowCubeMapPass()
 {
-    // Create Root
-    {
-        CD3DX12_ROOT_PARAMETER RootParams[4] {};
+    CD3DX12_ROOT_PARAMETER RootParams[4] {};
 
-        // Frame constant buffer
-        RootParams[0].InitAsConstantBufferView(0);
+    // Frame constant buffer
+    RootParams[0].InitAsConstantBufferView(0);
 
-        // Point light constant buffer
-        RootParams[1].InitAsConstantBufferView(1);
+    // Point light constant buffer
+    RootParams[1].InitAsConstantBufferView(1);
 
-        // Mesh constant buffer
-        RootParams[2].InitAsConstantBufferView(2);
+    // Mesh constant buffer
+    RootParams[2].InitAsConstantBufferView(2);
 
-        // View Projection matrix for cube map face
-        RootParams[3].InitAsConstants(16, 3);
+    // View Projection matrix for cube map face
+    RootParams[3].InitAsConstants(16, 3);
 
-        const auto& StaticSamplers = GetCommonStaticSamplers();
+    PointLightShadowCubeMapData.RootSignature = RenderApi::Core::RootSigBuilder::Create(RenderApi.get())
+        .SetRootParams(RootParams)
+        .SetStaticSamplers(GetCommonStaticSamplers())
+        .SetFlags(D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT)
+        .Build(L"Point Light Shadow Cube Map Pass Root Signature");
 
-        CD3DX12_ROOT_SIGNATURE_DESC RootSignatureDesc {};
-        RootSignatureDesc.Init(
-            std::size(RootParams),
-            RootParams,
-            StaticSamplers.size(),
-            StaticSamplers.data(),
-            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
-        );
+    auto RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+    RasterizerState.CullMode = D3D12_CULL_MODE_FRONT;
 
-        Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureBlob {};
-        Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureErrorBlob {};
+    PointLightShadowCubeMapData.PipelineState = RenderApi::Core::GraphicsPsoBuilder::Create(RenderApi.get())
+        .SetRootSignature(PointLightShadowCubeMapData.RootSignature.Get())
+        .SetInputLayout(RenderApi->GetCommonMeshBufferLayout().Layout)
+        .SetVertexShader(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/PointLight/PointLightShadowCubemapPass.hlsl")
+        .SetPixelShader(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/PointLight/PointLightShadowCubemapPass.hlsl")
+        .SetRenderTargets({
+            Core::PointLight::CUBE_MAP_FORMAT
+        }, Core::PointLight::CUBE_MAP_DEPTH_STENCIL_FORMAT)
+        .Build(L"Point Light Shadow Cube Map Pass PSO");
 
-        HRESULT RootSigSerResult = D3D12SerializeRootSignature(&RootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &RootSignatureBlob, &RootSignatureErrorBlob);
-        if (FAILED(RootSigSerResult))
-        {
-            std::string error (static_cast<const char*>(RootSignatureErrorBlob->GetBufferPointer()), RootSignatureErrorBlob->GetBufferSize());
-            __debugbreak();
-            return false;
-        }
+    if (!PointLightShadowCubeMapData.PipelineState)
+        return false;
 
-        CHECKED(
-            RenderApi->GetDevice()
-                ->CreateRootSignature(
-                    0,
-                    RootSignatureBlob->GetBufferPointer(),
-                    RootSignatureBlob->GetBufferSize(),
-                    IID_PPV_ARGS(&PointLightShadowCubeMapData.RootSignature)
-                ),
-            "Can't create root signature"
-        )
-    }
+    CHECKED(
+        RenderApi->GetDevice()
+        ->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&PointLightShadowCubeMapData.CommandAllocator)),
+        "Failed to create command allocator"
+    )
 
-    // Load Shaders
-    Microsoft::WRL::ComPtr<ID3DBlob> VertexShader {};
-    Microsoft::WRL::ComPtr<ID3DBlob> PixelShader {};
-    {
-        Microsoft::WRL::ComPtr<ID3DBlob> CompilationErrorBlob {};
+    CHECKED(
+        RenderApi->GetDevice()
+        ->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+            PointLightShadowCubeMapData.CommandAllocator.Get(), nullptr, IID_PPV_ARGS(&PointLightShadowCubeMapData.CommandList)),
+        "Failed to create command list"
+    )
 
-        RenderApi::Core::ContentFolderD3dInclude VertexShaderInclude {};
-
-        HRESULT VSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/PointLight/PointLightShadowCubemapPass.hlsl",
-            nullptr, &VertexShaderInclude, "VS_Main", "vs_5_1",
-            RenderApi->GetShaderCompileFlags(), 0, &VertexShader, &CompilationErrorBlob);
-
-        if(FAILED(VSCompileResult) || CompilationErrorBlob != nullptr)
-        {
-            std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
-            // TODO: log error
-
-            __debugbreak();
-
-            return false;
-        }
-
-        RenderApi::Core::ContentFolderD3dInclude PixelShaderInclude {};
-
-        HRESULT PSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/PointLight/PointLightShadowCubemapPass.hlsl",
-            nullptr, &PixelShaderInclude, "PS_Main", "ps_5_1",
-            RenderApi->GetShaderCompileFlags(), 0, &PixelShader, &CompilationErrorBlob);
-
-        if(FAILED(PSCompileResult) || CompilationErrorBlob != nullptr)
-        {
-            std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
-            // TODO: log error
-
-            __debugbreak();
-
-            return false;
-        }
-    }
-
-    // Create PSO
-    {
-        auto RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-        RasterizerState.CullMode = D3D12_CULL_MODE_FRONT;
-
-        D3D12_GRAPHICS_PIPELINE_STATE_DESC PsoDesc {
-            .pRootSignature = PointLightShadowCubeMapData.RootSignature.Get(),
-            .VS = CD3DX12_SHADER_BYTECODE(VertexShader.Get()),
-            .PS = CD3DX12_SHADER_BYTECODE(PixelShader.Get()),
-            .BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
-            .SampleMask = UINT_MAX,
-            .RasterizerState = RasterizerState,
-            .DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT),
-            .InputLayout = {
-                .pInputElementDescs = RenderApi->GetCommonMeshBufferLayout().Layout.data(),
-                .NumElements = static_cast<UINT>(RenderApi->GetCommonMeshBufferLayout().Layout.size())
-            },
-            .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
-            .NumRenderTargets = 1,
-            .RTVFormats = {
-                Core::PointLight::CUBE_MAP_FORMAT,
-            },
-            .DSVFormat = Core::PointLight::CUBE_MAP_DEPTH_STENCIL_FORMAT,
-            .SampleDesc = {
-                .Count = 1
-            }
-        };
-
-        CHECKED(
-            RenderApi->GetDevice()
-                ->CreateGraphicsPipelineState(&PsoDesc, IID_PPV_ARGS(&PointLightShadowCubeMapData.PipelineState)),
-            "Failed to create PSO"
-        )
-
-        PointLightShadowCubeMapData.PipelineState->SetName(L"Point Light Shadow Cube Map Pass PSO");
-    }
-
-    // Create command list and allocator
-    {
-        CHECKED(
-            RenderApi->GetDevice()
-                ->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&PointLightShadowCubeMapData.CommandAllocator)),
-            "Failed to create command allocator"
-        )
-
-        CHECKED(
-            RenderApi->GetDevice()
-                ->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
-                    PointLightShadowCubeMapData.CommandAllocator.Get(), nullptr, IID_PPV_ARGS(&PointLightShadowCubeMapData.CommandList)),
-            "Failed to create command list"
-        )
-
-        CHECKED_S(PointLightShadowCubeMapData.CommandList->Close());
-    }
+    CHECKED_S(PointLightShadowCubeMapData.CommandList->Close());
 
     return true;
 }
@@ -1068,119 +975,33 @@ bool DeferredRenderer::PointLightShadowCubeMapsPass()
 
 bool DeferredRenderer::InitPointLightVolumePass()
 {
-    // Create Root
-    {
-        CD3DX12_ROOT_PARAMETER RootParams[4] {};
+    CD3DX12_ROOT_PARAMETER RootParams[4] {};
 
-        // Descriptor table with GBuffer textures
-        CD3DX12_DESCRIPTOR_RANGE GBufferAndLightPassTexturesRange {};
-        GBufferAndLightPassTexturesRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, GBuffer.TEXTURES_COUNT, 0);
+    // Descriptor table with GBuffer textures
+    CD3DX12_DESCRIPTOR_RANGE GBufferAndLightPassTexturesRange {};
+    GBufferAndLightPassTexturesRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, GBuffer.TEXTURES_COUNT, 0);
 
-        RootParams[0].InitAsDescriptorTable(1, &GBufferAndLightPassTexturesRange);
+    RootParams[0].InitAsDescriptorTable(1, &GBufferAndLightPassTexturesRange);
 
-        // Frame constant buffer
-        RootParams[1].InitAsConstantBufferView(0);
+    // Frame constant buffer
+    RootParams[1].InitAsConstantBufferView(0);
 
-        // Point Light constant buffer
-        RootParams[2].InitAsConstantBufferView(1);
+    // Point Light constant buffer
+    RootParams[2].InitAsConstantBufferView(1);
 
-        // Shadow Cube Map
-        CD3DX12_DESCRIPTOR_RANGE ShadowCubeMapRange {};
-        ShadowCubeMapRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 6);
+    // Shadow Cube Map
+    CD3DX12_DESCRIPTOR_RANGE ShadowCubeMapRange {};
+    ShadowCubeMapRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 6);
 
-        RootParams[3].InitAsDescriptorTable(1, &ShadowCubeMapRange);
+    RootParams[3].InitAsDescriptorTable(1, &ShadowCubeMapRange);
 
-        const auto& StaticSamplers = GetCommonStaticSamplers();
+    PointLightVolumePassData.RootSignature = RenderApi::Core::RootSigBuilder::Create(RenderApi.get())
+        .SetRootParams(RootParams)
+        .SetStaticSamplers(GetCommonStaticSamplers())
+        .SetFlags(D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT)
+        .Build(L"Point Light Volume Root Signature");
 
-        CD3DX12_ROOT_SIGNATURE_DESC RootSignatureDesc {};
-        RootSignatureDesc.Init(
-            std::size(RootParams),
-            RootParams,
-            StaticSamplers.size(),
-            StaticSamplers.data(),
-            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
-        );
-
-        Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureBlob {};
-        Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureErrorBlob {};
-
-        HRESULT RootSigSerResult = D3D12SerializeRootSignature(&RootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &RootSignatureBlob, &RootSignatureErrorBlob);
-        if (FAILED(RootSigSerResult))
-        {
-            std::string error (static_cast<const char*>(RootSignatureErrorBlob->GetBufferPointer()), RootSignatureErrorBlob->GetBufferSize());
-            __debugbreak();
-            return false;
-        }
-
-        CHECKED(
-            RenderApi->GetDevice()
-                ->CreateRootSignature(
-                    0,
-                    RootSignatureBlob->GetBufferPointer(),
-                    RootSignatureBlob->GetBufferSize(),
-                    IID_PPV_ARGS(&PointLightVolumePassData.RootSignature)
-                ),
-            "Can't create root signature"
-        )
-    }
-
-    // Load Shaders
-    Microsoft::WRL::ComPtr<ID3DBlob> VertexShader {};
-    Microsoft::WRL::ComPtr<ID3DBlob> PixelShader {};
-    Microsoft::WRL::ComPtr<ID3DBlob> EmptyPixelShader {};
-    {
-        Microsoft::WRL::ComPtr<ID3DBlob> CompilationErrorBlob {};
-
-        RenderApi::Core::ContentFolderD3dInclude VertexShaderInclude {};
-
-        HRESULT VSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/PointLight/PointLightVolumePass.hlsl",
-            nullptr, &VertexShaderInclude, "VS_Main", "vs_5_1",
-            RenderApi->GetShaderCompileFlags(), 0, &VertexShader, &CompilationErrorBlob);
-
-        if(FAILED(VSCompileResult) || CompilationErrorBlob != nullptr)
-        {
-            std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
-            // TODO: log error
-
-            __debugbreak();
-
-            return false;
-        }
-
-        RenderApi::Core::ContentFolderD3dInclude PixelShaderInclude {};
-
-        HRESULT PSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/PointLight/PointLightVolumePass.hlsl",
-            nullptr, &PixelShaderInclude, "PS_Main", "ps_5_1",
-            RenderApi->GetShaderCompileFlags(), 0, &PixelShader, &CompilationErrorBlob);
-
-        if(FAILED(PSCompileResult) || CompilationErrorBlob != nullptr)
-        {
-            std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
-            // TODO: log error
-
-            __debugbreak();
-
-            return false;
-        }
-
-        RenderApi::Core::ContentFolderD3dInclude EmptyPixelShaderInclude {};
-
-        HRESULT EmptyPSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/PointLight/EmptyPS.hlsl",
-            nullptr, &EmptyPixelShaderInclude, "PS_Main", "ps_5_1",
-            RenderApi->GetShaderCompileFlags(), 0, &EmptyPixelShader, &CompilationErrorBlob);
-
-        if(FAILED(PSCompileResult) || CompilationErrorBlob != nullptr)
-        {
-            std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
-            // TODO: log error
-
-            __debugbreak();
-
-            return false;
-        }
-    }
-
-    // Create PSO for depth stencil part
+    // Create PSO for stencil part
     {
         auto RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
         RasterizerState.FrontCounterClockwise = true;
@@ -1207,34 +1028,19 @@ bool DeferredRenderer::InitPointLightVolumePass()
         auto BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
         BlendState.RenderTarget[0].RenderTargetWriteMask = 0x00;
 
-        D3D12_GRAPHICS_PIPELINE_STATE_DESC PsoDesc {
-            .pRootSignature = PointLightVolumePassData.RootSignature.Get(),
-            .VS = CD3DX12_SHADER_BYTECODE(VertexShader.Get()),
-            .PS = CD3DX12_SHADER_BYTECODE(EmptyPixelShader.Get()),
-            .BlendState = BlendState,
-            .SampleMask = UINT_MAX,
-            .RasterizerState = RasterizerState,
-            .DepthStencilState = DepthStencilState,
-            .InputLayout = {
-                .pInputElementDescs = RenderApi->GetCommonMeshBufferLayout().Layout.data(),
-                .NumElements = static_cast<UINT>(RenderApi->GetCommonMeshBufferLayout().Layout.size())
-            },
-            .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
-            .NumRenderTargets = 0,
-            .RTVFormats = {},
-            .DSVFormat = Core::PointLight::DEPTH_STENCIL_FORMAT,
-            .SampleDesc = {
-                .Count = 1
-            }
-        };
+        PointLightVolumePassData.StencilPipelineState = RenderApi::Core::GraphicsPsoBuilder::Create(RenderApi.get())
+            .SetRootSignature(PointLightVolumePassData.RootSignature.Get())
+            .SetInputLayout(RenderApi->GetCommonMeshBufferLayout().Layout)
+            .SetVertexShader(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/PointLight/PointLightVolumePass.hlsl")
+            .SetPixelShader(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/PointLight/EmptyPS.hlsl")
+            .SetRenderTargets({}, Core::PointLight::DEPTH_STENCIL_FORMAT)
+            .SetRasterizerState(RasterizerState)
+            .SetDepthStencilState(DepthStencilState)
+            .SetBlendState(BlendState)
+            .Build(L"Point Light Volume Stencil PSO");
 
-        CHECKED(
-            RenderApi->GetDevice()
-                ->CreateGraphicsPipelineState(&PsoDesc, IID_PPV_ARGS(&PointLightVolumePassData.StencilPipelineState)),
-            "Failed to create PSO"
-        )
-
-        PointLightVolumePassData.StencilPipelineState->SetName(L"Point Light Stencil PSO");
+        if (!PointLightVolumePassData.StencilPipelineState)
+            return false;
     }
 
     // Create PSO for color part
@@ -1269,36 +1075,21 @@ bool DeferredRenderer::InitPointLightVolumePass()
             .RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL
         };
 
-        D3D12_GRAPHICS_PIPELINE_STATE_DESC PsoDesc {
-            .pRootSignature = PointLightVolumePassData.RootSignature.Get(),
-            .VS = CD3DX12_SHADER_BYTECODE(VertexShader.Get()),
-            .PS = CD3DX12_SHADER_BYTECODE(PixelShader.Get()),
-            .BlendState = BlendState,
-            .SampleMask = UINT_MAX,
-            .RasterizerState = RasterizerState,
-            .DepthStencilState = DepthStencilState,
-            .InputLayout = {
-                .pInputElementDescs = RenderApi->GetCommonMeshBufferLayout().Layout.data(),
-                .NumElements = static_cast<UINT>(RenderApi->GetCommonMeshBufferLayout().Layout.size())
-            },
-            .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
-            .NumRenderTargets = 1,
-            .RTVFormats = {
-                DXGI_FORMAT_R16G16B16A16_FLOAT,
-            },
-            .DSVFormat = Core::PointLight::DEPTH_STENCIL_FORMAT,
-            .SampleDesc = {
-                .Count = 1
-            }
-        };
+        PointLightVolumePassData.ColorPipelineState = RenderApi::Core::GraphicsPsoBuilder::Create(RenderApi.get())
+            .SetRootSignature(PointLightVolumePassData.RootSignature.Get())
+            .SetInputLayout(RenderApi->GetCommonMeshBufferLayout().Layout)
+            .SetVertexShader(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/PointLight/PointLightVolumePass.hlsl")
+            .SetPixelShader(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/PointLight/PointLightVolumePass.hlsl")
+            .SetRenderTargets({
+                DXGI_FORMAT_R16G16B16A16_FLOAT
+            }, Core::PointLight::DEPTH_STENCIL_FORMAT)
+            .SetRasterizerState(RasterizerState)
+            .SetDepthStencilState(DepthStencilState)
+            .SetBlendState(BlendState)
+            .Build(L"Point Light Volume Color PSO");
 
-        CHECKED(
-            RenderApi->GetDevice()
-                ->CreateGraphicsPipelineState(&PsoDesc, IID_PPV_ARGS(&PointLightVolumePassData.ColorPipelineState)),
-            "Failed to create PSO"
-        )
-
-        PointLightVolumePassData.ColorPipelineState->SetName(L"Point Light Color PSO");
+        if (!PointLightVolumePassData.ColorPipelineState)
+            return false;
     }
 
     // Create command list and allocator
