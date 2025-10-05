@@ -631,127 +631,35 @@ bool DeferredRenderer::TransitionLightPassFromReadToRenderTargetState()
 
 bool DeferredRenderer::InitAmbientDirectionalLightPass()
 {
-    // Create Root
-    {
-        CD3DX12_ROOT_PARAMETER RootParams[2] {};
+    CD3DX12_ROOT_PARAMETER RootParams[2] {};
 
-        // Descriptor table with GBuffer textures
-        CD3DX12_DESCRIPTOR_RANGE GBufferTexturesRange {};
-        GBufferTexturesRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, GBuffer.TEXTURES_COUNT, 0);
+    // Descriptor table with GBuffer textures
+    CD3DX12_DESCRIPTOR_RANGE GBufferTexturesRange {};
+    GBufferTexturesRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, GBuffer.TEXTURES_COUNT, 0);
 
-        RootParams[0].InitAsDescriptorTable(1, &GBufferTexturesRange);
+    RootParams[0].InitAsDescriptorTable(1, &GBufferTexturesRange);
 
-        // Frame constant buffer
-        RootParams[1].InitAsConstantBufferView(0);
+    // Frame constant buffer
+    RootParams[1].InitAsConstantBufferView(0);
 
-        const auto& StaticSamplers = GetCommonStaticSamplers();
+    AmbientDirectionalLightPassData.RootSignature = RenderApi::Core::RootSigBuilder::Create(RenderApi.get())
+        .SetRootParams(RootParams)
+        .SetStaticSamplers(GetCommonStaticSamplers())
+        .SetFlags(D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT)
+        .Build(L"Ambient Directional Light Pass Root Signature");
 
-        CD3DX12_ROOT_SIGNATURE_DESC RootSignatureDesc {};
-        RootSignatureDesc.Init(
-            std::size(RootParams),
-            RootParams,
-            StaticSamplers.size(),
-            StaticSamplers.data(),
-            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
-        );
+    AmbientDirectionalLightPassData.PipelineState = RenderApi::Core::GraphicsPsoBuilder::Create(RenderApi.get())
+        .SetInputLayout(RenderApi->GetCommonMeshBufferLayout().Layout)
+        .SetRootSignature(AmbientDirectionalLightPassData.RootSignature.Get())
+        .SetVertexShader(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/AmbientDirectionalLightPass.hlsl")
+        .SetPixelShader(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/AmbientDirectionalLightPass.hlsl")
+        .SetRenderTargets({
+            DXGI_FORMAT_R16G16B16A16_FLOAT
+        })
+        .Build(L"Ambient Directional Light Pass PSO");
 
-        Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureBlob {};
-        Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureErrorBlob {};
-
-        HRESULT RootSigSerResult = D3D12SerializeRootSignature(&RootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &RootSignatureBlob, &RootSignatureErrorBlob);
-        if (FAILED(RootSigSerResult))
-        {
-            std::string error (static_cast<const char*>(RootSignatureErrorBlob->GetBufferPointer()), RootSignatureErrorBlob->GetBufferSize());
-            __debugbreak();
-            return false;
-        }
-
-        CHECKED(
-            RenderApi->GetDevice()
-                ->CreateRootSignature(
-                    0,
-                    RootSignatureBlob->GetBufferPointer(),
-                    RootSignatureBlob->GetBufferSize(),
-                    IID_PPV_ARGS(&AmbientDirectionalLightPassData.RootSignature)
-                ),
-            "Can't create root signature"
-        )
-    }
-
-    // Load Shaders
-    Microsoft::WRL::ComPtr<ID3DBlob> VertexShader {};
-    Microsoft::WRL::ComPtr<ID3DBlob> PixelShader {};
-    {
-        Microsoft::WRL::ComPtr<ID3DBlob> CompilationErrorBlob {};
-
-        RenderApi::Core::ContentFolderD3dInclude VertexShaderInclude {};
-
-        HRESULT VSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/AmbientDirectionalLightPass.hlsl",
-            nullptr, &VertexShaderInclude, "VS_Main", "vs_5_1",
-            RenderApi->GetShaderCompileFlags(), 0, &VertexShader, &CompilationErrorBlob);
-
-        if(FAILED(VSCompileResult) || CompilationErrorBlob != nullptr)
-        {
-            std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
-            // TODO: log error
-
-            __debugbreak();
-
-            return false;
-        }
-
-        RenderApi::Core::ContentFolderD3dInclude PixelShaderInclude {};
-
-        HRESULT PSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_renderer_deferred/Shaders/Passes/AmbientDirectionalLightPass.hlsl",
-            nullptr, &PixelShaderInclude, "PS_Main", "ps_5_1",
-            RenderApi->GetShaderCompileFlags(), 0, &PixelShader, &CompilationErrorBlob);
-
-        if(FAILED(PSCompileResult) || CompilationErrorBlob != nullptr)
-        {
-            std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
-            // TODO: log error
-
-            __debugbreak();
-
-            return false;
-        }
-    }
-
-
-    // Create PSO
-    {
-        auto RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-        RasterizerState.FrontCounterClockwise = true;
-
-        D3D12_GRAPHICS_PIPELINE_STATE_DESC PsoDesc {
-            .pRootSignature = AmbientDirectionalLightPassData.RootSignature.Get(),
-            .VS = CD3DX12_SHADER_BYTECODE(VertexShader.Get()),
-            .PS = CD3DX12_SHADER_BYTECODE(PixelShader.Get()),
-            .BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
-            .SampleMask = UINT_MAX,
-            .RasterizerState = RasterizerState,
-            .InputLayout = {
-                .pInputElementDescs = RenderApi->GetCommonMeshBufferLayout().Layout.data(),
-                .NumElements = static_cast<UINT>(RenderApi->GetCommonMeshBufferLayout().Layout.size())
-            },
-            .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
-            .NumRenderTargets = 1,
-            .RTVFormats = {
-                DXGI_FORMAT_R16G16B16A16_FLOAT,
-            },
-            .SampleDesc = {
-                .Count = 1
-            }
-        };
-
-        CHECKED(
-            RenderApi->GetDevice()
-                ->CreateGraphicsPipelineState(&PsoDesc, IID_PPV_ARGS(&AmbientDirectionalLightPassData.PipelineState)),
-            "Failed to create PSO"
-        )
-
-        AmbientDirectionalLightPassData.PipelineState->SetName(L"Ambient Directional Pass PSO");
-    }
+    if (!AmbientDirectionalLightPassData.PipelineState)
+        return false;
 
     // Create command list and allocator
     {
