@@ -26,7 +26,7 @@ namespace krendrr::Runtime::RenderApi::Core
 
         RootSigBuilder& SetFlags(D3D12_ROOT_SIGNATURE_FLAGS NewFlags);
 
-        ID3D12RootSignature* Build(const std::wstring_view& RootSigName = L"Root Signature");
+        Microsoft::WRL::ComPtr<ID3D12RootSignature> Build(const std::wstring_view& RootSigName = L"Root Signature");
 
     private:
 

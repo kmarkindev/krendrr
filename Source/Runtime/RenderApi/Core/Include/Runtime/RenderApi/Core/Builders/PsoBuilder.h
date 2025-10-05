@@ -83,7 +83,7 @@ namespace krendrr::Runtime::RenderApi::Core
         /**
          * Builds root signature using builder configuration
          */
-        ID3D12PipelineState* Build(const std::wstring_view& PsoName = L"Graphics PSO");
+        Microsoft::WRL::ComPtr<ID3D12PipelineState> Build(const std::wstring_view& PsoName = L"Graphics PSO");
 
     private:
 
@@ -131,7 +131,7 @@ namespace krendrr::Runtime::RenderApi::Core
         /**
          * Builds root signature using builder configuration
          */
-        ID3D12PipelineState* Build(const std::wstring_view& PsoName = L"Compute PSO");
+        Microsoft::WRL::ComPtr<ID3D12PipelineState> Build(const std::wstring_view& PsoName = L"Compute PSO");
 
     private:
 

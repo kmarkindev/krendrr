@@ -48,7 +48,7 @@ namespace krendrr::Runtime::RenderApi::Core
         return *this;
     }
 
-    ID3D12RootSignature* RootSigBuilder::Build(const std::wstring_view& RootSigName)
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> RootSigBuilder::Build(const std::wstring_view& RootSigName)
     {
         if (!RenderApi)
         {
@@ -88,7 +88,7 @@ namespace krendrr::Runtime::RenderApi::Core
             return {};
         }
 
-        ID3D12RootSignature* RootSig {};
+        Microsoft::WRL::ComPtr<ID3D12RootSignature> RootSig {};
 
         CHECKED(
             RenderApi->GetDevice()

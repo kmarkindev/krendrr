@@ -140,7 +140,7 @@ namespace krendrr::Runtime::RenderApi::Core
         return SetRenderTargets(Formats, NewDepthStencilFormat);
     }
 
-    ID3D12PipelineState* GraphicsPsoBuilder::Build(const std::wstring_view& PsoName)
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> GraphicsPsoBuilder::Build(const std::wstring_view& PsoName)
     {
         if (!RenderApi)
         {
@@ -218,7 +218,7 @@ namespace krendrr::Runtime::RenderApi::Core
 
         std::memcpy(PsoDesc.RTVFormats, Formats.data(), sizeof(Formats));
 
-        ID3D12PipelineState* Pso {};
+        Microsoft::WRL::ComPtr<ID3D12PipelineState> Pso {};
 
         CHECKED(
             RenderApi->GetDevice()
@@ -262,7 +262,7 @@ namespace krendrr::Runtime::RenderApi::Core
         return *this;
     }
 
-    ID3D12PipelineState* ComputePsoBuilder::Build(const std::wstring_view& PsoName)
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> ComputePsoBuilder::Build(const std::wstring_view& PsoName)
     {
         if (!RenderApi)
         {
@@ -289,7 +289,7 @@ namespace krendrr::Runtime::RenderApi::Core
             return {};
         }
 
-        ID3D12PipelineState* Pso {};
+        Microsoft::WRL::ComPtr<ID3D12PipelineState> Pso {};
 
         D3D12_COMPUTE_PIPELINE_STATE_DESC PsoDesc {
             .pRootSignature = RootSignature,
