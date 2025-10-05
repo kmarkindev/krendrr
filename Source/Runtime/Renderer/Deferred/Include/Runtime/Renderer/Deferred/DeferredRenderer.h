@@ -5,7 +5,6 @@
 #include "Runtime/Renderer/Core/Renderer.h"
 #include "Runtime/Renderer/Core/TexturedMesh/Mesh.h"
 #include "Runtime/Renderer/Core/TexturedMesh/TexturedMesh.h"
-#include "Runtime/ThreadPool/ThreadPool.h"
 
 namespace krendrr::Runtime::Renderer::Deferred
 {
@@ -13,7 +12,7 @@ namespace krendrr::Runtime::Renderer::Deferred
     {
     public:
 
-        bool Initialize(std::shared_ptr<RenderApi::Core::RenderApi> NewRenderApi, std::shared_ptr<Core::Scene> NewScene) override;
+        bool Initialize(std::shared_ptr<RenderApi::Core::RenderApi> NewRenderApi, std::shared_ptr<tf::Executor> NewTfExecutor, std::shared_ptr<Core::Scene> NewScene) override;
 
         bool Render(const std::span<Core::SceneView>& SceneViews) override;
 
@@ -24,7 +23,7 @@ namespace krendrr::Runtime::Renderer::Deferred
         std::shared_ptr<RenderApi::Core::RenderApi> RenderApi {};
         std::shared_ptr<Core::Scene> Scene {};
 
-        ThreadPool::ThreadPool RenderThreadPool {};
+        std::shared_ptr<tf::Executor> TfExecutor {};
 
         std::shared_ptr<Core::Mesh> FullscreenQuadMesh {};
         std::shared_ptr<Core::Mesh> SphereMesh {};

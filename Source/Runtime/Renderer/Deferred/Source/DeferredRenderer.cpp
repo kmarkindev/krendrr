@@ -15,14 +15,14 @@
 namespace krendrr::Runtime::Renderer::Deferred
 {
 
-bool DeferredRenderer::Initialize(std::shared_ptr<RenderApi::Core::RenderApi> NewRenderApi, std::shared_ptr<Core::Scene> NewScene)
+bool DeferredRenderer::Initialize(std::shared_ptr<RenderApi::Core::RenderApi> NewRenderApi, std::shared_ptr<tf::Executor> NewTfExecutor, std::shared_ptr<Core::Scene> NewScene)
 {
     nvtx3::scoped_range InitRange {"Deferred Renderer: Initialize"};
 
     RenderApi = std::move(NewRenderApi);
     Scene = std::move(NewScene);
 
-    RenderThreadPool.Initialize();
+    TfExecutor = std::move(NewTfExecutor);
 
     CHECKED(
         RenderApi->GetDevice()
@@ -1928,8 +1928,6 @@ bool DeferredRenderer::PostProcessingPass(const Core::SceneView& SceneView)
 
 bool DeferredRenderer::Shutdown()
 {
-    RenderThreadPool.Shutdown();
-
     return WaitDirectQueue();
 }
 
@@ -1979,9 +1977,7 @@ bool DeferredRenderer::InitBasicMeshes()
     ModelLoader::LoadResult UnitSphereLoadResult = ModelLoader::LoadModel(
         "../Content/krendrr_runtime_renderer_deferred/UnitIcoSphere.obj",
         *RenderApi,
-        {
-            .ThreadPool = &RenderThreadPool
-        }
+        *TfExecutor
     );
 
     if (!UnitSphereLoadResult.HasLoadedAtLeastOne())

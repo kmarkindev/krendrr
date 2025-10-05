@@ -4,7 +4,7 @@
 #include <vector>
 #include "Runtime/RenderApi/Core/RenderApi.h"
 #include "Runtime/Renderer/Core/TexturedMesh/TexturedMesh.h"
-#include "Runtime/ThreadPool/ThreadPool.h"
+#include "taskflow/taskflow.hpp"
 
 namespace krendrr::Runtime::ModelLoader
 {
@@ -28,8 +28,6 @@ namespace krendrr::Runtime::ModelLoader
         std::string_view RoughnessTextureName {"roughness"};
         std::string_view NormalTextureName {"normal"};
         std::string_view EmissiveTextureName {"emissive"};
-
-        ThreadPool::ThreadPool* ThreadPool {};
     };
 
     struct LoadResult
@@ -43,5 +41,5 @@ namespace krendrr::Runtime::ModelLoader
         }
     };
 
-    LoadResult LoadModel(const std::string_view& ModelFileName, const RenderApi::Core::RenderApi& RenderApi, const LoadParams& Params = {});
+    LoadResult LoadModel(const std::string_view& ModelFileName, const RenderApi::Core::RenderApi& RenderApi, tf::Executor& TfExecutor, const LoadParams& Params = {});
 }

@@ -1,7 +1,7 @@
 add_krendrr_target(STATIC RendererDeferred TARGET_NAME)
 
 target_link_libraries(${TARGET_NAME} PUBLIC
-    krendrr::runtime::threadpool
+    krendrr::runtime::taskflowex
     krendrr::thirdparty::glm
 )
 
