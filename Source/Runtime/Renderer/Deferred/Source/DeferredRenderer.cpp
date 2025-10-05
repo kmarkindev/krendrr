@@ -8,7 +8,6 @@
 #include "nvtx3/nvtx3.hpp"
 #include "Runtime/RenderApi/Core/ApiCallCheck.h"
 #include "Runtime/RenderApi/Core/Builders/ConstBufferBuilder.h"
-#include "Runtime/RenderApi/Core/ContentFolderD3DInclude.h"
 #include "Runtime/RenderApi/Core/Builders/PsoBuilder.h"
 #include "Runtime/RenderApi/Core/Builders/RootSigBuilder.h"
 #include "Runtime/Renderer/Core/Lights/PointLight.h"

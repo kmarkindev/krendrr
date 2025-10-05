@@ -203,7 +203,7 @@ namespace krendrr::Runtime::RenderApi::Core
             .BlendState = BlendState,
             .SampleMask = UINT_MAX,
             .RasterizerState = RasterizerState,
-            .DepthStencilState = DepthStencilState,
+            .DepthStencilState = DepthStencilFormat != DXGI_FORMAT_UNKNOWN ? DepthStencilState : D3D12_DEPTH_STENCIL_DESC{},
             .InputLayout = {
                 .pInputElementDescs = InputLayout.data(),
                 .NumElements = static_cast<UINT>(InputLayout.size()),
