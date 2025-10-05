@@ -13,7 +13,7 @@ ConstantBuffer<ConstBuff_RootConstants> RootConstants : register(b0);
 // Each shader invokation processes 2x2 blocks of mip level N, to generate one pixel for mip level N+1.
 // 8x8 is optimal here, since it fits 32 and 64 warp sizes and covers most mip map sizes
 [numthreads(8, 8, 1)]
-void Main(uint3 Id : SV_DispatchThreadID)
+void CS_Main(uint3 Id : SV_DispatchThreadID)
 {
     uint xIndex = Id.x * 2;
     uint yIndex = Id.y * 2;

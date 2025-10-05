@@ -1,10 +1,10 @@
-#define NOMINMAX
-
 #include "Runtime/MipMapsGenerator/Generator.h"
 #include "Runtime/RenderApi/Core/ApiCallCheck.h"
 #include <d3dcompiler.h>
 #include <algorithm>
 #include <cmath>
+#include "Runtime/RenderApi/Core/Builders/PsoBuilder.h"
+#include "Runtime/RenderApi/Core/Builders/RootSigBuilder.h"
 
 namespace krendrr::Runtime::MipMapsGenerator
 {
@@ -23,67 +23,17 @@ namespace krendrr::Runtime::MipMapsGenerator
             RootParams[0].InitAsDescriptorTable(2, Ranges);
             RootParams[1].InitAsConstants(3, 0);
 
-            CD3DX12_ROOT_SIGNATURE_DESC RootSignatureDesc {};
-            RootSignatureDesc.Init(
-                std::size(RootParams),
-                RootParams,
-                0,
-                nullptr
-            );
+            ComputeRootSignature = RenderApi::Core::RootSigBuilder::Create(&RenderApi)
+                .SetRootParams(RootParams)
+                .Build(L"Mips Generator Root Signature");
 
-            Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureBlob {};
-            Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureErrorBlob {};
+            ComputePipelineState = RenderApi::Core::ComputePsoBuilder::Create(&RenderApi)
+                .SetRootSignature(ComputeRootSignature.Get())
+                .SetComputeShader(L"../Content/krendrr_runtime_mipmapsgenerator/Shaders/GenerateMips.hlsl")
+                .Build(L"Mip Map Generator Compute PSO");
 
-            HRESULT RootSigSerResult = D3D12SerializeRootSignature(&RootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &RootSignatureBlob, &RootSignatureErrorBlob);
-            if (FAILED(RootSigSerResult))
-            {
-                std::string error (static_cast<const char*>(RootSignatureErrorBlob->GetBufferPointer()), RootSignatureErrorBlob->GetBufferSize());
-                __debugbreak();
+            if (!ComputePipelineState)
                 return false;
-            }
-
-            CHECKED(
-                RenderApi.GetDevice()
-                    ->CreateRootSignature(
-                        0,
-                        RootSignatureBlob->GetBufferPointer(),
-                        RootSignatureBlob->GetBufferSize(),
-                        IID_PPV_ARGS(&ComputeRootSignature)
-                    ),
-                "Can't create root signature"
-            )
-
-                Microsoft::WRL::ComPtr<ID3DBlob> Shader {};
-            {
-                {
-                    Microsoft::WRL::ComPtr<ID3DBlob> CompilationErrorBlob {};
-
-                    HRESULT VSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_mipmapsgenerator/Shaders/GenerateMips.hlsl",
-                        nullptr, nullptr, "Main", "cs_5_1",
-                        RenderApi.GetShaderCompileFlags(), 0, &Shader, &CompilationErrorBlob);
-
-                    if(FAILED(VSCompileResult) || CompilationErrorBlob != nullptr)
-                    {
-                        std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
-                        // TODO: log error
-
-                        __debugbreak();
-
-                        return false;
-                    }
-                }
-            }
-
-            D3D12_COMPUTE_PIPELINE_STATE_DESC PsoDesc {
-                .pRootSignature = ComputeRootSignature.Get(),
-                .CS = CD3DX12_SHADER_BYTECODE {Shader.Get()},
-            };
-
-            CHECKED(
-                RenderApi.GetDevice()
-                    ->CreateComputePipelineState(&PsoDesc, IID_PPV_ARGS(&ComputePipelineState)),
-                "Can't create compute pipeline"
-            )
 
             CHECKED(
                 RenderApi.GetDevice()

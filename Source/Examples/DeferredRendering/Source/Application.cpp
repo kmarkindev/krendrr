@@ -9,6 +9,7 @@
 #include "Runtime/RenderApi/Core/RenderApi.h"
 #include "Runtime/Renderer/Core/Lights/PointLight.h"
 #include "Runtime/Renderer/Core/Scene/Scene.h"
+#include "Runtime/TfExecutorBuilder/TfExecutorBuilder.h"
 
 IMPLEMENT_ENTRY_POINT(krendrr::Examples::SimpleDeferredRendering::Application)
 
@@ -20,6 +21,9 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize(const R
         std::cout << Arg << " ";
     }
     std::cout << std::endl;
+
+    TfExecutor = Runtime::TaskFlowEx::Builder::Create()
+        .Build();
 
     bLoadFuturisticScene = Args.GetStartupArgs().size() > 1 && Args.GetStartupArgs()[1] == "futuristic";
 
@@ -51,6 +55,7 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize(const R
             ?  "../Content/krendrr_examples_deferredrendering/FuturisticRoom/source/CyberPunkRoom.fbx"
             : "../Content/krendrr_examples_deferredrendering/Sponza/sponza.obj",
         *RenderApi,
+        *TfExecutor,
         {
             .bFlipUVs = true,
             .bFlipNormals = bLoadFuturisticScene,
@@ -81,7 +86,7 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize(const R
         SetupSponzaScene();
 
     Renderer = std::make_unique<Runtime::Renderer::Deferred::DeferredRenderer>();
-    if (!Renderer->Initialize(RenderApi, Scene))
+    if (!Renderer->Initialize(RenderApi, TfExecutor, Scene))
     {
         // TODO: log error
         return false;

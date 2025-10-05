@@ -1,6 +1,5 @@
 #include "Runtime/ModelLoader/Loader.h"
 #include <nvtx3/nvtx3.hpp>
-#include <stdexcept>
 #include <unordered_map>
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -11,7 +10,6 @@
 #include "Runtime/RenderApi/Core/ApiCallCheck.h"
 #include "Runtime/Renderer/Core/TexturedMesh/Mesh.h"
 #include "Runtime/Renderer/Core/TexturedMesh/Texture.h"
-#include "Runtime/ThreadPool/ThreadPool.h"
 
 namespace krendrr::Runtime::ModelLoader
 {
@@ -351,7 +349,7 @@ namespace krendrr::Runtime::ModelLoader
         }
     }
 
-    LoadResult LoadModel(const std::string_view& ModelFileName, const RenderApi::Core::RenderApi& RenderApi, const LoadParams& Params)
+    LoadResult LoadModel(const std::string_view& ModelFileName, const RenderApi::Core::RenderApi& RenderApi, tf::Executor& TfExecutor, const LoadParams& Params)
     {
         nvtx3::scoped_range LoadModelRange {"Load Model"};
 
@@ -401,24 +399,11 @@ namespace krendrr::Runtime::ModelLoader
             }
         }
 
-        // Startup thread pool, collect import jobs into pool
-        std::optional<ThreadPool::ThreadPool> LocalThreadPool {};
-        ThreadPool::ThreadPool* ThreadPool {};
-
-        if (Params.ThreadPool)
-        {
-            ThreadPool = Params.ThreadPool;
-        }
-        else
-        {
-            LocalThreadPool.emplace();
-            LocalThreadPool->Initialize();
-
-            ThreadPool = &LocalThreadPool.value();
-        }
-
         LoadData LoadData {};
         std::atomic_bool bError {};
+
+        std::vector<std::future<void>> Futures {};
+        Futures.reserve(Scene->mNumMeshes);
 
         {
             nvtx3::scoped_range PushJobsRange {"Pushing jobs"};
@@ -431,7 +416,7 @@ namespace krendrr::Runtime::ModelLoader
                 const aiNode* Node = ToProcess.front();
                 ToProcess.pop();
 
-                ThreadPool->PushJob([&, Node]()
+                auto Future = TfExecutor.async([&, Node]()
                 {
                     ProcessAiNodeJob(
                         RenderApi,
@@ -443,6 +428,7 @@ namespace krendrr::Runtime::ModelLoader
                         bError
                     );
                 });
+                Futures.emplace_back(std::move(Future));
 
                 for(unsigned i = 0; i < Node->mNumChildren; i++)
                 {
@@ -451,8 +437,11 @@ namespace krendrr::Runtime::ModelLoader
             }
         }
 
-        // First let thread pool finish all of it's jobs
-        ThreadPool->WaitForAllJobs();
+        // TODO: construct task graph (task flow) instead of vector of futures, then corun this task graph instead of locking of futures
+
+        // Wait for all jobs to complete
+        for (const auto & Future: Futures)
+            Future.wait();
 
         {
             nvtx3::scoped_range WaitCopyQueueFenceRange {"Waiting d3d copy queue fence"};

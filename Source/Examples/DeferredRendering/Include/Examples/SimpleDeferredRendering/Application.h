@@ -7,6 +7,11 @@
 #include "Runtime/Renderer/Core/Scene/SceneView.h"
 #include "Runtime/Renderer/Deferred/DeferredRenderer.h"
 
+namespace tf
+{
+    class Executor;
+}
+
 namespace krendrr::Runtime::Application::Core
 {
     class Window;
@@ -32,7 +37,9 @@ namespace krendrr::Examples::SimpleDeferredRendering
 
     private:
 
-        std::shared_ptr<Runtime::RenderApi::Core::RenderApi> RenderApi;
+        std::shared_ptr<tf::Executor> TfExecutor {};
+
+        std::shared_ptr<Runtime::RenderApi::Core::RenderApi> RenderApi {};
 
         bool bLoadFuturisticScene {false};
 
