@@ -53,13 +53,13 @@ namespace krendrr::Runtime::RenderApi::Core
         };
     }
 
-    GraphicsPsoBuilder::GraphicsPsoBuilder(class RenderApi* NewRenderApi)
+    GraphicsPsoBuilder::GraphicsPsoBuilder(const class RenderApi* NewRenderApi)
         : RenderApi(NewRenderApi)
     {
         RasterizerState.FrontCounterClockwise = true;
     }
 
-    GraphicsPsoBuilder GraphicsPsoBuilder::Create(class RenderApi* NewRenderApi)
+    GraphicsPsoBuilder GraphicsPsoBuilder::Create(const class RenderApi* NewRenderApi)
     {
         return GraphicsPsoBuilder {NewRenderApi};
     }
@@ -236,7 +236,7 @@ namespace krendrr::Runtime::RenderApi::Core
         return Pso;
     }
 
-    ComputePsoBuilder ComputePsoBuilder::Create(class RenderApi* NewRenderApi)
+    ComputePsoBuilder ComputePsoBuilder::Create(const class RenderApi* NewRenderApi)
     {
         return ComputePsoBuilder {NewRenderApi};
     }
@@ -248,7 +248,7 @@ namespace krendrr::Runtime::RenderApi::Core
         return *this;
     }
 
-    ComputePsoBuilder::ComputePsoBuilder(class RenderApi* NewRenderApi)
+    ComputePsoBuilder::ComputePsoBuilder(const class RenderApi* NewRenderApi)
         : RenderApi(NewRenderApi)
     {
 

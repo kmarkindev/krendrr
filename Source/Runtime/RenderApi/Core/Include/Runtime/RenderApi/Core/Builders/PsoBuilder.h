@@ -28,12 +28,12 @@ namespace krendrr::Runtime::RenderApi::Core
     {
     public:
 
-        explicit GraphicsPsoBuilder(RenderApi* NewRenderApi);
+        explicit GraphicsPsoBuilder(const RenderApi* NewRenderApi);
 
         /**
          * Creates builder instance
          */
-        static GraphicsPsoBuilder Create(RenderApi* NewRenderApi);
+        static GraphicsPsoBuilder Create(const RenderApi* NewRenderApi);
 
         // required, no default value
         GraphicsPsoBuilder& SetRootSignature(ID3D12RootSignature* NewRootSignature);
@@ -87,7 +87,7 @@ namespace krendrr::Runtime::RenderApi::Core
 
     private:
 
-        RenderApi* RenderApi {};
+        const RenderApi* RenderApi {};
 
         ID3D12RootSignature* RootSignature {};
         std::span<const D3D12_INPUT_ELEMENT_DESC> InputLayout {};
@@ -114,12 +114,12 @@ namespace krendrr::Runtime::RenderApi::Core
     {
     public:
 
-        explicit ComputePsoBuilder(RenderApi* NewRenderApi);
+        explicit ComputePsoBuilder(const RenderApi* NewRenderApi);
 
         /**
          * Creates builder instance
          */
-        static ComputePsoBuilder Create(RenderApi* NewRenderApi);
+        static ComputePsoBuilder Create(const RenderApi* NewRenderApi);
 
         // required, no default value
         ComputePsoBuilder& SetRootSignature(ID3D12RootSignature* NewRootSignature);
@@ -135,7 +135,7 @@ namespace krendrr::Runtime::RenderApi::Core
 
     private:
 
-        RenderApi* RenderApi {};
+        const RenderApi* RenderApi {};
 
         ID3D12RootSignature* RootSignature {};
 

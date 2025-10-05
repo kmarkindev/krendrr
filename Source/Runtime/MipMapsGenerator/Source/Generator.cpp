@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "Runtime/RenderApi/Core/Builders/PsoBuilder.h"
+
 namespace krendrr::Runtime::MipMapsGenerator
 {
 
@@ -51,37 +53,13 @@ namespace krendrr::Runtime::MipMapsGenerator
                 "Can't create root signature"
             )
 
-                Microsoft::WRL::ComPtr<ID3DBlob> Shader {};
-            {
-                {
-                    Microsoft::WRL::ComPtr<ID3DBlob> CompilationErrorBlob {};
+            ComputePipelineState = RenderApi::Core::ComputePsoBuilder::Create(&RenderApi)
+                .SetRootSignature(ComputeRootSignature.Get())
+                .SetComputeShader(L"../Content/krendrr_runtime_mipmapsgenerator/Shaders/GenerateMips.hlsl")
+                .Build(L"Mip Map Generator Compute PSO");
 
-                    HRESULT VSCompileResult = D3DCompileFromFile(L"../Content/krendrr_runtime_mipmapsgenerator/Shaders/GenerateMips.hlsl",
-                        nullptr, nullptr, "Main", "cs_5_1",
-                        RenderApi.GetShaderCompileFlags(), 0, &Shader, &CompilationErrorBlob);
-
-                    if(FAILED(VSCompileResult) || CompilationErrorBlob != nullptr)
-                    {
-                        std::string error( static_cast<char*>(CompilationErrorBlob->GetBufferPointer()), CompilationErrorBlob->GetBufferSize());
-                        // TODO: log error
-
-                        __debugbreak();
-
-                        return false;
-                    }
-                }
-            }
-
-            D3D12_COMPUTE_PIPELINE_STATE_DESC PsoDesc {
-                .pRootSignature = ComputeRootSignature.Get(),
-                .CS = CD3DX12_SHADER_BYTECODE {Shader.Get()},
-            };
-
-            CHECKED(
-                RenderApi.GetDevice()
-                    ->CreateComputePipelineState(&PsoDesc, IID_PPV_ARGS(&ComputePipelineState)),
-                "Can't create compute pipeline"
-            )
+            if (!ComputePipelineState)
+                return false;
 
             CHECKED(
                 RenderApi.GetDevice()
