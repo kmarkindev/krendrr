@@ -10,6 +10,7 @@
 #include "Runtime/RenderApi/Core/Builders/ConstBufferBuilder.h"
 #include "Runtime/RenderApi/Core/ContentFolderD3DInclude.h"
 #include "Runtime/RenderApi/Core/Builders/PsoBuilder.h"
+#include "Runtime/RenderApi/Core/Builders/RootSigBuilder.h"
 #include "Runtime/Renderer/Core/Lights/PointLight.h"
 
 namespace krendrr::Runtime::Renderer::Deferred
@@ -207,38 +208,14 @@ bool DeferredRenderer::InitializeGeometryPass()
         // Textured mesh constant buffer
         RootParams[2].InitAsConstantBufferView(1);
 
-        const auto& StaticSamplers = GetCommonStaticSamplers();
+        GeometryPassData.RootSignature = RenderApi::Core::RootSigBuilder::Create(RenderApi.get())
+            .SetRootParams(RootParams)
+            .SetStaticSamplers(GetCommonStaticSamplers())
+            .SetFlags(D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT)
+            .Build(L"Geometry Pass Root Signature");
 
-        CD3DX12_ROOT_SIGNATURE_DESC RootSignatureDesc {};
-        RootSignatureDesc.Init(
-            std::size(RootParams),
-            RootParams,
-            StaticSamplers.size(),
-            StaticSamplers.data(),
-            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
-        );
-
-        Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureBlob {};
-        Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureErrorBlob {};
-
-        HRESULT RootSigSerResult = D3D12SerializeRootSignature(&RootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &RootSignatureBlob, &RootSignatureErrorBlob);
-        if (FAILED(RootSigSerResult))
-        {
-            std::string error (static_cast<const char*>(RootSignatureErrorBlob->GetBufferPointer()), RootSignatureErrorBlob->GetBufferSize());
-            __debugbreak();
+        if (!GeometryPassData.RootSignature)
             return false;
-        }
-
-        CHECKED(
-            RenderApi->GetDevice()
-                ->CreateRootSignature(
-                    0,
-                    RootSignatureBlob->GetBufferPointer(),
-                    RootSignatureBlob->GetBufferSize(),
-                    IID_PPV_ARGS(&GeometryPassData.RootSignature)
-                ),
-            "Can't create root signature"
-        )
     }
 
     GeometryPassData.PipelineState = RenderApi::Core::GraphicsPsoBuilder::Create(RenderApi.get())

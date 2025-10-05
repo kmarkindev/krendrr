@@ -1,6 +1,8 @@
 #include "Runtime/RenderApi/Core/Builders/PsoBuilder.h"
 #include <d3dcompiler.h>
 #include <filesystem>
+
+#include "Runtime/RenderApi/Core/ApiCallCheck.h"
 #include "Runtime/RenderApi/Core/ContentFolderD3DInclude.h"
 
 namespace krendrr::Runtime::RenderApi::Core
@@ -138,7 +140,7 @@ namespace krendrr::Runtime::RenderApi::Core
         return SetRenderTargets(Formats, NewDepthStencilFormat);
     }
 
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> GraphicsPsoBuilder::Build(const std::wstring_view& PsoName)
+    ID3D12PipelineState* GraphicsPsoBuilder::Build(const std::wstring_view& PsoName)
     {
         if (!RenderApi)
         {
@@ -216,22 +218,18 @@ namespace krendrr::Runtime::RenderApi::Core
 
         std::memcpy(PsoDesc.RTVFormats, Formats.data(), sizeof(Formats));
 
-        Microsoft::WRL::ComPtr<ID3D12PipelineState> Pso {};
+        ID3D12PipelineState* Pso {};
 
-        const HRESULT PsoCreationResult = RenderApi->GetDevice()
-            ->CreateGraphicsPipelineState(&PsoDesc, IID_PPV_ARGS(&Pso));
+        CHECKED(
+            RenderApi->GetDevice()
+                ->CreateGraphicsPipelineState(&PsoDesc, IID_PPV_ARGS(&Pso)),
+            "Failed to create graphics PSO"
+        )
 
-        if (FAILED(PsoCreationResult))
-        {
-            // TODO: log error
-            return {};
-        }
-
-        if (FAILED(Pso->SetName(PsoName.data())))
-        {
-            // TODO: log error
-            return {};
-        }
+        CHECKED(
+            Pso->SetName(PsoName.data()),
+            "Failed to set PSO name"
+        )
 
         return Pso;
     }
@@ -264,7 +262,7 @@ namespace krendrr::Runtime::RenderApi::Core
         return *this;
     }
 
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> ComputePsoBuilder::Build(const std::wstring_view& PsoName)
+    ID3D12PipelineState* ComputePsoBuilder::Build(const std::wstring_view& PsoName)
     {
         if (!RenderApi)
         {
@@ -291,7 +289,7 @@ namespace krendrr::Runtime::RenderApi::Core
             return {};
         }
 
-        Microsoft::WRL::ComPtr<ID3D12PipelineState> Pso {};
+        ID3D12PipelineState* Pso {};
 
         D3D12_COMPUTE_PIPELINE_STATE_DESC PsoDesc {
             .pRootSignature = RootSignature,

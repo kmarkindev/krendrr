@@ -3,8 +3,8 @@
 #include <d3dcompiler.h>
 #include <algorithm>
 #include <cmath>
-
 #include "Runtime/RenderApi/Core/Builders/PsoBuilder.h"
+#include "Runtime/RenderApi/Core/Builders/RootSigBuilder.h"
 
 namespace krendrr::Runtime::MipMapsGenerator
 {
@@ -23,35 +23,9 @@ namespace krendrr::Runtime::MipMapsGenerator
             RootParams[0].InitAsDescriptorTable(2, Ranges);
             RootParams[1].InitAsConstants(3, 0);
 
-            CD3DX12_ROOT_SIGNATURE_DESC RootSignatureDesc {};
-            RootSignatureDesc.Init(
-                std::size(RootParams),
-                RootParams,
-                0,
-                nullptr
-            );
-
-            Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureBlob {};
-            Microsoft::WRL::ComPtr<ID3DBlob> RootSignatureErrorBlob {};
-
-            HRESULT RootSigSerResult = D3D12SerializeRootSignature(&RootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &RootSignatureBlob, &RootSignatureErrorBlob);
-            if (FAILED(RootSigSerResult))
-            {
-                std::string error (static_cast<const char*>(RootSignatureErrorBlob->GetBufferPointer()), RootSignatureErrorBlob->GetBufferSize());
-                __debugbreak();
-                return false;
-            }
-
-            CHECKED(
-                RenderApi.GetDevice()
-                    ->CreateRootSignature(
-                        0,
-                        RootSignatureBlob->GetBufferPointer(),
-                        RootSignatureBlob->GetBufferSize(),
-                        IID_PPV_ARGS(&ComputeRootSignature)
-                    ),
-                "Can't create root signature"
-            )
+            ComputeRootSignature = RenderApi::Core::RootSigBuilder::Create(&RenderApi)
+                .SetRootParams(RootParams)
+                .Build(L"Mips Generator Root Signature");
 
             ComputePipelineState = RenderApi::Core::ComputePsoBuilder::Create(&RenderApi)
                 .SetRootSignature(ComputeRootSignature.Get())
