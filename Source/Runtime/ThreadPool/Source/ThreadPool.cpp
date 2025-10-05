@@ -1,6 +1,5 @@
 #include "Runtime/ThreadPool/ThreadPool.h"
 #include <condition_variable>
-#define LEAN_AND_MEAN
 #include <windows.h>
 #include "nvtx3/nvtx3.hpp"
 

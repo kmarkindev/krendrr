@@ -1,5 +1,3 @@
-#define NOMINMAX
-
 #include "Runtime/MipMapsGenerator/Generator.h"
 #include "Runtime/RenderApi/Core/ApiCallCheck.h"
 #include <d3dcompiler.h>
