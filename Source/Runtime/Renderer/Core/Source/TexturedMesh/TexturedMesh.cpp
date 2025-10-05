@@ -1,8 +1,7 @@
 #include "Runtime/Renderer/Core/TexturedMesh/TexturedMesh.h"
-
 #include "glm/gtc/quaternion.hpp"
 #include "Runtime/RenderApi/Core/ApiCallCheck.h"
-#include "Runtime/RenderApi/Core/ConstBufferHelper.h"
+#include "Runtime/RenderApi/Core/Builders/ConstBufferBuilder.h"
 
 namespace krendrr::Runtime::Renderer::Core
 {
@@ -114,7 +113,7 @@ namespace krendrr::Runtime::Renderer::Core
         // Create buffer if not created
         if (ConstantBuffer == nullptr)
         {
-            if (!InitializeConstantBuffer<ConstBuff_TexturedMesh>(RenderApi, ConstantBuffer, CpuSrvHeap, L"Textured Mesh Constant Buffer"))
+            if (!BuildConstantBuffer<ConstBuff_TexturedMesh>(RenderApi, ConstantBuffer, CpuSrvHeap, L"Textured Mesh Constant Buffer"))
                 return false;
         }
 

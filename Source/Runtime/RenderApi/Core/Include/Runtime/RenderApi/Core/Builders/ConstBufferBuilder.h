@@ -1,17 +1,17 @@
 #pragma once
 
-#include "ApiCallCheck.h"
-#include "RenderApi.h"
+#include "Runtime/RenderApi/Core/ApiCallCheck.h"
+#include "Runtime/RenderApi/Core/RenderApi.h"
 
 namespace krendrr::Runtime::RenderApi::Core
 {
 
     template<typename ConstBufferType>
-    bool InitializeConstantBuffer(
+    bool BuildConstantBuffer(
         const RenderApi& RenderApi,
         Microsoft::WRL::ComPtr<ID3D12Resource>& ConstantBuffer,
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& DescriptorHeap,
-        const std::wstring_view& ConstantBufferName = L"Contant Buffer"
+        const std::wstring_view& ConstantBufferName = L"Constant Buffer"
         )
     {
         static_assert(alignof(ConstBufferType) == 256);

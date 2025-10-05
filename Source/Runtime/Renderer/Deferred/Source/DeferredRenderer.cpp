@@ -1,14 +1,13 @@
 #include "Runtime/Renderer/Deferred/DeferredRenderer.h"
 #include <array>
 #include <d3dcompiler.h>
-
 #include "Runtime/ModelLoader/Loader.h"
 #include "Runtime/Renderer/Core/Scene/Scene.h"
 #include "Runtime/Renderer/Core/Scene/SceneView.h"
 #include "Runtime/Renderer/Core/TexturedMesh/Texture.h"
 #include "nvtx3/nvtx3.hpp"
 #include "Runtime/RenderApi/Core/ApiCallCheck.h"
-#include "Runtime/RenderApi/Core/ConstBufferHelper.h"
+#include "Runtime/RenderApi/Core/Builders/ConstBufferBuilder.h"
 #include "Runtime/RenderApi/Core/ContentFolderD3DInclude.h"
 #include "Runtime/Renderer/Core/Lights/PointLight.h"
 
@@ -135,7 +134,7 @@ bool DeferredRenderer::UpdateFrameDataConstantBuffer(const Core::SceneView& Scen
     // Create buffer if not created
     if (FrameData.ConstantBuffer == nullptr)
     {
-        if (!InitializeConstantBuffer<ConstBuff_Frame>(*RenderApi, FrameData.ConstantBuffer, FrameData.CpuSrvHeap, L"Frame Data Constant Buffer"))
+        if (!BuildConstantBuffer<ConstBuff_Frame>(*RenderApi, FrameData.ConstantBuffer, FrameData.CpuSrvHeap, L"Frame Data Constant Buffer"))
             return false;
     }
 

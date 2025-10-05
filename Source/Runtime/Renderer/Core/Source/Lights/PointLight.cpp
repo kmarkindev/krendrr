@@ -1,6 +1,5 @@
 #include "Runtime/Renderer/Core/Lights/PointLight.h"
-
-#include "Runtime/RenderApi/Core/ConstBufferHelper.h"
+#include "Runtime/RenderApi/Core/Builders/ConstBufferBuilder.h"
 
 namespace krendrr::Runtime::Renderer::Core
 {
@@ -384,7 +383,7 @@ namespace krendrr::Runtime::Renderer::Core
         // Create buffer if not created
         if (ConstantBuffer == nullptr)
         {
-            if (!InitializeConstantBuffer<ConstBuff_PointLight>(RenderApi, ConstantBuffer, CpuSrvHeap, L"Point Light Constant Buffer"))
+            if (!BuildConstantBuffer<ConstBuff_PointLight>(RenderApi, ConstantBuffer, CpuSrvHeap, L"Point Light Constant Buffer"))
                 return false;
         }
 
