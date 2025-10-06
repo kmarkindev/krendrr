@@ -1,4 +1,4 @@
-#include "Runtime/Renderer/Core/Lights/PointLight.h"
+#include "Runtime/Renderer/Core/Scene/Lights/PointLight.h"
 #include "Runtime/RenderApi/Core/Builders/ConstBufferBuilder.h"
 
 namespace krendrr::Runtime::Renderer::Core

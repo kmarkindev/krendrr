@@ -1,13 +1,11 @@
-#include "Runtime/Renderer/Core/TexturedMesh/Texture2D.h"
-#include <algorithm>
+#include "Runtime/RenderApi/Core/Resources/Texture2D.h"
 #include <cassert>
 #include <stb_image.h>
 #include <stdexcept>
 #include <cmath>
-
 #include "Runtime/RenderApi/Core/ApiCallCheck.h"
 
-namespace krendrr::Runtime::Renderer::Core
+namespace krendrr::Runtime::RenderApi::Core
 {
 
 bool Texture2D::IsLoaded() const
@@ -15,7 +13,7 @@ bool Texture2D::IsLoaded() const
     return TextureBuffer != nullptr;
 }
 
-Texture2D::TextureLoadOperation Texture2D::Load(const RenderApi::Core::RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList,
+Texture2D::TextureLoadOperation Texture2D::Load(const RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList,
     const std::string_view& TextureFileName, const TextureLoadParams& Params)
 {
     if(IsLoaded())

@@ -6,7 +6,7 @@
 #include "glm/vec2.hpp"
 #include "Runtime/RenderApi/Core/RenderApi.h"
 
-namespace krendrr::Runtime::Renderer::Core
+namespace krendrr::Runtime::RenderApi::Core
 {
     class Texture2D
     {
@@ -52,7 +52,7 @@ namespace krendrr::Runtime::Renderer::Core
          * Creates upload heaps and fills provided command list with copy operations.
          * Caller need to execute the command list and keep upload buffers alive while copy is not finished.
          */
-        TextureLoadOperation Load(const RenderApi::Core::RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList,
+        TextureLoadOperation Load(const RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList,
             const std::string_view& TextureFileName, const TextureLoadParams& Params = TextureLoadParams::Default());
 
         D3D12_CPU_DESCRIPTOR_HANDLE GetTextureHandle() const;

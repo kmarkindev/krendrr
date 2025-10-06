@@ -1,7 +1,6 @@
 #include "Runtime/Renderer/Core/Scene/Scene.h"
-
-#include "Runtime/Renderer/Core/Lights/PointLight.h"
-#include "Runtime/Renderer/Core/TexturedMesh/TexturedStaticMesh.h"
+#include "Runtime/Renderer/Core/Scene/Lights/PointLight.h"
+#include "Runtime/Renderer/Core/Scene/Objects/TexturedStaticMesh.h"
 
 namespace krendrr::Runtime::Renderer::Core
 {

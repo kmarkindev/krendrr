@@ -7,7 +7,7 @@
 #include "Runtime/Application/Core/Window.h"
 #include "Runtime/ModelLoader/Loader.h"
 #include "Runtime/RenderApi/Core/RenderApi.h"
-#include "Runtime/Renderer/Core/Lights/PointLight.h"
+#include "Runtime/Renderer/Core/Scene/Lights/PointLight.h"
 #include "Runtime/Renderer/Core/Scene/Scene.h"
 #include "Runtime/TfExecutorBuilder/TfExecutorBuilder.h"
 

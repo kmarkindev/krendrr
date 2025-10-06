@@ -3,7 +3,7 @@
 #include <string_view>
 #include <vector>
 #include "Runtime/RenderApi/Core/RenderApi.h"
-#include "Runtime/Renderer/Core/TexturedMesh/TexturedStaticMesh.h"
+#include "Runtime/Renderer/Core/Scene/Objects/TexturedStaticMesh.h"
 #include "taskflow/taskflow.hpp"
 
 namespace krendrr::Runtime::ModelLoader

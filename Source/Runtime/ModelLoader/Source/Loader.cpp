@@ -8,15 +8,15 @@
 #include <glm/vec2.hpp>
 #include "Runtime/MipMapsGenerator/Generator.h"
 #include "Runtime/RenderApi/Core/ApiCallCheck.h"
-#include "Runtime/Renderer/Core/TexturedMesh/StaticMesh.h"
-#include "Runtime/Renderer/Core/TexturedMesh/Texture2D.h"
+#include "Runtime/RenderApi/Core/Resources/StaticMesh.h"
+#include "Runtime/RenderApi/Core/Resources/Texture2D.h"
 
 namespace krendrr::Runtime::ModelLoader
 {
     // a bunch of data shared between thread pool jobs
     struct LoadData
     {
-        std::unordered_map<std::string, std::shared_ptr<Renderer::Core::Texture2D>> TextureCache {};
+        std::unordered_map<std::string, std::shared_ptr<RenderApi::Core::Texture2D>> TextureCache {};
         std::vector<MipMapsGenerator::Generator::TextureToProcess> TexturesToGenerateMipMaps {};
         std::mutex TextureCacheMutex {};
 
@@ -184,10 +184,10 @@ namespace krendrr::Runtime::ModelLoader
 
             // Create Mesh
             {
-                std::shared_ptr<Renderer::Core::StaticMesh> NewMesh = std::make_shared<Renderer::Core::StaticMesh>();
+                std::shared_ptr<RenderApi::Core::StaticMesh> NewMesh = std::make_shared<RenderApi::Core::StaticMesh>();
                 NewTexturedMesh->AssignMesh(NewMesh);
 
-                Renderer::Core::StaticMesh::MeshLoadOperation MeshLoadOperation = NewMesh->LoadIndexed(
+                RenderApi::Core::StaticMesh::MeshLoadOperation MeshLoadOperation = NewMesh->LoadIndexed(
                     RenderApi, *NewCommandList.Get(), RenderApi::Core::RenderApi::ContainerToBytes(Vertices), Indices);
 
                 if (!MeshLoadOperation.WasSuccessful())
@@ -225,7 +225,7 @@ namespace krendrr::Runtime::ModelLoader
                         TexturePath.append("/");
                         TexturePath.append(RelativeTexturePath.C_Str());
 
-                        std::shared_ptr<Renderer::Core::Texture2D> Texture {};
+                        std::shared_ptr<RenderApi::Core::Texture2D> Texture {};
 
                         std::unique_lock TextureCacheLock(LoadData.TextureCacheMutex);
 
@@ -238,9 +238,9 @@ namespace krendrr::Runtime::ModelLoader
                             // Since texture loading may take a while, do not keep the mutex ownership
                             TextureCacheLock.unlock();
 
-                            Texture = std::make_shared<Renderer::Core::Texture2D>();
+                            Texture = std::make_shared<RenderApi::Core::Texture2D>();
 
-                            const Renderer::Core::Texture2D::TextureLoadOperation TextureLoadOperation = Texture->Load(RenderApi, *NewCommandList.Get(), TexturePath);
+                            const RenderApi::Core::Texture2D::TextureLoadOperation TextureLoadOperation = Texture->Load(RenderApi, *NewCommandList.Get(), TexturePath);
 
                             if (!TextureLoadOperation.WasSuccessful())
                             {

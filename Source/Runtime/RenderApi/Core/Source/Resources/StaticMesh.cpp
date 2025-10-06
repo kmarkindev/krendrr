@@ -1,9 +1,9 @@
-#include "Runtime/Renderer/Core/TexturedMesh/StaticMesh.h"
+#include "Runtime/RenderApi/Core/Resources/StaticMesh.h"
 #include "Runtime/RenderApi/Core/ApiCallCheck.h"
 
-namespace krendrr::Runtime::Renderer::Core
+namespace krendrr::Runtime::RenderApi::Core
 {
-    StaticMesh::MeshLoadOperation StaticMesh::Load(const RenderApi::Core::RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList, const std::span<const std::byte>& VertexData)
+    StaticMesh::MeshLoadOperation StaticMesh::Load(const RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList, const std::span<const std::byte>& VertexData)
     {
         if(IsLoaded())
         {
@@ -29,7 +29,7 @@ namespace krendrr::Runtime::Renderer::Core
         };
     }
 
-    StaticMesh::MeshLoadOperation StaticMesh::LoadIndexed(const RenderApi::Core::RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList, const std::span<const std::byte>& VertexData, const std::span<const std::uint32_t>& IndexData)
+    StaticMesh::MeshLoadOperation StaticMesh::LoadIndexed(const RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList, const std::span<const std::byte>& VertexData, const std::span<const std::uint32_t>& IndexData)
     {
         if(IsLoaded())
         {
@@ -38,7 +38,7 @@ namespace krendrr::Runtime::Renderer::Core
         }
 
         Microsoft::WRL::ComPtr<ID3D12Resource> VertexBufferUpload = LoadVertexBuffer(RenderApi, CommandList, VertexData);
-        Microsoft::WRL::ComPtr<ID3D12Resource> IndexBufferUpload = RenderApi.CreateUploadBufferAndMap(RenderApi::Core::RenderApi::ContainerToBytes(IndexData));
+        Microsoft::WRL::ComPtr<ID3D12Resource> IndexBufferUpload = RenderApi.CreateUploadBufferAndMap(RenderApi::ContainerToBytes(IndexData));
         if (!VertexBufferUpload || !IndexBufferUpload)
         {
             // TODO: log error
@@ -77,7 +77,7 @@ namespace krendrr::Runtime::Renderer::Core
         };
     }
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> StaticMesh::LoadVertexBuffer(const RenderApi::Core::RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList, const std::span<const std::byte>& VertexData)
+    Microsoft::WRL::ComPtr<ID3D12Resource> StaticMesh::LoadVertexBuffer(const RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList, const std::span<const std::byte>& VertexData)
     {
         Microsoft::WRL::ComPtr<ID3D12Resource> VertexBufferUpload = RenderApi.CreateUploadBufferAndMap(VertexData);
 

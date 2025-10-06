@@ -1,4 +1,4 @@
-#include "Runtime/Renderer/Core/TexturedMesh/TexturedStaticMesh.h"
+#include "Runtime/Renderer/Core/Scene/Objects/TexturedStaticMesh.h"
 #include "glm/gtc/quaternion.hpp"
 #include "Runtime/RenderApi/Core/ApiCallCheck.h"
 #include "Runtime/RenderApi/Core/Builders/ConstBufferBuilder.h"
@@ -10,17 +10,17 @@ namespace krendrr::Runtime::Renderer::Core
         return Mesh != nullptr;
     }
 
-    void TexturedStaticMesh::AssignMesh(std::shared_ptr<Core::StaticMesh> NewMesh)
+    void TexturedStaticMesh::AssignMesh(std::shared_ptr<RenderApi::Core::StaticMesh> NewMesh)
     {
         Mesh = std::move(NewMesh);
     }
 
-    void TexturedStaticMesh::AssignTexture(std::string Name, std::shared_ptr<Texture2D> NewTexture)
+    void TexturedStaticMesh::AssignTexture(std::string Name, std::shared_ptr<RenderApi::Core::Texture2D> NewTexture)
     {
         Textures.insert_or_assign(std::move(Name), std::move(NewTexture));
     }
 
-    std::shared_ptr<const Texture2D> TexturedStaticMesh::GetTexture(const std::string_view& Name) const
+    std::shared_ptr<const RenderApi::Core::Texture2D> TexturedStaticMesh::GetTexture(const std::string_view& Name) const
     {
         auto Iter = Textures.find(Name);
 
@@ -35,7 +35,7 @@ namespace krendrr::Runtime::Renderer::Core
         return Textures.contains(Name);
     }
 
-    std::shared_ptr<const StaticMesh> TexturedStaticMesh::GetMesh() const
+    std::shared_ptr<const RenderApi::Core::StaticMesh> TexturedStaticMesh::GetMesh() const
     {
         return Mesh;
     }

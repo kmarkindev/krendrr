@@ -9,11 +9,14 @@
 #include "glm/detail/type_quat.hpp"
 #include "Runtime/RenderApi/Core/RenderApi.h"
 
+namespace krendrr::Runtime::RenderApi::Core
+{
+    class StaticMesh;
+    class Texture2D;
+}
+
 namespace krendrr::Runtime::Renderer::Core
 {
-    class Texture2D;
-    class StaticMesh;
-
     /**
      * Represents a textured mesh on scene
      *
@@ -25,12 +28,12 @@ namespace krendrr::Runtime::Renderer::Core
 
         [[nodiscard]] bool IsValid() const;
 
-        void AssignTexture(std::string Name, std::shared_ptr<Texture2D> NewTexture);
-        [[nodiscard]] std::shared_ptr<const Texture2D> GetTexture(const std::string_view& Name) const;
+        void AssignTexture(std::string Name, std::shared_ptr<RenderApi::Core::Texture2D> NewTexture);
+        [[nodiscard]] std::shared_ptr<const RenderApi::Core::Texture2D> GetTexture(const std::string_view& Name) const;
         [[nodiscard]] bool HasTexture(const std::string_view& Name) const;
 
-        void AssignMesh(std::shared_ptr<StaticMesh> NewMesh);
-        [[nodiscard]] std::shared_ptr<const Core::StaticMesh> GetMesh() const;
+        void AssignMesh(std::shared_ptr<RenderApi::Core::StaticMesh> NewMesh);
+        [[nodiscard]] std::shared_ptr<const RenderApi::Core::StaticMesh> GetMesh() const;
         [[nodiscard]] const glm::vec3& GetMeshColor() const;
         void SetMeshColor(const glm::vec3& NewMeshColor);
 
@@ -59,8 +62,8 @@ namespace krendrr::Runtime::Renderer::Core
         glm::quat Rotation {};
         glm::vec3 Scale {1.f, 1.f, 1.f};
 
-        std::shared_ptr<const StaticMesh> Mesh {};
-        std::map<std::string, std::shared_ptr<const Texture2D>, std::less<>> Textures {};
+        std::shared_ptr<const RenderApi::Core::StaticMesh> Mesh {};
+        std::map<std::string, std::shared_ptr<const RenderApi::Core::Texture2D>, std::less<>> Textures {};
 
         glm::vec3 MeshColor {};
         bool bCanCastShadow {true};

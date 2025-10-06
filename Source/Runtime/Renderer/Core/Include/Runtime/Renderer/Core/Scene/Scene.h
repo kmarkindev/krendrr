@@ -3,7 +3,6 @@
 #include <memory>
 #include <span>
 #include <vector>
-
 #include "glm/fwd.hpp"
 #include "glm/detail/type_quat.hpp"
 

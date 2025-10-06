@@ -4,13 +4,13 @@
 #include "Runtime/ModelLoader/Loader.h"
 #include "Runtime/Renderer/Core/Scene/Scene.h"
 #include "Runtime/Renderer/Core/Scene/SceneView.h"
-#include "Runtime/Renderer/Core/TexturedMesh/Texture2D.h"
+#include "Runtime/RenderApi/Core/Resources/Texture2D.h"
 #include "nvtx3/nvtx3.hpp"
 #include "Runtime/RenderApi/Core/ApiCallCheck.h"
 #include "Runtime/RenderApi/Core/Builders/ConstBufferBuilder.h"
 #include "Runtime/RenderApi/Core/Builders/PsoBuilder.h"
 #include "Runtime/RenderApi/Core/Builders/RootSigBuilder.h"
-#include "Runtime/Renderer/Core/Lights/PointLight.h"
+#include "Runtime/Renderer/Core/Scene/Lights/PointLight.h"
 
 namespace krendrr::Runtime::Renderer::Deferred
 {
@@ -1479,8 +1479,9 @@ bool DeferredRenderer::InitBasicMeshes()
         1.f, -1.f, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     };
 
-    auto NewFullscreenQuadMesh = std::make_shared<Core::StaticMesh>();
-    const Core::StaticMesh::MeshLoadOperation MeshLoad = NewFullscreenQuadMesh->Load(*RenderApi.get(), *InitCommandList.Get(), RenderApi->ContainerToBytes(QuadMesh));
+    auto NewFullscreenQuadMesh = std::make_shared<RenderApi::Core::StaticMesh>();
+    const RenderApi::Core::StaticMesh::MeshLoadOperation MeshLoad = NewFullscreenQuadMesh
+        ->Load(*RenderApi.get(), *InitCommandList.Get(), RenderApi->ContainerToBytes(QuadMesh));
 
     if (!MeshLoad.WasSuccessful())
         return false;
