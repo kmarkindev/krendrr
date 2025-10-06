@@ -12,17 +12,15 @@ namespace krendrr::Runtime::Renderer::Deferred
     {
     public:
 
-        bool Initialize(std::shared_ptr<RenderApi::Core::RenderApi> NewRenderApi, std::shared_ptr<tf::Executor> NewTfExecutor, std::shared_ptr<Core::Scene> NewScene) override;
+        bool Initialize(std::shared_ptr<RenderApi::Core::RenderApi> NewRenderApi, std::shared_ptr<tf::Executor> NewTfExecutor) override;
 
-        bool Render(const std::span<Core::SceneView>& SceneViews) override;
+        bool Render(const Core::Scene* Scene, const std::span<Core::SceneView>& SceneViews) override;
 
         bool Shutdown() override;
 
     private:
 
         std::shared_ptr<RenderApi::Core::RenderApi> RenderApi {};
-        std::shared_ptr<Core::Scene> Scene {};
-
         std::shared_ptr<tf::Executor> TfExecutor {};
 
         std::shared_ptr<Core::Mesh> FullscreenQuadMesh {};
@@ -38,7 +36,7 @@ namespace krendrr::Runtime::Renderer::Deferred
         PrePostRenderData PrePostRenderData {};
 
         bool InitPrePostRender();
-        bool PreRender(const Core::SceneView& SceneView);
+        bool PreRender(const Core::Scene* Scene, const Core::SceneView& SceneView);
         bool PostRender(const Core::SceneView& SceneView);
 
         Microsoft::WRL::ComPtr<ID3D12Fence> FrameFence {};
@@ -124,9 +122,9 @@ namespace krendrr::Runtime::Renderer::Deferred
 
         FrameData FrameData {};
 
-        bool UpdateFrameDataConstantBuffer(const Core::SceneView& SceneView);
-        bool UpdateTexturedMeshConstantBuffers();
-        bool UpdatePointLightConstantBuffers();
+        bool UpdateFrameDataConstantBuffer(const Core::Scene* Scene, const Core::SceneView& SceneView);
+        bool UpdateTexturedMeshConstantBuffers(const Core::Scene* Scene);
+        bool UpdatePointLightConstantBuffers(const Core::Scene* Scene);
 
         struct GeometryPassData
         {
@@ -150,7 +148,7 @@ namespace krendrr::Runtime::Renderer::Deferred
         GeometryPassData GeometryPassData {};
 
         bool InitializeGeometryPass();
-        bool GeometryPass(const Core::SceneView& SceneView);
+        bool GeometryPass(const Core::Scene* Scene, const Core::SceneView& SceneView);
 
         struct LightPassData
         {
@@ -200,7 +198,7 @@ namespace krendrr::Runtime::Renderer::Deferred
         PointLightShadowCubeMapData PointLightShadowCubeMapData {};
 
         bool InitPointLightShadowCubeMapPass();
-        bool PointLightShadowCubeMapsPass();
+        bool PointLightShadowCubeMapsPass(const Core::Scene* Scene);
 
         struct PointLightVolumePassData
         {
@@ -221,7 +219,7 @@ namespace krendrr::Runtime::Renderer::Deferred
         PointLightVolumePassData PointLightVolumePassData{};
 
         bool InitPointLightVolumePass();
-        bool PointLightVolumesPass(const Core::SceneView& SceneView);
+        bool PointLightVolumesPass(const Core::Scene* Scene, const Core::SceneView& SceneView);
 
         struct PostProcessingPassData
         {

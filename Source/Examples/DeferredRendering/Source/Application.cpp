@@ -86,7 +86,7 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize(const R
         SetupSponzaScene();
 
     Renderer = std::make_unique<Runtime::Renderer::Deferred::DeferredRenderer>();
-    if (!Renderer->Initialize(RenderApi, TfExecutor, Scene))
+    if (!Renderer->Initialize(RenderApi, TfExecutor))
     {
         // TODO: log error
         return false;
@@ -129,7 +129,7 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Tick(float DeltaTi
     std::array Views = {
         SceneView
     };
-    if (!Renderer->Render(Views))
+    if (!Renderer->Render(Scene.get(), Views))
     {
         // TODO: add error log
         return false;

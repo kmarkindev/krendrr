@@ -15,13 +15,11 @@
 namespace krendrr::Runtime::Renderer::Deferred
 {
 
-bool DeferredRenderer::Initialize(std::shared_ptr<RenderApi::Core::RenderApi> NewRenderApi, std::shared_ptr<tf::Executor> NewTfExecutor, std::shared_ptr<Core::Scene> NewScene)
+bool DeferredRenderer::Initialize(std::shared_ptr<RenderApi::Core::RenderApi> NewRenderApi, std::shared_ptr<tf::Executor> NewTfExecutor)
 {
     nvtx3::scoped_range InitRange {"Deferred Renderer: Initialize"};
 
     RenderApi = std::move(NewRenderApi);
-    Scene = std::move(NewScene);
-
     TfExecutor = std::move(NewTfExecutor);
 
     CHECKED(
@@ -63,7 +61,7 @@ bool DeferredRenderer::Initialize(std::shared_ptr<RenderApi::Core::RenderApi> Ne
     return true;
 }
 
-bool DeferredRenderer::Render(const std::span<Core::SceneView>& SceneViews)
+bool DeferredRenderer::Render(const Core::Scene* Scene, const std::span<Core::SceneView>& SceneViews)
 {
     if (Scene->GetPointLights().size() > PointLightVolumePassData.MAX_DYNAMIC_POINT_LIGHTS_COUNT)
     {
@@ -73,22 +71,22 @@ bool DeferredRenderer::Render(const std::span<Core::SceneView>& SceneViews)
 
     for (const Core::SceneView& SceneView : SceneViews)
     {
-        if (!UpdateFrameDataConstantBuffer(SceneView))
+        if (!UpdateFrameDataConstantBuffer(Scene, SceneView))
             return false;
 
-        if (!UpdateTexturedMeshConstantBuffers())
+        if (!UpdateTexturedMeshConstantBuffers(Scene))
             return false;
 
-        if (!UpdatePointLightConstantBuffers())
+        if (!UpdatePointLightConstantBuffers(Scene))
             return false;
 
-        if (!PreRender(SceneView))
+        if (!PreRender(Scene, SceneView))
             return false;
 
         if (!InitGBufferForView(SceneView))
             return false;
 
-        if (!GeometryPass(SceneView))
+        if (!GeometryPass(Scene, SceneView))
             return false;
 
         if (!TransitionGBufferFromRenderTargetToReadState())
@@ -100,10 +98,10 @@ bool DeferredRenderer::Render(const std::span<Core::SceneView>& SceneViews)
         if (!AmbientDirectionalLightPass(SceneView))
             return false;
 
-        if (!PointLightShadowCubeMapsPass())
+        if (!PointLightShadowCubeMapsPass(Scene))
             return false;
 
-        if (!PointLightVolumesPass(SceneView))
+        if (!PointLightVolumesPass(Scene, SceneView))
             return false;
 
         if (!TransitionLightPassFromRenderTargetToReadState())
@@ -128,7 +126,7 @@ bool DeferredRenderer::Render(const std::span<Core::SceneView>& SceneViews)
     return true;
 }
 
-bool DeferredRenderer::UpdateFrameDataConstantBuffer(const Core::SceneView& SceneView)
+bool DeferredRenderer::UpdateFrameDataConstantBuffer(const Core::Scene* Scene, const Core::SceneView& SceneView)
 {
     nvtx3::scoped_range ConstBufUpdateRange {"Update Frame Data Constant Buffer"};
 
@@ -163,7 +161,7 @@ bool DeferredRenderer::UpdateFrameDataConstantBuffer(const Core::SceneView& Scen
     return true;
 }
 
-bool DeferredRenderer::UpdateTexturedMeshConstantBuffers()
+bool DeferredRenderer::UpdateTexturedMeshConstantBuffers(const Core::Scene* Scene)
 {
     nvtx3::scoped_range ConstBufUpdateRange {"Update Textured Mesh Constant Buffers"};
 
@@ -176,7 +174,7 @@ bool DeferredRenderer::UpdateTexturedMeshConstantBuffers()
     return true;
 }
 
-bool DeferredRenderer::UpdatePointLightConstantBuffers()
+bool DeferredRenderer::UpdatePointLightConstantBuffers(const Core::Scene* Scene)
 {
     nvtx3::scoped_range ConstBufUpdateRange {"Update Point Light Constant Buffers"};
 
@@ -271,7 +269,7 @@ bool DeferredRenderer::InitializeGeometryPass()
     return true;
 }
 
-bool DeferredRenderer::GeometryPass(const Core::SceneView& SceneView)
+bool DeferredRenderer::GeometryPass(const Core::Scene* Scene, const Core::SceneView& SceneView)
 {
     nvtx3::scoped_range PassRange {"Geometry Pass"};
 
@@ -833,7 +831,7 @@ bool DeferredRenderer::InitPointLightShadowCubeMapPass()
     return true;
 }
 
-bool DeferredRenderer::PointLightShadowCubeMapsPass()
+bool DeferredRenderer::PointLightShadowCubeMapsPass(const Core::Scene* Scene)
 {
     nvtx3::scoped_range PassRange {"Point Light Shadow Cube Maps Pass"};
 
@@ -1127,7 +1125,7 @@ bool DeferredRenderer::InitPointLightVolumePass()
     return true;
 }
 
-bool DeferredRenderer::PointLightVolumesPass(const Core::SceneView& SceneView)
+bool DeferredRenderer::PointLightVolumesPass(const Core::Scene* Scene, const Core::SceneView& SceneView)
 {
     nvtx3::scoped_range PassRange {"Point Light Volumes Pass"};
 
@@ -1533,7 +1531,7 @@ bool DeferredRenderer::InitPrePostRender()
     return true;
 }
 
-bool DeferredRenderer::PreRender(const Core::SceneView& SceneView)
+bool DeferredRenderer::PreRender(const Core::Scene* Scene, const Core::SceneView& SceneView)
 {
     CHECKED_S(PrePostRenderData.CommandAllocator->Reset());
 
