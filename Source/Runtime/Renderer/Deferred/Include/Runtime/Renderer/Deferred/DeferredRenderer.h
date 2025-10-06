@@ -3,8 +3,8 @@
 #include <memory>
 #include <array>
 #include "Runtime/Renderer/Core/Renderer.h"
-#include "Runtime/Renderer/Core/TexturedMesh/Mesh.h"
-#include "Runtime/Renderer/Core/TexturedMesh/TexturedMesh.h"
+#include "Runtime/Renderer/Core/TexturedMesh/StaticMesh.h"
+#include "Runtime/Renderer/Core/TexturedMesh/TexturedStaticMesh.h"
 
 namespace krendrr::Runtime::Renderer::Deferred
 {
@@ -23,8 +23,8 @@ namespace krendrr::Runtime::Renderer::Deferred
         std::shared_ptr<RenderApi::Core::RenderApi> RenderApi {};
         std::shared_ptr<tf::Executor> TfExecutor {};
 
-        std::shared_ptr<Core::Mesh> FullscreenQuadMesh {};
-        std::shared_ptr<Core::Mesh> SphereMesh {};
+        std::shared_ptr<const Core::StaticMesh> FullscreenQuadMesh {};
+        std::shared_ptr<const Core::StaticMesh> SphereMesh {};
         bool InitBasicMeshes();
 
         struct PrePostRenderData

@@ -1,9 +1,9 @@
-#include "Runtime/Renderer/Core/TexturedMesh/Mesh.h"
+#include "Runtime/Renderer/Core/TexturedMesh/StaticMesh.h"
 #include "Runtime/RenderApi/Core/ApiCallCheck.h"
 
 namespace krendrr::Runtime::Renderer::Core
 {
-    Mesh::MeshLoadOperation Mesh::Load(const RenderApi::Core::RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList, const std::span<const std::byte>& VertexData)
+    StaticMesh::MeshLoadOperation StaticMesh::Load(const RenderApi::Core::RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList, const std::span<const std::byte>& VertexData)
     {
         if(IsLoaded())
         {
@@ -29,7 +29,7 @@ namespace krendrr::Runtime::Renderer::Core
         };
     }
 
-    Mesh::MeshLoadOperation Mesh::LoadIndexed(const RenderApi::Core::RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList, const std::span<const std::byte>& VertexData, const std::span<const std::uint32_t>& IndexData)
+    StaticMesh::MeshLoadOperation StaticMesh::LoadIndexed(const RenderApi::Core::RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList, const std::span<const std::byte>& VertexData, const std::span<const std::uint32_t>& IndexData)
     {
         if(IsLoaded())
         {
@@ -77,7 +77,7 @@ namespace krendrr::Runtime::Renderer::Core
         };
     }
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> Mesh::LoadVertexBuffer(const RenderApi::Core::RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList, const std::span<const std::byte>& VertexData)
+    Microsoft::WRL::ComPtr<ID3D12Resource> StaticMesh::LoadVertexBuffer(const RenderApi::Core::RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList, const std::span<const std::byte>& VertexData)
     {
         Microsoft::WRL::ComPtr<ID3D12Resource> VertexBufferUpload = RenderApi.CreateUploadBufferAndMap(VertexData);
 
@@ -105,12 +105,12 @@ namespace krendrr::Runtime::Renderer::Core
         return VertexBufferUpload;
     }
 
-    bool Mesh::IsLoaded() const
+    bool StaticMesh::IsLoaded() const
     {
         return VertexBuffer != nullptr;
     }
 
-    bool Mesh::IsUsingIndices() const
+    bool StaticMesh::IsUsingIndices() const
     {
         if (!CheckLoaded())
             return false;
@@ -118,7 +118,7 @@ namespace krendrr::Runtime::Renderer::Core
         return IndexBuffer != nullptr;
     }
 
-    std::int32_t Mesh::GetPrimitivesCount() const
+    std::int32_t StaticMesh::GetPrimitivesCount() const
     {
         if (!CheckLoaded())
             return 0;
@@ -126,7 +126,7 @@ namespace krendrr::Runtime::Renderer::Core
         return PrimitivesCount;
     }
 
-    std::ptrdiff_t Mesh::GetPrimitivesOffset() const
+    std::ptrdiff_t StaticMesh::GetPrimitivesOffset() const
     {
         if (!CheckLoaded())
             return 0;
@@ -134,7 +134,7 @@ namespace krendrr::Runtime::Renderer::Core
         return PrimitivesOffset;
     }
 
-    D3D12_VERTEX_BUFFER_VIEW Mesh::GetVertexBufferView() const
+    D3D12_VERTEX_BUFFER_VIEW StaticMesh::GetVertexBufferView() const
     {
         const D3D12_RESOURCE_DESC Desc = VertexBuffer->GetDesc();
 
@@ -145,7 +145,7 @@ namespace krendrr::Runtime::Renderer::Core
         };
     }
 
-    D3D12_INDEX_BUFFER_VIEW Mesh::GetIndexBufferView() const
+    D3D12_INDEX_BUFFER_VIEW StaticMesh::GetIndexBufferView() const
     {
         const D3D12_RESOURCE_DESC Desc = IndexBuffer->GetDesc();
 
@@ -156,7 +156,7 @@ namespace krendrr::Runtime::Renderer::Core
         };
     }
 
-    bool Mesh::CheckLoaded() const
+    bool StaticMesh::CheckLoaded() const
     {
         if(!IsLoaded())
         {

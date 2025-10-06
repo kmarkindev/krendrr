@@ -1,26 +1,26 @@
-#include "Runtime/Renderer/Core/TexturedMesh/TexturedMesh.h"
+#include "Runtime/Renderer/Core/TexturedMesh/TexturedStaticMesh.h"
 #include "glm/gtc/quaternion.hpp"
 #include "Runtime/RenderApi/Core/ApiCallCheck.h"
 #include "Runtime/RenderApi/Core/Builders/ConstBufferBuilder.h"
 
 namespace krendrr::Runtime::Renderer::Core
 {
-    bool TexturedMesh::IsValid() const
+    bool TexturedStaticMesh::IsValid() const
     {
         return Mesh != nullptr;
     }
 
-    void TexturedMesh::AssignMesh(std::shared_ptr<Core::Mesh> NewMesh)
+    void TexturedStaticMesh::AssignMesh(std::shared_ptr<Core::StaticMesh> NewMesh)
     {
         Mesh = std::move(NewMesh);
     }
 
-    void TexturedMesh::AssignTexture(std::string Name, std::shared_ptr<Texture> NewTexture)
+    void TexturedStaticMesh::AssignTexture(std::string Name, std::shared_ptr<Texture2D> NewTexture)
     {
         Textures.insert_or_assign(std::move(Name), std::move(NewTexture));
     }
 
-    std::shared_ptr<Texture> TexturedMesh::GetTexture(const std::string_view& Name) const
+    std::shared_ptr<const Texture2D> TexturedStaticMesh::GetTexture(const std::string_view& Name) const
     {
         auto Iter = Textures.find(Name);
 
@@ -30,67 +30,67 @@ namespace krendrr::Runtime::Renderer::Core
         return Iter->second;
     }
 
-    bool TexturedMesh::HasTexture(const std::string_view& Name) const
+    bool TexturedStaticMesh::HasTexture(const std::string_view& Name) const
     {
         return Textures.contains(Name);
     }
 
-    std::shared_ptr<Mesh> TexturedMesh::GetMesh() const
+    std::shared_ptr<const StaticMesh> TexturedStaticMesh::GetMesh() const
     {
         return Mesh;
     }
 
-    const glm::vec3& TexturedMesh::GetMeshColor() const
+    const glm::vec3& TexturedStaticMesh::GetMeshColor() const
     {
         return MeshColor;
     }
 
-    void TexturedMesh::SetMeshColor(const glm::vec3& NewMeshColor)
+    void TexturedStaticMesh::SetMeshColor(const glm::vec3& NewMeshColor)
     {
         MeshColor = NewMeshColor;
     }
 
-    bool TexturedMesh::CanCastShadow() const
+    bool TexturedStaticMesh::CanCastShadow() const
     {
         return bCanCastShadow;
     }
 
-    void TexturedMesh::SetCanCastShadow(bool bNewCanCastShadow)
+    void TexturedStaticMesh::SetCanCastShadow(bool bNewCanCastShadow)
     {
         bCanCastShadow = bNewCanCastShadow;
     }
 
-    const glm::vec3& TexturedMesh::GetPosition() const
+    const glm::vec3& TexturedStaticMesh::GetPosition() const
     {
         return Position;
     }
 
-    void TexturedMesh::SetPosition(const glm::vec3& NewPosition)
+    void TexturedStaticMesh::SetPosition(const glm::vec3& NewPosition)
     {
         Position = NewPosition;
     }
 
-    const glm::quat& TexturedMesh::GetRotation() const
+    const glm::quat& TexturedStaticMesh::GetRotation() const
     {
         return Rotation;
     }
 
-    void TexturedMesh::SetRotation(const glm::quat& NewRotation)
+    void TexturedStaticMesh::SetRotation(const glm::quat& NewRotation)
     {
         Rotation = NewRotation;
     }
 
-    const glm::vec3& TexturedMesh::GetScale() const
+    const glm::vec3& TexturedStaticMesh::GetScale() const
     {
         return Scale;
     }
 
-    void TexturedMesh::SetScale(const glm::vec3& NewScale)
+    void TexturedStaticMesh::SetScale(const glm::vec3& NewScale)
     {
         Scale = NewScale;
     }
 
-    glm::mat4 TexturedMesh::GetModelMatrix() const
+    glm::mat4 TexturedStaticMesh::GetModelMatrix() const
     {
         glm::mat4 ModelMatrix = glm::mat4(1.0f);
 
@@ -103,12 +103,12 @@ namespace krendrr::Runtime::Renderer::Core
         return ModelMatrix;
     }
 
-    glm::mat3 TexturedMesh::GetNormalMatrix() const
+    glm::mat3 TexturedStaticMesh::GetNormalMatrix() const
     {
         return glm::transpose(glm::inverse(glm::mat3(GetModelMatrix())));
     }
 
-    bool TexturedMesh::UpdateConstantBuffer(const RenderApi::Core::RenderApi& RenderApi)
+    bool TexturedStaticMesh::UpdateConstantBuffer(const RenderApi::Core::RenderApi& RenderApi)
     {
         // Create buffer if not created
         if (ConstantBuffer == nullptr)
@@ -133,7 +133,7 @@ namespace krendrr::Runtime::Renderer::Core
         return true;
     }
 
-    D3D12_CPU_DESCRIPTOR_HANDLE TexturedMesh::GetConstantBufferHandle() const
+    D3D12_CPU_DESCRIPTOR_HANDLE TexturedStaticMesh::GetConstantBufferHandle() const
     {
         if (CpuSrvHeap == nullptr)
             return {};
@@ -143,7 +143,7 @@ namespace krendrr::Runtime::Renderer::Core
         };
     }
 
-    D3D12_GPU_VIRTUAL_ADDRESS TexturedMesh::GetConstantBufferGpuAddress() const
+    D3D12_GPU_VIRTUAL_ADDRESS TexturedStaticMesh::GetConstantBufferGpuAddress() const
     {
         return ConstantBuffer->GetGPUVirtualAddress();
     }

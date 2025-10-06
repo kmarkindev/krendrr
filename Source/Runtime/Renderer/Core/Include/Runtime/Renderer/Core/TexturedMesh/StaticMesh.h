@@ -7,16 +7,16 @@
 
 namespace krendrr::Runtime::Renderer::Core
 {
-    class Mesh
+    class StaticMesh
     {
     public:
 
-        Mesh() = default;
-        Mesh(const Mesh& Other) = delete;
-        Mesh& operator=(const Mesh& Other) = delete;
-        Mesh(Mesh&& Other) noexcept = default;
-        Mesh& operator=(Mesh&& Other) noexcept = default;
-        ~Mesh() = default;
+        StaticMesh() = default;
+        StaticMesh(const StaticMesh& Other) = delete;
+        StaticMesh& operator=(const StaticMesh& Other) = delete;
+        StaticMesh(StaticMesh&& Other) noexcept = default;
+        StaticMesh& operator=(StaticMesh&& Other) noexcept = default;
+        ~StaticMesh() = default;
 
         struct MeshLoadOperation
         {

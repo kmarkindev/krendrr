@@ -3,22 +3,21 @@
 #include <string_view>
 #include <wrl/client.h>
 #include <d3dx12/d3dx12.h>
-
 #include "glm/vec2.hpp"
 #include "Runtime/RenderApi/Core/RenderApi.h"
 
 namespace krendrr::Runtime::Renderer::Core
 {
-    class Texture
+    class Texture2D
     {
     public:
 
-        Texture() = default;
-        Texture(const Texture& Other) = delete;
-        Texture& operator=(const Texture& Other) = delete;
-        Texture(Texture&& Other) noexcept = default;
-        Texture& operator=(Texture&& Other) noexcept = default;
-        ~Texture() = default;
+        Texture2D() = default;
+        Texture2D(const Texture2D& Other) = delete;
+        Texture2D& operator=(const Texture2D& Other) = delete;
+        Texture2D(Texture2D&& Other) noexcept = default;
+        Texture2D& operator=(Texture2D&& Other) noexcept = default;
+        ~Texture2D() = default;
 
         struct TextureLoadParams
         {

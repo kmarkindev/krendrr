@@ -4,7 +4,7 @@
 #include "Runtime/ModelLoader/Loader.h"
 #include "Runtime/Renderer/Core/Scene/Scene.h"
 #include "Runtime/Renderer/Core/Scene/SceneView.h"
-#include "Runtime/Renderer/Core/TexturedMesh/Texture.h"
+#include "Runtime/Renderer/Core/TexturedMesh/Texture2D.h"
 #include "nvtx3/nvtx3.hpp"
 #include "Runtime/RenderApi/Core/ApiCallCheck.h"
 #include "Runtime/RenderApi/Core/Builders/ConstBufferBuilder.h"
@@ -345,7 +345,7 @@ bool DeferredRenderer::GeometryPass(const Core::Scene* Scene, const Core::SceneV
     );
 
     int DrawIndex = -1;
-    for (const std::shared_ptr<Core::TexturedMesh>& TexturedMesh : Scene->GetTexturedMeshes())
+    for (const std::shared_ptr<Core::TexturedStaticMesh>& TexturedMesh : Scene->GetTexturedMeshes())
     {
         nvtx3::scoped_range MeshIterationRange {"Mesh Iteration"};
 
@@ -1479,11 +1479,13 @@ bool DeferredRenderer::InitBasicMeshes()
         1.f, -1.f, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     };
 
-    FullscreenQuadMesh = std::make_shared<Core::Mesh>();
-    const Core::Mesh::MeshLoadOperation MeshLoad = FullscreenQuadMesh->Load(*RenderApi.get(), *InitCommandList.Get(), RenderApi->ContainerToBytes(QuadMesh));
+    auto NewFullscreenQuadMesh = std::make_shared<Core::StaticMesh>();
+    const Core::StaticMesh::MeshLoadOperation MeshLoad = NewFullscreenQuadMesh->Load(*RenderApi.get(), *InitCommandList.Get(), RenderApi->ContainerToBytes(QuadMesh));
 
     if (!MeshLoad.WasSuccessful())
         return false;
+
+    FullscreenQuadMesh = std::move(NewFullscreenQuadMesh);
 
     CHECKED_S(InitCommandList->Close());
 
