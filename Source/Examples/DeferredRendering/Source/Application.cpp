@@ -111,13 +111,13 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Tick(float DeltaTi
     Camera.Update(DeltaTime);
 
     // No sync needed, since all tasks in main task flow access it separately
-    bool bHasError {};
+    std::atomic_bool bHasError {};
 
     tf::Taskflow MainTaskFlow {};
 
     auto ErrorCheckLambda = [&]()
     {
-        return bHasError ? 1 : 0;
+        return bHasError.load(std::memory_order::relaxed) ? 1 : 0;
     };
 
     tf::Task RenderErrorCheckTask = MainTaskFlow.emplace(ErrorCheckLambda)
@@ -144,7 +144,7 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Tick(float DeltaTi
 
             if (!bRenderDataSetSuccess)
             {
-                bHasError = false;
+                bHasError.store(true, std::memory_order::relaxed);
                 return;
             }
 
@@ -159,7 +159,7 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Tick(float DeltaTi
                 // remove queued tasks if any
                 Subflow.graph().clear();
 
-                bHasError = true;
+                bHasError.store(true, std::memory_order::relaxed);
                 return;
             }
         }
@@ -175,7 +175,7 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Tick(float DeltaTi
             {
                 // TODO: add error log
 
-                bHasError = true;
+                bHasError.store(true, std::memory_order::relaxed);
             }
         }
     ).name("Window Swap Task");
@@ -191,7 +191,7 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Tick(float DeltaTi
 
     TfExecutor->run(MainTaskFlow).wait();
 
-    return !bHasError;
+    return !bHasError.load(std::memory_order::relaxed);
 }
 
 bool krendrr::Examples::SimpleDeferredRendering::Application::Shutdown()
