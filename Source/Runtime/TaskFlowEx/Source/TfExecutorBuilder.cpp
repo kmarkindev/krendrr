@@ -33,7 +33,7 @@ namespace krendrr::Runtime::TaskFlowEx
     std::shared_ptr<tf::Executor> Builder::Build()
     {
         std::shared_ptr<tf::Executor> Executor = std::make_shared<tf::Executor>(
-            WorkersCount > 0 ? WorkersCount : std::thread::hardware_concurrency() - 1
+            WorkersCount > 0 ? WorkersCount : std::thread::hardware_concurrency()
         );
 
         if (bIsNvtxObserverAttached)

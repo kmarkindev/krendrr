@@ -31,8 +31,8 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize(const R
     const bool bRenderApiInitResult = RenderApi->Initialize({
         .Debug = Runtime::RenderApi::Core::RenderApi::InitParams::Debug::DebugLayerWithGpuBasedValidation,
         .bEnableShadersDebug = true
-        //.Debug = Runtime::RenderApi::Core::RenderApi::InitParams::Debug::None,
-        //.bEnableShadersDebug = false
+        // .Debug = Runtime::RenderApi::Core::RenderApi::InitParams::Debug::None,
+        // .bEnableShadersDebug = false
     });
 
     if (!bRenderApiInitResult)
@@ -102,46 +102,96 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Tick(float DeltaTi
         static std::size_t FpsDisplayCounter = 0;
         FpsDisplayCounter++;
         if (FpsDisplayCounter % 100 == 0)
-            std::cout << "Delta: " << DeltaTime << " FPS: " << 1.f / DeltaTime << std::endl;
-    }
-
-    const glm::ivec2 WindowSize = Window->GetSize();
-    Runtime::Application::Core::Window::WindowRenderData RenderData = Window->GetCurrentRenderTargetView();
-
-    const bool bRenderDataSetSuccess = SceneView.SetRenderData(
         {
-            RenderData.WindowRenderTarget,
-            RenderData.Handle,
-            D3D12_RESOURCE_STATE_PRESENT
-        }, {
-            0,
-            0,
-            WindowSize.x,
-            WindowSize.y
+            FpsDisplayCounter = 0;
+            std::cout << "Delta: " << DeltaTime << " FPS: " << 1.f / DeltaTime << std::endl;
         }
-    );
-
-    if (!bRenderDataSetSuccess)
-        return false;
+    }
 
     Camera.Update(DeltaTime);
 
-    std::array Views = {
-        SceneView
+    // No sync needed, since all tasks in main task flow access it separately
+    bool bHasError {};
+
+    tf::Taskflow MainTaskFlow {};
+
+    auto ErrorCheckLambda = [&]()
+    {
+        return bHasError ? 1 : 0;
     };
-    if (!Renderer->Render(Scene.get(), Views))
-    {
-        // TODO: add error log
-        return false;
-    }
 
-    if (!Window->Swap())
-    {
-        // TODO: add error log
-        return false;
-    }
+    tf::Task RenderErrorCheckTask = MainTaskFlow.emplace(ErrorCheckLambda)
+        .name("Render Error Checking Task");
 
-    return true;
+    tf::Task RenderTickTask = MainTaskFlow.emplace(
+        [&](tf::Subflow& Subflow)
+        {
+            const glm::ivec2 WindowSize = Window->GetSize();
+            const Runtime::Application::Core::Window::WindowRenderData RenderData = Window->GetCurrentRenderTargetView();
+
+            const bool bRenderDataSetSuccess = SceneView.SetRenderData(
+                {
+                    RenderData.WindowRenderTarget,
+                    RenderData.Handle,
+                    D3D12_RESOURCE_STATE_PRESENT
+                }, {
+                    0,
+                    0,
+                    WindowSize.x,
+                    WindowSize.y
+                }
+            );
+
+            if (!bRenderDataSetSuccess)
+            {
+                bHasError = false;
+                return;
+            }
+
+            std::array Views = {
+                SceneView
+            };
+
+            if (!Renderer->Render(Scene.get(), Views, Subflow))
+            {
+                // TODO: add error log
+
+                // remove queued tasks if any
+                Subflow.graph().clear();
+
+                bHasError = true;
+                return;
+            }
+        }
+    ).name("Renderer Tick Task");
+
+    tf::Task SwapErrorCheckTask = MainTaskFlow.emplace(ErrorCheckLambda)
+        .name("Swap Error Checking Task");
+
+    tf::Task SwapTask = MainTaskFlow.emplace(
+        [&]()
+        {
+            if (!Window->Swap())
+            {
+                // TODO: add error log
+
+                bHasError = true;
+            }
+        }
+    ).name("Window Swap Task");
+
+    // dead-end task. can be used for canceling the task flow execution
+    tf::Task EndTask = MainTaskFlow.emplace([](){}).name("Application Tick End Task");
+
+    // Allow render tick task to go straight to end task in case of an error
+    RenderTickTask.precede(RenderErrorCheckTask);
+    RenderErrorCheckTask.precede(SwapTask, EndTask);
+    SwapTask.precede(SwapErrorCheckTask);
+    SwapErrorCheckTask.precede(EndTask);
+
+    TfExecutor->run(MainTaskFlow).wait();
+
+    return !bHasError;
 }
 
 bool krendrr::Examples::SimpleDeferredRendering::Application::Shutdown()

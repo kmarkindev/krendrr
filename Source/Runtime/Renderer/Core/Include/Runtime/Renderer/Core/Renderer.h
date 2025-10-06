@@ -6,6 +6,7 @@
 namespace tf
 {
     class Executor;
+    class FlowBuilder;
 }
 
 namespace krendrr::Runtime::RenderApi::Core
@@ -28,6 +29,8 @@ namespace krendrr::Runtime::Renderer::Core
      *
      * Renderer may hold data between render calls, e.g. it can keep multiple
      * GBuffers between render calls when rendering into multiple scene views at the same time.
+     *
+     *
      */
     class Renderer
     {
@@ -35,7 +38,11 @@ namespace krendrr::Runtime::Renderer::Core
 
         virtual bool Initialize(std::shared_ptr<RenderApi::Core::RenderApi> NewRenderApi, std::shared_ptr<tf::Executor> NewTfExecutor) = 0;
 
-        virtual bool Render(const Scene* Scene, const std::span<SceneView>& SceneViews) = 0;
+        /**
+         * Use FlowBuilder to create task graphs (simplified render graph) and run your passes in parallel when needed.
+         * FlowBuilder tasks are going to be executed right after this call if it has returned true.
+         */
+        virtual bool Render(const Scene* Scene, const std::span<SceneView>& SceneViews, tf::FlowBuilder& FlowBuilder) = 0;
 
         virtual bool Shutdown() = 0;
 

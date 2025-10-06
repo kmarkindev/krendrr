@@ -27,10 +27,7 @@ namespace krendrr::Runtime::TaskFlowEx
         Builder& AttachNvtxObserver(bool bShouldAttach = true);
 
         /**
-         * Sets the amount of workers. Uses std::thread::hardware_concurrency() - 1 by default.
-         *
-         * Note: we subtract 1 because we usually have a main thread that pushes top level jobs and then coruns them,
-         * so it is not part of workers set, but becomes one of them when needed.
+         * Sets the amount of workers. Uses std::thread::hardware_concurrency() by default.
          *
          * If set to 0, uses the default value.
          */

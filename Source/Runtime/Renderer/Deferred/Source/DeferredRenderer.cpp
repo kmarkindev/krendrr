@@ -61,7 +61,7 @@ bool DeferredRenderer::Initialize(std::shared_ptr<RenderApi::Core::RenderApi> Ne
     return true;
 }
 
-bool DeferredRenderer::Render(const Core::Scene* Scene, const std::span<Core::SceneView>& SceneViews)
+bool DeferredRenderer::Render(const Core::Scene* Scene, const std::span<Core::SceneView>& SceneViews, tf::FlowBuilder& FlowBuilder)
 {
     if (Scene->GetPointLights().size() > PointLightVolumePassData.MAX_DYNAMIC_POINT_LIGHTS_COUNT)
     {
