@@ -27,6 +27,13 @@ namespace krendrr::Runtime::TaskFlowEx
         Builder& AttachNvtxObserver(bool bShouldAttach = true);
 
         /**
+         * Attaches worker interface that gives all worker threads some human-readable names.
+         *
+         * Attached by default.
+         */
+        Builder& AttachWorkerInterface(bool bShouldAttach = true);
+
+        /**
          * Sets the amount of workers. Uses std::thread::hardware_concurrency() by default.
          *
          * If set to 0, uses the default value.
@@ -36,6 +43,7 @@ namespace krendrr::Runtime::TaskFlowEx
     private:
 
         bool bIsNvtxObserverAttached = true;
+        bool bAttachWorkerInterface = true;
         unsigned WorkersCount = 0;
 
     };

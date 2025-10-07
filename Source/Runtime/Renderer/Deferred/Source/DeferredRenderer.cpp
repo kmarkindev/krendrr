@@ -63,6 +63,8 @@ bool DeferredRenderer::Initialize(std::shared_ptr<RenderApi::Core::RenderApi> Ne
 
 bool DeferredRenderer::Render(const Core::Scene* Scene, const std::span<Core::SceneView>& SceneViews, tf::FlowBuilder& FlowBuilder)
 {
+    NVTX3_FUNC_RANGE();
+
     if (Scene->GetPointLights().size() > PointLightVolumePassData.MAX_DYNAMIC_POINT_LIGHTS_COUNT)
     {
         // TODO: add error log
@@ -128,7 +130,7 @@ bool DeferredRenderer::Render(const Core::Scene* Scene, const std::span<Core::Sc
 
 bool DeferredRenderer::UpdateFrameDataConstantBuffer(const Core::Scene* Scene, const Core::SceneView& SceneView)
 {
-    nvtx3::scoped_range ConstBufUpdateRange {"Update Frame Data Constant Buffer"};
+    NVTX3_FUNC_RANGE();
 
     // Create buffer if not created
     if (FrameData.ConstantBuffer == nullptr)
@@ -163,7 +165,7 @@ bool DeferredRenderer::UpdateFrameDataConstantBuffer(const Core::Scene* Scene, c
 
 bool DeferredRenderer::UpdateTexturedMeshConstantBuffers(const Core::Scene* Scene)
 {
-    nvtx3::scoped_range ConstBufUpdateRange {"Update Textured Mesh Constant Buffers"};
+    NVTX3_FUNC_RANGE();
 
     for (auto& TexturedMesh : Scene->GetTexturedMeshes())
     {
@@ -176,7 +178,7 @@ bool DeferredRenderer::UpdateTexturedMeshConstantBuffers(const Core::Scene* Scen
 
 bool DeferredRenderer::UpdatePointLightConstantBuffers(const Core::Scene* Scene)
 {
-    nvtx3::scoped_range ConstBufUpdateRange {"Update Point Light Constant Buffers"};
+    NVTX3_FUNC_RANGE();
 
     for (auto& PointLight : Scene->GetPointLights())
     {
@@ -271,7 +273,7 @@ bool DeferredRenderer::InitializeGeometryPass()
 
 bool DeferredRenderer::GeometryPass(const Core::Scene* Scene, const Core::SceneView& SceneView)
 {
-    nvtx3::scoped_range PassRange {"Geometry Pass"};
+    NVTX3_FUNC_RANGE();
 
     const unsigned RtvHandleIncrement = RenderApi->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     const unsigned SrvHandleIncrement = RenderApi->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -514,6 +516,8 @@ bool DeferredRenderer::InitLightPass()
 
 bool DeferredRenderer::PrepareLightPassData(const Core::SceneView& SceneView)
 {
+    NVTX3_FUNC_RANGE();
+
     const glm::ivec2 ViewportSize = SceneView.GetViewportSize();
 
     if (LightPassData.Size == SceneView.GetViewportSize())
@@ -595,6 +599,8 @@ bool DeferredRenderer::PrepareLightPassData(const Core::SceneView& SceneView)
 
 bool DeferredRenderer::TransitionLightPassFromRenderTargetToReadState()
 {
+    NVTX3_FUNC_RANGE();
+
     CD3DX12_RESOURCE_BARRIER Barrier = CD3DX12_RESOURCE_BARRIER::Transition(LightPassData.ColorTexture.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_GENERIC_READ);
 
     CHECKED_S(LightPassData.RenderTargetToReadTransitionAllocator->Reset());
@@ -612,6 +618,8 @@ bool DeferredRenderer::TransitionLightPassFromRenderTargetToReadState()
 
 bool DeferredRenderer::TransitionLightPassFromReadToRenderTargetState()
 {
+    NVTX3_FUNC_RANGE();
+
     CD3DX12_RESOURCE_BARRIER Barrier = CD3DX12_RESOURCE_BARRIER::Transition(LightPassData.ColorTexture.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
     CHECKED_S(LightPassData.TransitionCommandList->Reset(LightPassData.RenderTargetToReadTransitionAllocator.Get(), nullptr))
@@ -696,7 +704,7 @@ bool DeferredRenderer::InitAmbientDirectionalLightPass()
 
 bool DeferredRenderer::AmbientDirectionalLightPass(const Core::SceneView& SceneView)
 {
-    nvtx3::scoped_range PassRange {"Ambient & Directional Light Pass"};
+    NVTX3_FUNC_RANGE();
 
     auto& CommandList = AmbientDirectionalLightPassData.CommandList;
     auto& CommandAllocator = AmbientDirectionalLightPassData.CommandAllocator;
@@ -833,7 +841,7 @@ bool DeferredRenderer::InitPointLightShadowCubeMapPass()
 
 bool DeferredRenderer::PointLightShadowCubeMapsPass(const Core::Scene* Scene)
 {
-    nvtx3::scoped_range PassRange {"Point Light Shadow Cube Maps Pass"};
+    NVTX3_FUNC_RANGE();
 
     auto& CommandAllocator = PointLightShadowCubeMapData.CommandAllocator;
     auto& CommandList = PointLightShadowCubeMapData.CommandList;
@@ -875,6 +883,8 @@ bool DeferredRenderer::PointLightShadowCubeMapsPass(const Core::Scene* Scene)
     {
         for(const auto& PointLight : Scene->GetPointLights())
         {
+            nvtx3::scoped_range PointLightLoop{"Point Light Iteration"};
+
             if (!PointLight->CastsShadows())
                 continue;
 
@@ -899,6 +909,8 @@ bool DeferredRenderer::PointLightShadowCubeMapsPass(const Core::Scene* Scene)
             // Render each side of point light
             for (int i = 0; i < 6; ++i)
             {
+                nvtx3::scoped_range PointLightSideLoop{"Point Light Side Iteration"};
+
                 D3D12_CPU_DESCRIPTOR_HANDLE RtvHandle = PointLight->GetShadowCubeMapRtvHandle(i);
                 D3D12_CPU_DESCRIPTOR_HANDLE DsvHandle = PointLight->GetShadowCubeMapDsvHandle(i);
                 CommandList->OMSetRenderTargets(1, &RtvHandle, true, &DsvHandle);
@@ -1127,7 +1139,7 @@ bool DeferredRenderer::InitPointLightVolumePass()
 
 bool DeferredRenderer::PointLightVolumesPass(const Core::Scene* Scene, const Core::SceneView& SceneView)
 {
-    nvtx3::scoped_range PassRange {"Point Light Volumes Pass"};
+    NVTX3_FUNC_RANGE();
 
     auto& CommandAllocator = PointLightVolumePassData.CommandAllocator;
     auto& CommandList = PointLightVolumePassData.CommandList;
@@ -1352,7 +1364,7 @@ bool DeferredRenderer::InitPostProcessingPass()
 
 bool DeferredRenderer::PostProcessingPass(const Core::SceneView& SceneView)
 {
-    nvtx3::scoped_range PassRange {"Post Processing Pass"};
+    NVTX3_FUNC_RANGE();
 
     auto& CommandList = PostProcessingPassData.CommandList;
     auto& CommandAllocator = PostProcessingPassData.CommandAllocator;
@@ -1536,6 +1548,8 @@ bool DeferredRenderer::InitPrePostRender()
 
 bool DeferredRenderer::PreRender(const Core::Scene* Scene, const Core::SceneView& SceneView)
 {
+    NVTX3_FUNC_RANGE();
+
     CHECKED_S(PrePostRenderData.CommandAllocator->Reset());
 
     CHECKED(
@@ -1567,6 +1581,8 @@ bool DeferredRenderer::PreRender(const Core::Scene* Scene, const Core::SceneView
 
 bool DeferredRenderer::PostRender(const Core::SceneView& SceneView)
 {
+    NVTX3_FUNC_RANGE();
+
     CHECKED(
         PrePostRenderData.CommandList->Reset(PrePostRenderData.CommandAllocator.Get(), nullptr),
         "Can't reset command list"
@@ -1589,6 +1605,8 @@ bool DeferredRenderer::PostRender(const Core::SceneView& SceneView)
 
 bool DeferredRenderer::WaitDirectQueue()
 {
+    NVTX3_FUNC_RANGE();
+
     CHECKED(
         RenderApi->GetDirectQueue()
             ->Signal(FrameFence.Get(), ++FrameFenceValue),
@@ -1719,6 +1737,8 @@ bool DeferredRenderer::InitEmptyTexture()
 
 bool DeferredRenderer::InitGBufferForView(const Core::SceneView& SceneView)
 {
+    NVTX3_FUNC_RANGE();
+
     const glm::ivec2 ViewportSize = SceneView.GetViewportSize();
 
     if (GBuffer.Size == ViewportSize)
@@ -1888,6 +1908,8 @@ bool DeferredRenderer::InitGBufferForView(const Core::SceneView& SceneView)
 
 bool DeferredRenderer::TransitionGBufferFromRenderTargetToReadState()
 {
+    NVTX3_FUNC_RANGE();
+
     const std::array Barriers = {
         CD3DX12_RESOURCE_BARRIER::Transition(GBuffer.DiffuseTexture.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_GENERIC_READ),
         CD3DX12_RESOURCE_BARRIER::Transition(GBuffer.WorldPositionTexture.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_GENERIC_READ),
@@ -1912,6 +1934,8 @@ bool DeferredRenderer::TransitionGBufferFromRenderTargetToReadState()
 
 bool DeferredRenderer::TransitionGBufferFromReadToRenderTargetState()
 {
+    NVTX3_FUNC_RANGE();
+
     const std::array Barriers = {
         CD3DX12_RESOURCE_BARRIER::Transition(GBuffer.DiffuseTexture.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_RENDER_TARGET),
         CD3DX12_RESOURCE_BARRIER::Transition(GBuffer.WorldPositionTexture.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_RENDER_TARGET),
