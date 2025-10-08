@@ -175,7 +175,7 @@ tf::Task DeferredRenderer::UpdateFrameDataConstantBuffer(const Core::Scene* Scen
         };
 
         FrameData.ConstantBuffer->Unmap(0, nullptr);
-    });
+    }).name("UpdateFrameDataConstantBuffer Task");
 }
 
 tf::Task DeferredRenderer::UpdateTexturedMeshConstantBuffers(const Core::Scene* Scene, tf::FlowBuilder& FlowBuilder)
@@ -190,7 +190,7 @@ tf::Task DeferredRenderer::UpdateTexturedMeshConstantBuffers(const Core::Scene* 
             if (!TexturedMesh->UpdateConstantBuffer(*RenderApi))
                 TaskFlowEx::CancelCurrentTaskflow();
         }
-    );
+    ).name("UpdateTexturedMeshConstantBuffers Task");
 }
 
 tf::Task DeferredRenderer::UpdatePointLightConstantBuffers(const Core::Scene* Scene, tf::FlowBuilder& FlowBuilder)
@@ -200,12 +200,12 @@ tf::Task DeferredRenderer::UpdatePointLightConstantBuffers(const Core::Scene* Sc
     auto PointLights = Scene->GetPointLights();
 
     return FlowBuilder.for_each(PointLights.begin(), PointLights.end(),
-        [Scene, this](const auto& PointLight)
+        [this](const auto& PointLight)
         {
             if (!PointLight->UpdateConstantBuffer(*RenderApi.get()))
                 TaskFlowEx::CancelCurrentTaskflow();
         }
-    );
+    ).name("UpdatePointLightConstantBuffers Task");
 }
 
 bool DeferredRenderer::InitializeGeometryPass()
@@ -502,7 +502,7 @@ tf::Task DeferredRenderer::GeometryPass(const Core::Scene* Scene, const Core::Sc
         if (DrawIndex >= 0)
             if (!ExecuteCommandList())
                 TaskFlowEx::CancelCurrentTaskflow();
-    });
+    }).name("GeometryPass Task");
 }
 
 bool DeferredRenderer::InitLightPass()
@@ -615,7 +615,7 @@ tf::Task DeferredRenderer::PrepareLightPassData(const Core::SceneView& SceneView
             RenderApi->GetDevice()
                 ->CreateShaderResourceView(LightPassData.ColorTexture.Get(), nullptr, LightPassData.CpuSrvHeap->GetCPUDescriptorHandleForHeapStart());
         }
-    });
+    }).name("PrepareLightPassData Task");
 }
 
 tf::Task DeferredRenderer::TransitionLightPassFromRenderTargetToReadState(tf::FlowBuilder& FlowBuilder)
@@ -808,7 +808,7 @@ tf::Task DeferredRenderer::AmbientDirectionalLightPass(const Core::SceneView& Sc
         ID3D12CommandList* CommandLists[] = {CommandList.Get()};
         RenderApi->GetDirectQueue()
             ->ExecuteCommandLists(1, CommandLists);
-    });
+    }).name("AmbientDirectionalLightPass Task");
 }
 
 bool DeferredRenderer::InitPointLightShadowCubeMapPass()
@@ -1008,7 +1008,7 @@ tf::Task DeferredRenderer::PointLightShadowCubeMapsPass(const Core::Scene* Scene
         ID3D12CommandList* CommandLists[] = {CommandList.Get()};
         RenderApi->GetDirectQueue()
             ->ExecuteCommandLists(1, CommandLists);
-    });
+    }).name("PointLightShadowCubeMapsPass Task");
 }
 
 bool DeferredRenderer::InitPointLightVolumePass()
@@ -1321,7 +1321,7 @@ tf::Task DeferredRenderer::PointLightVolumesPass(const Core::Scene* Scene, const
         ID3D12CommandList* CommandLists[] = {CommandList.Get()};
         RenderApi->GetDirectQueue()
             ->ExecuteCommandLists(1, CommandLists);
-    });
+    }).name("PointLightVolumesPass Task");
 }
 
 bool DeferredRenderer::InitPostProcessingPass()
@@ -1499,7 +1499,7 @@ tf::Task DeferredRenderer::PostRenderPasses(const Core::SceneView& SceneView, tf
             PostRender(SceneView, Subflow),
             TransitionGBufferFromReadToRenderTargetState(Subflow)
         });
-    });
+    }).name("PostRenderPasses Task");
 }
 
 bool DeferredRenderer::Shutdown()
@@ -1622,7 +1622,7 @@ tf::Task DeferredRenderer::PreRender(const Core::Scene* Scene, const Core::Scene
             if (!PointLight->HasShadowResources())
                 PointLight->CreateShadowCubeMapResource(*RenderApi);
         }
-    });
+    }).name("PreRender Task");
 }
 
 tf::Task DeferredRenderer::PostRender(const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder)
@@ -1668,7 +1668,7 @@ tf::Task DeferredRenderer::WaitDirectQueueTask(tf::FlowBuilder& FlowBuilder)
         {
             return FrameFence->GetCompletedValue() >= ExpectedValue;
         });
-    });
+    }).name("WaitDirectQueue Task");
 }
 
 bool DeferredRenderer::WaitDirectQueue()
@@ -1972,7 +1972,7 @@ tf::Task DeferredRenderer::InitGBufferForView(const Core::SceneView& SceneView, 
         }
 
         GBuffer.Size = ViewportSize;
-    });
+    }).name("InitGBufferForView Task");
 }
 
 tf::Task DeferredRenderer::TransitionGBufferFromRenderTargetToReadState(tf::FlowBuilder& FlowBuilder)
@@ -1999,7 +1999,7 @@ tf::Task DeferredRenderer::TransitionGBufferFromRenderTargetToReadState(tf::Flow
         ID3D12CommandList* CommandLists[] = {GBuffer.TransitionCommandList.Get()};
         RenderApi->GetDirectQueue()
             ->ExecuteCommandLists(1, CommandLists);
-        });
+    }).name("TransitionGBufferFromRenderTargetToReadState Task");
 }
 
 tf::Task DeferredRenderer::TransitionGBufferFromReadToRenderTargetState(tf::FlowBuilder& FlowBuilder)
