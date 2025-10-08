@@ -25,11 +25,11 @@ namespace krendrr::Runtime::TaskFlowEx
  */
 #define CHECKED_TF(ApiCall, ErrorMessage) \
 { \
-if(FAILED(ApiCall)) \
-{ \
-    __debugbreak(); \
-    krendrr::Runtime::TaskFlowEx::CancelCurrentTaskflow(); \
-} \
+    if(FAILED(ApiCall)) \
+    { \
+        __debugbreak(); \
+        krendrr::Runtime::TaskFlowEx::CancelCurrentTaskflow(); \
+    } \
 } \
 
 /**
@@ -37,9 +37,9 @@ if(FAILED(ApiCall)) \
  */
 #define CHECKED_TF_S(ApiCall) \
 { \
-if(FAILED(ApiCall)) \
-{ \
-    __debugbreak(); \
-    krendrr::Runtime::TaskFlowEx::CancelCurrentTaskflow(); \
-} \
+    if(FAILED(ApiCall)) \
+    { \
+        __debugbreak(); \
+        krendrr::Runtime::TaskFlowEx::CancelCurrentTaskflow(); \
+    } \
 } \

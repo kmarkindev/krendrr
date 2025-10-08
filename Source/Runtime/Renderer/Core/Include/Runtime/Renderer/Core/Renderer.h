@@ -7,7 +7,7 @@
 namespace tf
 {
     class Executor;
-    class Taskflow;
+    class FlowBuilder;
 }
 
 namespace krendrr::Runtime::RenderApi::Core
@@ -43,7 +43,7 @@ namespace krendrr::Runtime::Renderer::Core
          *
          * ErrorStop can be called from Taskflow tasks to actually request a stop of taskflow execution in case of an error.
          */
-        virtual bool Render(const Scene* Scene, const std::span<SceneView>& SceneViews, tf::Taskflow& Taskflow) = 0;
+        virtual bool Render(const Scene* Scene, const std::span<SceneView>& SceneViews, tf::FlowBuilder& FlowBuilder) = 0;
 
         virtual bool Shutdown() = 0;
 

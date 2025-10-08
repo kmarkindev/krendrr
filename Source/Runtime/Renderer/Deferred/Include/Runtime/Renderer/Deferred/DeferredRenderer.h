@@ -15,7 +15,7 @@ namespace krendrr::Runtime::Renderer::Deferred
 
         bool Initialize(std::shared_ptr<RenderApi::Core::RenderApi> NewRenderApi, std::shared_ptr<tf::Executor> NewTfExecutor) override;
 
-        bool Render(const Core::Scene* Scene, const std::span<Core::SceneView>& SceneViews, tf::Taskflow& Taskflow) override;
+        bool Render(const Core::Scene* Scene, const std::span<Core::SceneView>& SceneViews, tf::FlowBuilder& FlowBuilder) override;
 
         bool Shutdown() override;
 
@@ -23,11 +23,6 @@ namespace krendrr::Runtime::Renderer::Deferred
 
         std::shared_ptr<RenderApi::Core::RenderApi> RenderApi {};
         std::shared_ptr<tf::Executor> TfExecutor {};
-
-        std::vector<tf::Taskflow> Taskflows {};
-        // Next call to this function may invalidate previous return values
-        tf::Taskflow* AllocateTaskFlow();
-        void ClearTaskFlows();
 
         std::shared_ptr<const RenderApi::Core::StaticMesh> FullscreenQuadMesh {};
         std::shared_ptr<const RenderApi::Core::StaticMesh> SphereMesh {};
@@ -42,11 +37,15 @@ namespace krendrr::Runtime::Renderer::Deferred
         PrePostRenderData PrePostRenderData {};
 
         bool InitPrePostRender();
-        bool PreRender(const Core::Scene* Scene, const Core::SceneView& SceneView);
-        bool PostRender(const Core::SceneView& SceneView);
+
+        tf::Task PreRender(const Core::Scene* Scene, const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder);
+
+        tf::Task PostRender(const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder);
 
         Microsoft::WRL::ComPtr<ID3D12Fence> FrameFence {};
         uint64_t FrameFenceValue {};
+
+        tf::Task WaitDirectQueueTask(tf::FlowBuilder& FlowBuilder);
 
         bool WaitDirectQueue();
 
@@ -87,9 +86,11 @@ namespace krendrr::Runtime::Renderer::Deferred
         GBuffer GBuffer {};
 
         // Called every time we need to update GBuffer, so it has same size as scene view
-        bool InitGBufferForView(const Core::SceneView& SceneView);
-        bool TransitionGBufferFromRenderTargetToReadState();
-        bool TransitionGBufferFromReadToRenderTargetState();
+        tf::Task InitGBufferForView(const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder);
+
+        tf::Task TransitionGBufferFromRenderTargetToReadState(tf::FlowBuilder& FlowBuilder);
+
+        tf::Task TransitionGBufferFromReadToRenderTargetState(tf::FlowBuilder& FlowBuilder);
 
         // Make sure our C++ <-> HLSL types have same sizes
         static_assert(sizeof(float) == 4);
@@ -128,11 +129,11 @@ namespace krendrr::Runtime::Renderer::Deferred
 
         FrameData FrameData {};
 
-        tf::Taskflow* UpdateFrameDataConstantBuffer(const Core::Scene* Scene, const Core::SceneView& SceneView);
+        tf::Task UpdateFrameDataConstantBuffer(const Core::Scene* Scene, const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder);
 
-        tf::Taskflow* UpdateTexturedMeshConstantBuffers(const Core::Scene* Scene);
+        tf::Task UpdateTexturedMeshConstantBuffers(const Core::Scene* Scene, tf::FlowBuilder& FlowBuilder);
 
-        tf::Taskflow* UpdatePointLightConstantBuffers(const Core::Scene* Scene);
+        tf::Task UpdatePointLightConstantBuffers(const Core::Scene* Scene, tf::FlowBuilder& FlowBuilder);
 
         struct GeometryPassData
         {
@@ -156,7 +157,8 @@ namespace krendrr::Runtime::Renderer::Deferred
         GeometryPassData GeometryPassData {};
 
         bool InitializeGeometryPass();
-        bool GeometryPass(const Core::Scene* Scene, const Core::SceneView& SceneView);
+
+        tf::Task GeometryPass(const Core::Scene* Scene, const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder);
 
         struct LightPassData
         {
@@ -176,9 +178,12 @@ namespace krendrr::Runtime::Renderer::Deferred
         LightPassData LightPassData {};
 
         bool InitLightPass();
-        bool PrepareLightPassData(const Core::SceneView& SceneView);
-        bool TransitionLightPassFromRenderTargetToReadState();
-        bool TransitionLightPassFromReadToRenderTargetState();
+
+        tf::Task PrepareLightPassData(const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder);
+
+        tf::Task TransitionLightPassFromRenderTargetToReadState(tf::FlowBuilder& FlowBuilder);
+
+        tf::Task TransitionLightPassFromReadToRenderTargetState(tf::FlowBuilder& FlowBuilder);
 
         struct AmbientDirectionalLightPassData
         {
@@ -193,7 +198,8 @@ namespace krendrr::Runtime::Renderer::Deferred
         AmbientDirectionalLightPassData AmbientDirectionalLightPassData {};
 
         bool InitAmbientDirectionalLightPass();
-        bool AmbientDirectionalLightPass(const Core::SceneView& SceneView);
+
+        tf::Task AmbientDirectionalLightPass(const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder);
 
         struct PointLightShadowCubeMapData
         {
@@ -206,7 +212,8 @@ namespace krendrr::Runtime::Renderer::Deferred
         PointLightShadowCubeMapData PointLightShadowCubeMapData {};
 
         bool InitPointLightShadowCubeMapPass();
-        bool PointLightShadowCubeMapsPass(const Core::Scene* Scene);
+
+        tf::Task PointLightShadowCubeMapsPass(const Core::Scene* Scene, tf::FlowBuilder& FlowBuilder);
 
         struct PointLightVolumePassData
         {
@@ -227,7 +234,8 @@ namespace krendrr::Runtime::Renderer::Deferred
         PointLightVolumePassData PointLightVolumePassData{};
 
         bool InitPointLightVolumePass();
-        bool PointLightVolumesPass(const Core::Scene* Scene, const Core::SceneView& SceneView);
+
+        tf::Task PointLightVolumesPass(const Core::Scene* Scene, const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder);
 
         struct PostProcessingPassData
         {
@@ -242,7 +250,10 @@ namespace krendrr::Runtime::Renderer::Deferred
         PostProcessingPassData PostProcessingPassData {};
 
         bool InitPostProcessingPass();
-        bool PostProcessingPass(const Core::SceneView& SceneView);
+
+        tf::Task PostProcessingPass(const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder);
+
+        tf::Task PostRenderPasses(const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder);
     };
 }
 
