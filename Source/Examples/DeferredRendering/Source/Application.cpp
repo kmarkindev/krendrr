@@ -9,6 +9,7 @@
 #include "Runtime/RenderApi/Core/RenderApi.h"
 #include "Runtime/Renderer/Core/Scene/Lights/PointLight.h"
 #include "Runtime/Renderer/Core/Scene/Scene.h"
+#include "Runtime/TfExecutorBuilder/TaskFailedException.h"
 #include "Runtime/TfExecutorBuilder/TfExecutorBuilder.h"
 
 IMPLEMENT_ENTRY_POINT(krendrr::Examples::SimpleDeferredRendering::Application)
@@ -110,63 +111,28 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Tick(float DeltaTi
 
     Camera.Update(DeltaTime);
 
-    // No sync needed, since all tasks in main task flow access it separately
-    std::atomic_bool bHasError {};
-
     tf::Taskflow MainTaskFlow {};
 
-    auto ErrorCheckLambda = [&]()
+    std::atomic_bool bWasStoppedOnError {};
+    tf::Future<void> TaskflowExecutionFuture {};
+    auto StopOnError = [&bWasStoppedOnError, &TaskflowExecutionFuture]()
     {
-        return bHasError.load(std::memory_order::relaxed) ? 1 : 0;
+        if (TaskflowExecutionFuture.valid())
+        {
+            bWasStoppedOnError.store(true, std::memory_order_relaxed);
+            TaskflowExecutionFuture.cancel();
+        }
+        else
+        {
+            // TODO: log error "Trying to cancel taskflow execution when it is not started"
+        }
     };
 
-    tf::Task RenderErrorCheckTask = MainTaskFlow.emplace(ErrorCheckLambda)
-        .name("Render Error Checking Task");
+    tf::Taskflow RenderTaskFlow {};
+    if (!FillRenderTaskflow(RenderTaskFlow, StopOnError))
+        return false;
 
-    tf::Task RenderTickTask = MainTaskFlow.emplace(
-        [&](tf::Subflow& Subflow)
-        {
-            const glm::ivec2 WindowSize = Window->GetSize();
-            const Runtime::Application::Core::Window::WindowRenderData RenderData = Window->GetCurrentRenderTargetView();
-
-            const bool bRenderDataSetSuccess = SceneView.SetRenderData(
-                {
-                    RenderData.WindowRenderTarget,
-                    RenderData.Handle,
-                    D3D12_RESOURCE_STATE_PRESENT
-                }, {
-                    0,
-                    0,
-                    WindowSize.x,
-                    WindowSize.y
-                }
-            );
-
-            if (!bRenderDataSetSuccess)
-            {
-                bHasError.store(true, std::memory_order::relaxed);
-                return;
-            }
-
-            std::array Views = {
-                SceneView
-            };
-
-            if (!Renderer->Render(Scene.get(), Views, Subflow))
-            {
-                // TODO: add error log
-
-                // remove queued tasks if any
-                Subflow.graph().clear();
-
-                bHasError.store(true, std::memory_order::relaxed);
-                return;
-            }
-        }
-    ).name("Renderer Tick Task");
-
-    tf::Task SwapErrorCheckTask = MainTaskFlow.emplace(ErrorCheckLambda)
-        .name("Swap Error Checking Task");
+    tf::Task RendererTickTask = MainTaskFlow.composed_of(RenderTaskFlow).name("Renderer Tick Task");
 
     tf::Task SwapTask = MainTaskFlow.emplace(
         [&]()
@@ -175,23 +141,61 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Tick(float DeltaTi
             {
                 // TODO: add error log
 
-                bHasError.store(true, std::memory_order::relaxed);
+                throw Runtime::TaskFlowEx::TaskFailedException{};
             }
         }
     ).name("Window Swap Task");
 
-    // dead-end task. can be used for canceling the task flow execution
-    tf::Task EndTask = MainTaskFlow.emplace([](){}).name("Application Tick End Task");
-
     // Allow render tick task to go straight to end task in case of an error
-    RenderTickTask.precede(RenderErrorCheckTask);
-    RenderErrorCheckTask.precede(SwapTask, EndTask);
-    SwapTask.precede(SwapErrorCheckTask);
-    SwapErrorCheckTask.precede(EndTask);
+    RendererTickTask.precede(SwapTask);
 
-    TfExecutor->run(MainTaskFlow).wait();
+    try
+    {
+        TaskflowExecutionFuture = TfExecutor->run(MainTaskFlow);
+        TaskflowExecutionFuture.wait();
+    }
+    catch (const Runtime::TaskFlowEx::TaskFailedException&)
+    {
+        // TODO: add error log "Application tick failed. Taskflow task failed."
+        return false;
+    }
 
-    return !bHasError.load(std::memory_order::relaxed);
+    return true;
+}
+
+bool krendrr::Examples::SimpleDeferredRendering::Application::FillRenderTaskflow(tf::Taskflow& Taskflow, const std::function<void()>& ErrorStop)
+{
+    const glm::ivec2 WindowSize = Window->GetSize();
+    const Runtime::Application::Core::Window::WindowRenderData RenderData = Window->GetCurrentRenderTargetView();
+
+    const bool bRenderDataSetSuccess = SceneView.SetRenderData(
+        {
+            RenderData.WindowRenderTarget,
+            RenderData.Handle,
+            D3D12_RESOURCE_STATE_PRESENT
+        }, {
+            0,
+            0,
+            WindowSize.x,
+            WindowSize.y
+        }
+    );
+
+    if (!bRenderDataSetSuccess)
+        return false;
+
+    std::array Views = {
+        SceneView
+    };
+
+    if (!Renderer->Render(Scene.get(), Views, Taskflow, ErrorStop))
+    {
+        // TODO: add error log
+
+        return false;
+    }
+
+    return true;
 }
 
 bool krendrr::Examples::SimpleDeferredRendering::Application::Shutdown()

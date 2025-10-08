@@ -1,12 +1,13 @@
 #pragma once
 
+#include <functional>
 #include <span>
 #include <memory>
 
 namespace tf
 {
     class Executor;
-    class FlowBuilder;
+    class Taskflow;
 }
 
 namespace krendrr::Runtime::RenderApi::Core
@@ -29,8 +30,6 @@ namespace krendrr::Runtime::Renderer::Core
      *
      * Renderer may hold data between render calls, e.g. it can keep multiple
      * GBuffers between render calls when rendering into multiple scene views at the same time.
-     *
-     *
      */
     class Renderer
     {
@@ -39,10 +38,12 @@ namespace krendrr::Runtime::Renderer::Core
         virtual bool Initialize(std::shared_ptr<RenderApi::Core::RenderApi> NewRenderApi, std::shared_ptr<tf::Executor> NewTfExecutor) = 0;
 
         /**
-         * Use FlowBuilder to create task graphs (simplified render graph) and run your passes in parallel when needed.
-         * FlowBuilder tasks are going to be executed right after this call if it has returned true.
+         * Use Taskflow to create task graphs (simplified render graph) and run your passes in parallel when needed.
+         * Provided taskflow is usually composed into some high-level taskflow.
+         *
+         * ErrorStop can be called from Taskflow tasks to actually request a stop of taskflow execution in case of an error.
          */
-        virtual bool Render(const Scene* Scene, const std::span<SceneView>& SceneViews, tf::FlowBuilder& FlowBuilder) = 0;
+        virtual bool Render(const Scene* Scene, const std::span<SceneView>& SceneViews, tf::Taskflow& Taskflow, const std::function<void()>& ErrorStop) = 0;
 
         virtual bool Shutdown() = 0;
 

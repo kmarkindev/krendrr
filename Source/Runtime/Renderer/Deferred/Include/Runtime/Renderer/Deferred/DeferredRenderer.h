@@ -14,7 +14,7 @@ namespace krendrr::Runtime::Renderer::Deferred
 
         bool Initialize(std::shared_ptr<RenderApi::Core::RenderApi> NewRenderApi, std::shared_ptr<tf::Executor> NewTfExecutor) override;
 
-        bool Render(const Core::Scene* Scene, const std::span<Core::SceneView>& SceneViews, tf::FlowBuilder& FlowBuilder) override;
+        bool Render(const Core::Scene* Scene, const std::span<Core::SceneView>& SceneViews, tf::Taskflow& Taskflow, const std::function<void()>& ErrorStop) override;
 
         bool Shutdown() override;
 

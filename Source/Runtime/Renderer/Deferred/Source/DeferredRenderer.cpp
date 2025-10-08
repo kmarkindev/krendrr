@@ -61,7 +61,7 @@ bool DeferredRenderer::Initialize(std::shared_ptr<RenderApi::Core::RenderApi> Ne
     return true;
 }
 
-bool DeferredRenderer::Render(const Core::Scene* Scene, const std::span<Core::SceneView>& SceneViews, tf::FlowBuilder& FlowBuilder)
+bool DeferredRenderer::Render(const Core::Scene* Scene, const std::span<Core::SceneView>& SceneViews, tf::Taskflow& Taskflow, const std::function<void()>& ErrorStop)
 {
     NVTX3_FUNC_RANGE();
 
@@ -73,8 +73,14 @@ bool DeferredRenderer::Render(const Core::Scene* Scene, const std::span<Core::Sc
 
     for (const Core::SceneView& SceneView : SceneViews)
     {
+
+
         if (!UpdateFrameDataConstantBuffer(Scene, SceneView))
             return false;
+
+
+
+
 
         if (!UpdateTexturedMeshConstantBuffers(Scene))
             return false;
@@ -88,8 +94,15 @@ bool DeferredRenderer::Render(const Core::Scene* Scene, const std::span<Core::Sc
         if (!InitGBufferForView(SceneView))
             return false;
 
+
+
+
         if (!GeometryPass(Scene, SceneView))
             return false;
+
+
+
+
 
         if (!TransitionGBufferFromRenderTargetToReadState())
             return false;
@@ -97,17 +110,31 @@ bool DeferredRenderer::Render(const Core::Scene* Scene, const std::span<Core::Sc
         if (!PrepareLightPassData(SceneView))
             return false;
 
+
+
+
         if (!AmbientDirectionalLightPass(SceneView))
             return false;
 
+
+
+        // с самого начала, и до point light volumes pass
         if (!PointLightShadowCubeMapsPass(Scene))
             return false;
 
         if (!PointLightVolumesPass(Scene, SceneView))
             return false;
 
+
+
+
+
         if (!TransitionLightPassFromRenderTargetToReadState())
             return false;
+
+
+
+
 
         if (!PostProcessingPass(SceneView))
             return false;
@@ -120,6 +147,11 @@ bool DeferredRenderer::Render(const Core::Scene* Scene, const std::span<Core::Sc
 
         if (!TransitionGBufferFromReadToRenderTargetState())
             return false;
+
+
+
+
+
 
         if (!WaitDirectQueue())
             return false;
