@@ -5,6 +5,7 @@
 #include "Runtime/Renderer/Core/Renderer.h"
 #include "Runtime/RenderApi/Core/Resources/StaticMesh.h"
 #include "Runtime/Renderer/Core/Scene/Objects/TexturedStaticMesh.h"
+#include "taskflow/core/taskflow.hpp"
 
 namespace krendrr::Runtime::Renderer::Deferred
 {
@@ -14,7 +15,7 @@ namespace krendrr::Runtime::Renderer::Deferred
 
         bool Initialize(std::shared_ptr<RenderApi::Core::RenderApi> NewRenderApi, std::shared_ptr<tf::Executor> NewTfExecutor) override;
 
-        bool Render(const Core::Scene* Scene, const std::span<Core::SceneView>& SceneViews, tf::Taskflow& Taskflow, const std::function<void()>& ErrorStop) override;
+        bool Render(const Core::Scene* Scene, const std::span<Core::SceneView>& SceneViews, tf::Taskflow& Taskflow) override;
 
         bool Shutdown() override;
 
@@ -22,6 +23,11 @@ namespace krendrr::Runtime::Renderer::Deferred
 
         std::shared_ptr<RenderApi::Core::RenderApi> RenderApi {};
         std::shared_ptr<tf::Executor> TfExecutor {};
+
+        std::vector<tf::Taskflow> Taskflows {};
+        // Next call to this function may invalidate previous return values
+        tf::Taskflow* AllocateTaskFlow();
+        void ClearTaskFlows();
 
         std::shared_ptr<const RenderApi::Core::StaticMesh> FullscreenQuadMesh {};
         std::shared_ptr<const RenderApi::Core::StaticMesh> SphereMesh {};
@@ -122,9 +128,11 @@ namespace krendrr::Runtime::Renderer::Deferred
 
         FrameData FrameData {};
 
-        bool UpdateFrameDataConstantBuffer(const Core::Scene* Scene, const Core::SceneView& SceneView);
-        bool UpdateTexturedMeshConstantBuffers(const Core::Scene* Scene);
-        bool UpdatePointLightConstantBuffers(const Core::Scene* Scene);
+        tf::Taskflow* UpdateFrameDataConstantBuffer(const Core::Scene* Scene, const Core::SceneView& SceneView);
+
+        tf::Taskflow* UpdateTexturedMeshConstantBuffers(const Core::Scene* Scene);
+
+        tf::Taskflow* UpdatePointLightConstantBuffers(const Core::Scene* Scene);
 
         struct GeometryPassData
         {

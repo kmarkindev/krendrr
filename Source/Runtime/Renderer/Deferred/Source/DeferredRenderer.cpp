@@ -11,6 +11,8 @@
 #include "Runtime/RenderApi/Core/Builders/PsoBuilder.h"
 #include "Runtime/RenderApi/Core/Builders/RootSigBuilder.h"
 #include "Runtime/Renderer/Core/Scene/Lights/PointLight.h"
+#include "Runtime/TfExecutorBuilder/TaskFailedException.h"
+#include "taskflow/algorithm/for_each.hpp"
 
 namespace krendrr::Runtime::Renderer::Deferred
 {
@@ -61,7 +63,7 @@ bool DeferredRenderer::Initialize(std::shared_ptr<RenderApi::Core::RenderApi> Ne
     return true;
 }
 
-bool DeferredRenderer::Render(const Core::Scene* Scene, const std::span<Core::SceneView>& SceneViews, tf::Taskflow& Taskflow, const std::function<void()>& ErrorStop)
+bool DeferredRenderer::Render(const Core::Scene* Scene, const std::span<Core::SceneView>& SceneViews, tf::Taskflow& Taskflow)
 {
     NVTX3_FUNC_RANGE();
 
@@ -71,22 +73,43 @@ bool DeferredRenderer::Render(const Core::Scene* Scene, const std::span<Core::Sc
         return false;
     }
 
+    ClearTaskFlows();
+
+    bool bError {};
+    auto CreateTask = [&Taskflow, &bError](auto Callable)
+    {
+        tf::Taskflow* ChildTaskflow = Callable();
+        if (!ChildTaskflow)
+        {
+            bError = true;
+            return tf::Task {};
+        }
+
+        return Taskflow.composed_of(*ChildTaskflow);
+    };
+
     for (const Core::SceneView& SceneView : SceneViews)
     {
+        auto UpdateFrameDataConstantBufferTask = CreateTask([&, this]()
+        {
+            return UpdateFrameDataConstantBuffer(Scene, SceneView);
+        }).name("UpdateFrameDataConstantBuffer");
 
+        auto UpdateTexturedMeshConstantBuffersTask = CreateTask([&, this]()
+        {
+            return UpdateTexturedMeshConstantBuffers(Scene);
+        }).name("UpdateTexturedMeshConstantBuffers");
 
-        if (!UpdateFrameDataConstantBuffer(Scene, SceneView))
+        auto UpdatePointLightConstantBuffersTask = CreateTask([&, this]()
+        {
+            return UpdatePointLightConstantBuffers(Scene);
+        }).name("UpdatePointLightConstantBuffers");
+
+        if (bError)
+        {
+            // TODO: log error "Error during taskflow creation in renderer"
             return false;
-
-
-
-
-
-        if (!UpdateTexturedMeshConstantBuffers(Scene))
-            return false;
-
-        if (!UpdatePointLightConstantBuffers(Scene))
-            return false;
+        }
 
         if (!PreRender(Scene, SceneView))
             return false;
@@ -160,65 +183,78 @@ bool DeferredRenderer::Render(const Core::Scene* Scene, const std::span<Core::Sc
     return true;
 }
 
-bool DeferredRenderer::UpdateFrameDataConstantBuffer(const Core::Scene* Scene, const Core::SceneView& SceneView)
+tf::Taskflow* DeferredRenderer::UpdateFrameDataConstantBuffer(const Core::Scene* Scene, const Core::SceneView& SceneView)
 {
     NVTX3_FUNC_RANGE();
 
-    // Create buffer if not created
-    if (FrameData.ConstantBuffer == nullptr)
+    auto* Taskflow = AllocateTaskFlow();
+
+    Taskflow->emplace([Scene, SceneView, this]()
     {
-        if (!BuildConstantBuffer<ConstBuff_Frame>(*RenderApi, FrameData.ConstantBuffer, FrameData.CpuSrvHeap, L"Frame Data Constant Buffer"))
-            return false;
-    }
+        // Create buffer if not created
+        if (FrameData.ConstantBuffer == nullptr)
+        {
+            if (!BuildConstantBuffer<ConstBuff_Frame>(*RenderApi, FrameData.ConstantBuffer, FrameData.CpuSrvHeap, L"Frame Data Constant Buffer"))
+                TaskFlowEx::CancelCurrentTaskflow();
+        }
 
-    // Update buffer
+        // Update buffer
 
-    ConstBuff_Frame* Buffer {};
-    CHECKED_S(FrameData.ConstantBuffer->Map(0, nullptr, reinterpret_cast<void**>(&Buffer)))
+        ConstBuff_Frame* Buffer {};
+        CHECKED_TF_S(FrameData.ConstantBuffer->Map(0, nullptr, reinterpret_cast<void**>(&Buffer)))
 
-    *Buffer = {
-        .ViewMatrix = SceneView.GetViewMatrix(),
-        .ProjectionMatrix = SceneView.GetProjectionMatrix(),
-        .bHasAmbientLight = Scene->HasAmbientLight(),
-        .AmbientColor = Scene->GetAmbientLightData().Color,
-        .AmbientIntensity = Scene->GetAmbientLightData().Intensity,
-        .DirectionalColor = Scene->GetDirectionalLightData().Color,
-        .bHasDirectionalLight = Scene->HasDirectionalLight(),
-        .DirectionalDir = Scene->GetDirectionalLightData().Direction,
-        .DirectionalIntensity = Scene->GetDirectionalLightData().Intensity,
-        .CameraPosition = SceneView.GetPosition(),
-        .ViewportSize = SceneView.GetViewportSize(),
-    };
+        *Buffer = {
+            .ViewMatrix = SceneView.GetViewMatrix(),
+            .ProjectionMatrix = SceneView.GetProjectionMatrix(),
+            .bHasAmbientLight = Scene->HasAmbientLight(),
+            .AmbientColor = Scene->GetAmbientLightData().Color,
+            .AmbientIntensity = Scene->GetAmbientLightData().Intensity,
+            .DirectionalColor = Scene->GetDirectionalLightData().Color,
+            .bHasDirectionalLight = Scene->HasDirectionalLight(),
+            .DirectionalDir = Scene->GetDirectionalLightData().Direction,
+            .DirectionalIntensity = Scene->GetDirectionalLightData().Intensity,
+            .CameraPosition = SceneView.GetPosition(),
+            .ViewportSize = SceneView.GetViewportSize(),
+        };
 
-    FrameData.ConstantBuffer->Unmap(0, nullptr);
+        FrameData.ConstantBuffer->Unmap(0, nullptr);
+    });
 
-    return true;
+    return Taskflow;
 }
 
-bool DeferredRenderer::UpdateTexturedMeshConstantBuffers(const Core::Scene* Scene)
+tf::Taskflow* DeferredRenderer::UpdateTexturedMeshConstantBuffers(const Core::Scene* Scene)
 {
     NVTX3_FUNC_RANGE();
 
-    for (auto& TexturedMesh : Scene->GetTexturedMeshes())
+    auto* Taskflow = AllocateTaskFlow();
+
+    auto TexturedMeshes = Scene->GetTexturedMeshes();
+    Taskflow->for_each(TexturedMeshes.begin(), TexturedMeshes.end(), [&](std::shared_ptr<Core::TexturedStaticMesh> TexturedMesh)
     {
         if (!TexturedMesh->UpdateConstantBuffer(*RenderApi))
-            return false;
-    }
+            TaskFlowEx::CancelCurrentTaskflow();
+    });
 
-    return true;
+    return Taskflow;
 }
 
-bool DeferredRenderer::UpdatePointLightConstantBuffers(const Core::Scene* Scene)
+tf::Taskflow* DeferredRenderer::UpdatePointLightConstantBuffers(const Core::Scene* Scene)
 {
     NVTX3_FUNC_RANGE();
 
-    for (auto& PointLight : Scene->GetPointLights())
-    {
-        if (!PointLight->UpdateConstantBuffer(*RenderApi.get()))
-            return false;
-    }
+    auto* Taskflow = AllocateTaskFlow();
 
-    return true;
+    Taskflow->emplace([Scene, this]()
+    {
+        for (auto& PointLight : Scene->GetPointLights())
+        {
+            if (!PointLight->UpdateConstantBuffer(*RenderApi.get()))
+                TaskFlowEx::CancelCurrentTaskflow();
+        }
+    });
+
+    return Taskflow;
 }
 
 bool DeferredRenderer::InitializeGeometryPass()
@@ -1492,6 +1528,16 @@ bool DeferredRenderer::PostProcessingPass(const Core::SceneView& SceneView)
 bool DeferredRenderer::Shutdown()
 {
     return WaitDirectQueue();
+}
+
+tf::Taskflow* DeferredRenderer::AllocateTaskFlow()
+{
+    return &Taskflows.emplace_back();
+}
+
+void DeferredRenderer::ClearTaskFlows()
+{
+    Taskflows.clear();
 }
 
 bool DeferredRenderer::InitBasicMeshes()

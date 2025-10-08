@@ -113,26 +113,13 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Tick(float DeltaTi
 
     tf::Taskflow MainTaskFlow {};
 
-    std::atomic_bool bWasStoppedOnError {};
-    tf::Future<void> TaskflowExecutionFuture {};
-    auto StopOnError = [&bWasStoppedOnError, &TaskflowExecutionFuture]()
-    {
-        if (TaskflowExecutionFuture.valid())
-        {
-            bWasStoppedOnError.store(true, std::memory_order_relaxed);
-            TaskflowExecutionFuture.cancel();
-        }
-        else
-        {
-            // TODO: log error "Trying to cancel taskflow execution when it is not started"
-        }
-    };
-
     tf::Taskflow RenderTaskFlow {};
-    if (!FillRenderTaskflow(RenderTaskFlow, StopOnError))
+    if (!FillRenderTaskflow(RenderTaskFlow))
         return false;
 
-    tf::Task RendererTickTask = MainTaskFlow.composed_of(RenderTaskFlow).name("Renderer Tick Task");
+    tf::Task RendererTickTask = MainTaskFlow
+        .composed_of(RenderTaskFlow)
+        .name("Renderer Tick Task");
 
     tf::Task SwapTask = MainTaskFlow.emplace(
         [&]()
@@ -140,8 +127,7 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Tick(float DeltaTi
             if (!Window->Swap())
             {
                 // TODO: add error log
-
-                throw Runtime::TaskFlowEx::TaskFailedException{};
+                Runtime::TaskFlowEx::CancelCurrentTaskflow();
             }
         }
     ).name("Window Swap Task");
@@ -151,8 +137,7 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Tick(float DeltaTi
 
     try
     {
-        TaskflowExecutionFuture = TfExecutor->run(MainTaskFlow);
-        TaskflowExecutionFuture.wait();
+        TfExecutor->run(MainTaskFlow).wait();
     }
     catch (const Runtime::TaskFlowEx::TaskFailedException&)
     {
@@ -163,7 +148,7 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Tick(float DeltaTi
     return true;
 }
 
-bool krendrr::Examples::SimpleDeferredRendering::Application::FillRenderTaskflow(tf::Taskflow& Taskflow, const std::function<void()>& ErrorStop)
+bool krendrr::Examples::SimpleDeferredRendering::Application::FillRenderTaskflow(tf::Taskflow& Taskflow)
 {
     const glm::ivec2 WindowSize = Window->GetSize();
     const Runtime::Application::Core::Window::WindowRenderData RenderData = Window->GetCurrentRenderTargetView();
@@ -188,7 +173,7 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::FillRenderTaskflow
         SceneView
     };
 
-    if (!Renderer->Render(Scene.get(), Views, Taskflow, ErrorStop))
+    if (!Renderer->Render(Scene.get(), Views, Taskflow))
     {
         // TODO: add error log
 

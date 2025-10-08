@@ -50,7 +50,7 @@ namespace krendrr::Examples::SimpleDeferredRendering
 
         bool InitializeSceneViewAndCamera();
 
-        bool FillRenderTaskflow(tf::Taskflow& Taskflow, const std::function<void()>& ErrorStop);
+        bool FillRenderTaskflow(tf::Taskflow& Taskflow);
 
     };
 }
