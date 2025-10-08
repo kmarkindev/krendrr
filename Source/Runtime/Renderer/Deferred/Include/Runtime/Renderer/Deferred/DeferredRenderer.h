@@ -148,11 +148,11 @@ namespace krendrr::Runtime::Renderer::Deferred
             Microsoft::WRL::ComPtr<ID3D12RootSignature> RootSignature {};
             Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineState {};
 
-            constexpr inline static unsigned PARALLEL_DRAWS_COUNT_ALLOWED = 1000;
             Microsoft::WRL::ComPtr<ID3D12CommandAllocator> DrawCommandAllocator {};
             Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> DrawCommandList {};
 
             Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> GpuDescriptorHeap {};
+            unsigned CurrentGpuDescriptorSize {};
         };
         GeometryPassData GeometryPassData {};
 

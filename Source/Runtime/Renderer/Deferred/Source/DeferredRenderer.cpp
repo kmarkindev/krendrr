@@ -65,8 +65,6 @@ bool DeferredRenderer::Initialize(std::shared_ptr<RenderApi::Core::RenderApi> Ne
 
 bool DeferredRenderer::Render(const Core::Scene* Scene, const std::span<Core::SceneView>& SceneViews, tf::FlowBuilder& FlowBuilder)
 {
-    NVTX3_FUNC_RANGE();
-
     if (Scene->GetPointLights().size() > PointLightVolumePassData.MAX_DYNAMIC_POINT_LIGHTS_COUNT)
     {
         // TODO: add error log
@@ -144,8 +142,6 @@ bool DeferredRenderer::Render(const Core::Scene* Scene, const std::span<Core::Sc
 
 tf::Task DeferredRenderer::UpdateFrameDataConstantBuffer(const Core::Scene* Scene, const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder)
 {
-    NVTX3_FUNC_RANGE();
-
     return FlowBuilder.emplace([Scene, SceneView, this]()
     {
         // Create buffer if not created
@@ -180,8 +176,6 @@ tf::Task DeferredRenderer::UpdateFrameDataConstantBuffer(const Core::Scene* Scen
 
 tf::Task DeferredRenderer::UpdateTexturedMeshConstantBuffers(const Core::Scene* Scene, tf::FlowBuilder& FlowBuilder)
 {
-    NVTX3_FUNC_RANGE();
-
     auto TexturedMeshes = Scene->GetTexturedMeshes();
 
     return FlowBuilder.for_each(TexturedMeshes.begin(), TexturedMeshes.end(),
@@ -195,8 +189,6 @@ tf::Task DeferredRenderer::UpdateTexturedMeshConstantBuffers(const Core::Scene* 
 
 tf::Task DeferredRenderer::UpdatePointLightConstantBuffers(const Core::Scene* Scene, tf::FlowBuilder& FlowBuilder)
 {
-    NVTX3_FUNC_RANGE();
-
     auto PointLights = Scene->GetPointLights();
 
     return FlowBuilder.for_each(PointLights.begin(), PointLights.end(),
@@ -254,21 +246,6 @@ bool DeferredRenderer::InitializeGeometryPass()
     if (!GeometryPassData.PipelineState)
         return false;
 
-    // Create GPU srv heap for textured mesh texture handles
-    {
-        D3D12_DESCRIPTOR_HEAP_DESC HeapDesc {
-            .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-            .NumDescriptors = GeometryPassData.PARALLEL_DRAWS_COUNT_ALLOWED * GeometryPassData.TEXTURED_MESH_TEXTURES_COUNT,
-            .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
-        };
-
-        CHECKED(
-            RenderApi->GetDevice()
-                ->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(&GeometryPassData.GpuDescriptorHeap)),
-            "Can't create descriptor heap"
-        )
-    }
-
     // Create command list
     {
         CHECKED(
@@ -292,10 +269,28 @@ bool DeferredRenderer::InitializeGeometryPass()
 
 tf::Task DeferredRenderer::GeometryPass(const Core::Scene* Scene, const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder)
 {
-    NVTX3_FUNC_RANGE();
-
     return FlowBuilder.emplace([Scene, SceneView, this]()
     {
+        const unsigned SrvDescriptorsCount = static_cast<UINT>(Scene->GetTexturedMeshes().size()) * GeometryPassData.TEXTURED_MESH_TEXTURES_COUNT;
+
+        // Make sure we have a descriptor heap with enough size
+        if (GeometryPassData.CurrentGpuDescriptorSize == 0 || GeometryPassData.CurrentGpuDescriptorSize < SrvDescriptorsCount)
+        {
+            D3D12_DESCRIPTOR_HEAP_DESC HeapDesc {
+                .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                .NumDescriptors = SrvDescriptorsCount,
+                .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
+            };
+
+            CHECKED_TF(
+                RenderApi->GetDevice()
+                    ->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(&GeometryPassData.GpuDescriptorHeap)),
+                "Can't create descriptor heap"
+            )
+
+            GeometryPassData.CurrentGpuDescriptorSize = SrvDescriptorsCount;
+        }
+
         const unsigned RtvHandleIncrement = RenderApi->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
         const unsigned SrvHandleIncrement = RenderApi->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
@@ -312,7 +307,7 @@ tf::Task DeferredRenderer::GeometryPass(const Core::Scene* Scene, const Core::Sc
 
         auto ExecuteCommandList = [this, CommandList]() -> bool
         {
-            CHECKED_S(CommandList->Close())
+            CHECKED_TF_S(CommandList->Close())
 
             ID3D12CommandList* CommandLists[] = {CommandList.Get()};
 
@@ -324,8 +319,8 @@ tf::Task DeferredRenderer::GeometryPass(const Core::Scene* Scene, const Core::Sc
 
         auto ResetCommandList = [this, &CommandAllocator, &CommandList, &SceneView, &RtvHandles, &DsvHandle]() -> bool
         {
-            CHECKED_S(CommandAllocator->Reset());
-            CHECKED_S(CommandList->Reset(CommandAllocator.Get(), GeometryPassData.PipelineState.Get()));
+            CHECKED_TF_S(CommandAllocator->Reset());
+            CHECKED_TF_S(CommandList->Reset(CommandAllocator.Get(), GeometryPassData.PipelineState.Get()));
 
             // Setup pipeline
 
@@ -367,29 +362,13 @@ tf::Task DeferredRenderer::GeometryPass(const Core::Scene* Scene, const Core::Sc
             nullptr
         );
 
-        int DrawIndex = -1;
-        for (const std::shared_ptr<Core::TexturedStaticMesh>& TexturedMesh : Scene->GetTexturedMeshes())
+        auto TexturedMeshes = Scene->GetTexturedMeshes();
+        for (int DrawIndex = 0; DrawIndex < TexturedMeshes.size(); ++DrawIndex)
         {
+            const std::shared_ptr<Core::TexturedStaticMesh>& TexturedMesh = TexturedMeshes[DrawIndex];
             nvtx3::scoped_range MeshIterationRange {"Mesh Iteration"};
 
             auto Mesh = TexturedMesh->GetMesh();
-
-            // Make sure we have enough descriptors to draw this textured mesh
-            {
-                if (DrawIndex + 1 == GeometryPassData.PARALLEL_DRAWS_COUNT_ALLOWED)
-                {
-                    if (!ExecuteCommandList())
-                        TaskFlowEx::CancelCurrentTaskflow();
-
-                    WaitDirectQueue();
-
-                    DrawIndex = -1;
-
-                    if (!ResetCommandList())
-                        TaskFlowEx::CancelCurrentTaskflow();
-                }
-                DrawIndex += 1;
-            }
 
             // Setup Mesh
             {
@@ -499,9 +478,9 @@ tf::Task DeferredRenderer::GeometryPass(const Core::Scene* Scene, const Core::Sc
             }
         }
 
-        if (DrawIndex >= 0)
-            if (!ExecuteCommandList())
-                TaskFlowEx::CancelCurrentTaskflow();
+        if (!ExecuteCommandList())
+            TaskFlowEx::CancelCurrentTaskflow();
+
     }).name("GeometryPass Task");
 }
 
@@ -536,8 +515,6 @@ bool DeferredRenderer::InitLightPass()
 
 tf::Task DeferredRenderer::PrepareLightPassData(const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder)
 {
-    NVTX3_FUNC_RANGE();
-
     return FlowBuilder.emplace([SceneView, this]()
     {
         const glm::ivec2 ViewportSize = SceneView.GetViewportSize();
@@ -620,8 +597,6 @@ tf::Task DeferredRenderer::PrepareLightPassData(const Core::SceneView& SceneView
 
 tf::Task DeferredRenderer::TransitionLightPassFromRenderTargetToReadState(tf::FlowBuilder& FlowBuilder)
 {
-    NVTX3_FUNC_RANGE();
-
     return FlowBuilder.emplace([this]()
     {
         CD3DX12_RESOURCE_BARRIER Barrier = CD3DX12_RESOURCE_BARRIER::Transition(LightPassData.ColorTexture.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_GENERIC_READ);
@@ -640,8 +615,6 @@ tf::Task DeferredRenderer::TransitionLightPassFromRenderTargetToReadState(tf::Fl
 
 tf::Task DeferredRenderer::TransitionLightPassFromReadToRenderTargetState(tf::FlowBuilder& FlowBuilder)
 {
-    NVTX3_FUNC_RANGE();
-
     return FlowBuilder.emplace([this]()
     {
         CD3DX12_RESOURCE_BARRIER Barrier = CD3DX12_RESOURCE_BARRIER::Transition(
@@ -731,8 +704,6 @@ bool DeferredRenderer::InitAmbientDirectionalLightPass()
 
 tf::Task DeferredRenderer::AmbientDirectionalLightPass(const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder)
 {
-    NVTX3_FUNC_RANGE();
-
     return FlowBuilder.emplace([SceneView, this]()
     {
         auto& CommandList = AmbientDirectionalLightPassData.CommandList;
@@ -869,8 +840,6 @@ bool DeferredRenderer::InitPointLightShadowCubeMapPass()
 
 tf::Task DeferredRenderer::PointLightShadowCubeMapsPass(const Core::Scene* Scene, tf::FlowBuilder& FlowBuilder)
 {
-    NVTX3_FUNC_RANGE();
-
     return FlowBuilder.emplace([Scene, this]()
     {
         auto& CommandAllocator = PointLightShadowCubeMapData.CommandAllocator;
@@ -1168,8 +1137,6 @@ bool DeferredRenderer::InitPointLightVolumePass()
 
 tf::Task DeferredRenderer::PointLightVolumesPass(const Core::Scene* Scene, const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder)
 {
-    NVTX3_FUNC_RANGE();
-
     return FlowBuilder.emplace([Scene, SceneView, this]()
     {
         auto& CommandAllocator = PointLightVolumePassData.CommandAllocator;
@@ -1394,8 +1361,6 @@ bool DeferredRenderer::InitPostProcessingPass()
 
 tf::Task DeferredRenderer::PostProcessingPass(const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder)
 {
-    NVTX3_FUNC_RANGE();
-
     return FlowBuilder.emplace([SceneView, this]()
     {
         auto& CommandList = PostProcessingPassData.CommandList;
@@ -1593,8 +1558,6 @@ bool DeferredRenderer::InitPrePostRender()
 
 tf::Task DeferredRenderer::PreRender(const Core::Scene* Scene, const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder)
 {
-    NVTX3_FUNC_RANGE();
-
     return FlowBuilder.emplace([Scene, SceneView, this]()
     {
         CHECKED_TF_S(PrePostRenderData.CommandAllocator->Reset());
@@ -1627,8 +1590,6 @@ tf::Task DeferredRenderer::PreRender(const Core::Scene* Scene, const Core::Scene
 
 tf::Task DeferredRenderer::PostRender(const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder)
 {
-    NVTX3_FUNC_RANGE();
-
     return FlowBuilder.emplace([SceneView, this]()
     {
         CHECKED_TF(
@@ -1652,8 +1613,6 @@ tf::Task DeferredRenderer::PostRender(const Core::SceneView& SceneView, tf::Flow
 
 tf::Task DeferredRenderer::WaitDirectQueueTask(tf::FlowBuilder& FlowBuilder)
 {
-    NVTX3_FUNC_RANGE();
-
     return FlowBuilder.emplace([this](tf::Subflow& Subflow)
     {
         const uint64_t ExpectedValue = ++FrameFenceValue;
@@ -1673,8 +1632,6 @@ tf::Task DeferredRenderer::WaitDirectQueueTask(tf::FlowBuilder& FlowBuilder)
 
 bool DeferredRenderer::WaitDirectQueue()
 {
-    NVTX3_FUNC_RANGE();
-
     CHECKED(
         RenderApi->GetDirectQueue()
             ->Signal(FrameFence.Get(), ++FrameFenceValue),
@@ -1805,8 +1762,6 @@ bool DeferredRenderer::InitEmptyTexture()
 
 tf::Task DeferredRenderer::InitGBufferForView(const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder)
 {
-    NVTX3_FUNC_RANGE();
-
     return FlowBuilder.emplace([SceneView, this]()
     {
         const glm::ivec2 ViewportSize = SceneView.GetViewportSize();
@@ -1977,8 +1932,6 @@ tf::Task DeferredRenderer::InitGBufferForView(const Core::SceneView& SceneView, 
 
 tf::Task DeferredRenderer::TransitionGBufferFromRenderTargetToReadState(tf::FlowBuilder& FlowBuilder)
 {
-    NVTX3_FUNC_RANGE();
-
     return FlowBuilder.emplace([this]()
     {
         const std::array Barriers = {
@@ -2004,8 +1957,6 @@ tf::Task DeferredRenderer::TransitionGBufferFromRenderTargetToReadState(tf::Flow
 
 tf::Task DeferredRenderer::TransitionGBufferFromReadToRenderTargetState(tf::FlowBuilder& FlowBuilder)
 {
-    NVTX3_FUNC_RANGE();
-
     return FlowBuilder.emplace([this]()
     {
         const std::array Barriers = {
