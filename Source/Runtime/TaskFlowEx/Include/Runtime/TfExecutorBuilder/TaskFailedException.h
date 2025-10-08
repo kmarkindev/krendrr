@@ -30,7 +30,7 @@ namespace krendrr::Runtime::TaskFlowEx
         __debugbreak(); \
         krendrr::Runtime::TaskFlowEx::CancelCurrentTaskflow(); \
     } \
-} \
+}
 
 /**
  * Checks if api call was successful. If not, cancels current taskflow
@@ -42,4 +42,4 @@ namespace krendrr::Runtime::TaskFlowEx
         __debugbreak(); \
         krendrr::Runtime::TaskFlowEx::CancelCurrentTaskflow(); \
     } \
-} \
+}

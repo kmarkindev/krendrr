@@ -319,8 +319,8 @@ tf::Task DeferredRenderer::GeometryPass(const Core::Scene* Scene, const Core::Sc
 
         auto ResetCommandList = [this, &CommandAllocator, &CommandList, &SceneView, &RtvHandles, &DsvHandle]() -> bool
         {
-            CHECKED_TF_S(CommandAllocator->Reset());
-            CHECKED_TF_S(CommandList->Reset(CommandAllocator.Get(), GeometryPassData.PipelineState.Get()));
+            CHECKED_TF_S(CommandAllocator->Reset())
+            CHECKED_TF_S(CommandList->Reset(CommandAllocator.Get(), GeometryPassData.PipelineState.Get()))
 
             // Setup pipeline
 
