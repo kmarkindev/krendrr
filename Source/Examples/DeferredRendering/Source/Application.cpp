@@ -7,8 +7,9 @@
 #include "Runtime/Application/Core/Window.h"
 #include "Runtime/ModelLoader/Loader.h"
 #include "Runtime/RenderApi/Core/RenderApi.h"
-#include "Runtime/Renderer/Core/Lights/PointLight.h"
+#include "Runtime/Renderer/Core/Scene/Lights/PointLight.h"
 #include "Runtime/Renderer/Core/Scene/Scene.h"
+#include "Runtime/TfExecutorBuilder/TaskFailedException.h"
 #include "Runtime/TfExecutorBuilder/TfExecutorBuilder.h"
 
 IMPLEMENT_ENTRY_POINT(krendrr::Examples::SimpleDeferredRendering::Application)
@@ -31,8 +32,8 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize(const R
     const bool bRenderApiInitResult = RenderApi->Initialize({
         .Debug = Runtime::RenderApi::Core::RenderApi::InitParams::Debug::DebugLayerWithGpuBasedValidation,
         .bEnableShadersDebug = true
-        //.Debug = Runtime::RenderApi::Core::RenderApi::InitParams::Debug::None,
-        //.bEnableShadersDebug = false
+        // .Debug = Runtime::RenderApi::Core::RenderApi::InitParams::Debug::None,
+        // .bEnableShadersDebug = false
     });
 
     if (!bRenderApiInitResult)
@@ -86,7 +87,7 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Initialize(const R
         SetupSponzaScene();
 
     Renderer = std::make_unique<Runtime::Renderer::Deferred::DeferredRenderer>();
-    if (!Renderer->Initialize(RenderApi, TfExecutor, Scene))
+    if (!Renderer->Initialize(RenderApi, TfExecutor))
     {
         // TODO: log error
         return false;
@@ -102,11 +103,55 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Tick(float DeltaTi
         static std::size_t FpsDisplayCounter = 0;
         FpsDisplayCounter++;
         if (FpsDisplayCounter % 100 == 0)
+        {
+            FpsDisplayCounter = 0;
             std::cout << "Delta: " << DeltaTime << " FPS: " << 1.f / DeltaTime << std::endl;
+        }
     }
 
+    Camera.Update(DeltaTime);
+
+    tf::Taskflow MainTaskFlow {};
+
+    tf::Taskflow RenderTaskFlow {};
+    if (!FillRenderTaskflow(RenderTaskFlow))
+        return false;
+
+    tf::Task RendererTickTask = MainTaskFlow
+        .composed_of(RenderTaskFlow)
+        .name("Renderer Tick Task");
+
+    tf::Task SwapTask = MainTaskFlow.emplace(
+        [&]()
+        {
+            if (!Window->Swap())
+            {
+                // TODO: add error log
+                Runtime::TaskFlowEx::CancelCurrentTaskflow();
+            }
+        }
+    ).name("Window Swap Task");
+
+    // Allow render tick task to go straight to end task in case of an error
+    RendererTickTask.precede(SwapTask);
+
+    try
+    {
+        TfExecutor->run(MainTaskFlow).wait();
+    }
+    catch (const Runtime::TaskFlowEx::TaskFailedException&)
+    {
+        // TODO: add error log "Application tick failed. Taskflow task failed."
+        return false;
+    }
+
+    return true;
+}
+
+bool krendrr::Examples::SimpleDeferredRendering::Application::FillRenderTaskflow(tf::Taskflow& Taskflow)
+{
     const glm::ivec2 WindowSize = Window->GetSize();
-    Runtime::Application::Core::Window::WindowRenderData RenderData = Window->GetCurrentRenderTargetView();
+    const Runtime::Application::Core::Window::WindowRenderData RenderData = Window->GetCurrentRenderTargetView();
 
     const bool bRenderDataSetSuccess = SceneView.SetRenderData(
         {
@@ -124,20 +169,14 @@ bool krendrr::Examples::SimpleDeferredRendering::Application::Tick(float DeltaTi
     if (!bRenderDataSetSuccess)
         return false;
 
-    Camera.Update(DeltaTime);
-
     std::array Views = {
         SceneView
     };
-    if (!Renderer->Render(Views))
-    {
-        // TODO: add error log
-        return false;
-    }
 
-    if (!Window->Swap())
+    if (!Renderer->Render(Scene.get(), Views, Taskflow))
     {
         // TODO: add error log
+
         return false;
     }
 
@@ -191,8 +230,7 @@ void krendrr::Examples::SimpleDeferredRendering::Application::SetupSponzaScene()
 
     auto PointLight1 = Scene->SpawnPointLight();
     PointLight1->SetPosition({1000, 250, 0});
-    PointLight1->SetColor({1.f, 0.3f, 0.3f});
-    PointLight1->SetCastsShadows(false);
+    PointLight1->SetColor({1.f, 1.f, 1.f});
 
     auto PointLight2 = Scene->SpawnPointLight();
     PointLight2->SetPosition({-1100, 250, 0});

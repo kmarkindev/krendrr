@@ -5,18 +5,18 @@
 #include "Runtime/RenderApi/Core/RenderApi.h"
 #include "d3dx12/d3dx12.h"
 
-namespace krendrr::Runtime::Renderer::Core
+namespace krendrr::Runtime::RenderApi::Core
 {
-    class Mesh
+    class StaticMesh
     {
     public:
 
-        Mesh() = default;
-        Mesh(const Mesh& Other) = delete;
-        Mesh& operator=(const Mesh& Other) = delete;
-        Mesh(Mesh&& Other) noexcept = default;
-        Mesh& operator=(Mesh&& Other) noexcept = default;
-        ~Mesh() = default;
+        StaticMesh() = default;
+        StaticMesh(const StaticMesh& Other) = delete;
+        StaticMesh& operator=(const StaticMesh& Other) = delete;
+        StaticMesh(StaticMesh&& Other) noexcept = default;
+        StaticMesh& operator=(StaticMesh&& Other) noexcept = default;
+        ~StaticMesh() = default;
 
         struct MeshLoadOperation
         {
@@ -34,13 +34,13 @@ namespace krendrr::Runtime::Renderer::Core
          * Creates upload heaps and fills provided command list with copy operations.
          * Caller need to execute the command list and keep upload buffers alive while copy is not finished.
          */
-        MeshLoadOperation Load(const RenderApi::Core::RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList, const std::span<const std::byte>& VertexData);
+        MeshLoadOperation Load(const RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList, const std::span<const std::byte>& VertexData);
 
         /**
          * Creates upload heaps and fills provided command list with copy operations.
          * Caller need to execute the command list and keep upload buffers alive while copy is not finished.
          */
-        MeshLoadOperation LoadIndexed(const RenderApi::Core::RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList,
+        MeshLoadOperation LoadIndexed(const RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList,
             const std::span<const std::byte>& VertexData, const std::span<const std::uint32_t>& IndexData);
 
         /**
@@ -67,7 +67,7 @@ namespace krendrr::Runtime::Renderer::Core
 
         [[nodiscard]] bool CheckLoaded() const;
 
-        Microsoft::WRL::ComPtr<ID3D12Resource> LoadVertexBuffer(const RenderApi::Core::RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList,
+        Microsoft::WRL::ComPtr<ID3D12Resource> LoadVertexBuffer(const RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList,
             const std::span<const std::byte>& VertexData);
     };
 }

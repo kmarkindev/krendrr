@@ -3,8 +3,9 @@
 #include <memory>
 #include <array>
 #include "Runtime/Renderer/Core/Renderer.h"
-#include "Runtime/Renderer/Core/TexturedMesh/Mesh.h"
-#include "Runtime/Renderer/Core/TexturedMesh/TexturedMesh.h"
+#include "Runtime/RenderApi/Core/Resources/StaticMesh.h"
+#include "Runtime/Renderer/Core/Scene/Objects/TexturedStaticMesh.h"
+#include "taskflow/core/taskflow.hpp"
 
 namespace krendrr::Runtime::Renderer::Deferred
 {
@@ -12,21 +13,19 @@ namespace krendrr::Runtime::Renderer::Deferred
     {
     public:
 
-        bool Initialize(std::shared_ptr<RenderApi::Core::RenderApi> NewRenderApi, std::shared_ptr<tf::Executor> NewTfExecutor, std::shared_ptr<Core::Scene> NewScene) override;
+        bool Initialize(std::shared_ptr<RenderApi::Core::RenderApi> NewRenderApi, std::shared_ptr<tf::Executor> NewTfExecutor) override;
 
-        bool Render(const std::span<Core::SceneView>& SceneViews) override;
+        bool Render(const Core::Scene* Scene, const std::span<Core::SceneView>& SceneViews, tf::FlowBuilder& FlowBuilder) override;
 
         bool Shutdown() override;
 
     private:
 
         std::shared_ptr<RenderApi::Core::RenderApi> RenderApi {};
-        std::shared_ptr<Core::Scene> Scene {};
-
         std::shared_ptr<tf::Executor> TfExecutor {};
 
-        std::shared_ptr<Core::Mesh> FullscreenQuadMesh {};
-        std::shared_ptr<Core::Mesh> SphereMesh {};
+        std::shared_ptr<const RenderApi::Core::StaticMesh> FullscreenQuadMesh {};
+        std::shared_ptr<const RenderApi::Core::StaticMesh> SphereMesh {};
         bool InitBasicMeshes();
 
         struct PrePostRenderData
@@ -38,11 +37,15 @@ namespace krendrr::Runtime::Renderer::Deferred
         PrePostRenderData PrePostRenderData {};
 
         bool InitPrePostRender();
-        bool PreRender(const Core::SceneView& SceneView);
-        bool PostRender(const Core::SceneView& SceneView);
+
+        tf::Task PreRender(const Core::Scene* Scene, const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder);
+
+        tf::Task PostRender(const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder);
 
         Microsoft::WRL::ComPtr<ID3D12Fence> FrameFence {};
         uint64_t FrameFenceValue {};
+
+        tf::Task WaitDirectQueueTask(tf::FlowBuilder& FlowBuilder);
 
         bool WaitDirectQueue();
 
@@ -83,9 +86,11 @@ namespace krendrr::Runtime::Renderer::Deferred
         GBuffer GBuffer {};
 
         // Called every time we need to update GBuffer, so it has same size as scene view
-        bool InitGBufferForView(const Core::SceneView& SceneView);
-        bool TransitionGBufferFromRenderTargetToReadState();
-        bool TransitionGBufferFromReadToRenderTargetState();
+        tf::Task InitGBufferForView(const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder);
+
+        tf::Task TransitionGBufferFromRenderTargetToReadState(tf::FlowBuilder& FlowBuilder);
+
+        tf::Task TransitionGBufferFromReadToRenderTargetState(tf::FlowBuilder& FlowBuilder);
 
         // Make sure our C++ <-> HLSL types have same sizes
         static_assert(sizeof(float) == 4);
@@ -124,9 +129,11 @@ namespace krendrr::Runtime::Renderer::Deferred
 
         FrameData FrameData {};
 
-        bool UpdateFrameDataConstantBuffer(const Core::SceneView& SceneView);
-        bool UpdateTexturedMeshConstantBuffers();
-        bool UpdatePointLightConstantBuffers();
+        tf::Task UpdateFrameDataConstantBuffer(const Core::Scene* Scene, const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder);
+
+        tf::Task UpdateTexturedMeshConstantBuffers(const Core::Scene* Scene, tf::FlowBuilder& FlowBuilder);
+
+        tf::Task UpdatePointLightConstantBuffers(const Core::Scene* Scene, tf::FlowBuilder& FlowBuilder);
 
         struct GeometryPassData
         {
@@ -141,16 +148,17 @@ namespace krendrr::Runtime::Renderer::Deferred
             Microsoft::WRL::ComPtr<ID3D12RootSignature> RootSignature {};
             Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineState {};
 
-            constexpr inline static unsigned PARALLEL_DRAWS_COUNT_ALLOWED = 1000;
             Microsoft::WRL::ComPtr<ID3D12CommandAllocator> DrawCommandAllocator {};
             Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> DrawCommandList {};
 
             Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> GpuDescriptorHeap {};
+            unsigned CurrentGpuDescriptorSize {};
         };
         GeometryPassData GeometryPassData {};
 
         bool InitializeGeometryPass();
-        bool GeometryPass(const Core::SceneView& SceneView);
+
+        tf::Task GeometryPass(const Core::Scene* Scene, const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder);
 
         struct LightPassData
         {
@@ -170,9 +178,12 @@ namespace krendrr::Runtime::Renderer::Deferred
         LightPassData LightPassData {};
 
         bool InitLightPass();
-        bool PrepareLightPassData(const Core::SceneView& SceneView);
-        bool TransitionLightPassFromRenderTargetToReadState();
-        bool TransitionLightPassFromReadToRenderTargetState();
+
+        tf::Task PrepareLightPassData(const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder);
+
+        tf::Task TransitionLightPassFromRenderTargetToReadState(tf::FlowBuilder& FlowBuilder);
+
+        tf::Task TransitionLightPassFromReadToRenderTargetState(tf::FlowBuilder& FlowBuilder);
 
         struct AmbientDirectionalLightPassData
         {
@@ -187,7 +198,8 @@ namespace krendrr::Runtime::Renderer::Deferred
         AmbientDirectionalLightPassData AmbientDirectionalLightPassData {};
 
         bool InitAmbientDirectionalLightPass();
-        bool AmbientDirectionalLightPass(const Core::SceneView& SceneView);
+
+        tf::Task AmbientDirectionalLightPass(const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder);
 
         struct PointLightShadowCubeMapData
         {
@@ -200,7 +212,8 @@ namespace krendrr::Runtime::Renderer::Deferred
         PointLightShadowCubeMapData PointLightShadowCubeMapData {};
 
         bool InitPointLightShadowCubeMapPass();
-        bool PointLightShadowCubeMapsPass();
+
+        tf::Task PointLightShadowCubeMapsPass(const Core::Scene* Scene, tf::FlowBuilder& FlowBuilder);
 
         struct PointLightVolumePassData
         {
@@ -221,7 +234,8 @@ namespace krendrr::Runtime::Renderer::Deferred
         PointLightVolumePassData PointLightVolumePassData{};
 
         bool InitPointLightVolumePass();
-        bool PointLightVolumesPass(const Core::SceneView& SceneView);
+
+        tf::Task PointLightVolumesPass(const Core::Scene* Scene, const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder);
 
         struct PostProcessingPassData
         {
@@ -236,7 +250,10 @@ namespace krendrr::Runtime::Renderer::Deferred
         PostProcessingPassData PostProcessingPassData {};
 
         bool InitPostProcessingPass();
-        bool PostProcessingPass(const Core::SceneView& SceneView);
+
+        tf::Task PostProcessingPass(const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder);
+
+        tf::Task PostRenderPasses(const Core::SceneView& SceneView, tf::FlowBuilder& FlowBuilder);
     };
 }
 

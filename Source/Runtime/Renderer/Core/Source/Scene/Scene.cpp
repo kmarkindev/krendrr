@@ -1,13 +1,12 @@
 #include "Runtime/Renderer/Core/Scene/Scene.h"
-
-#include "Runtime/Renderer/Core/Lights/PointLight.h"
-#include "Runtime/Renderer/Core/TexturedMesh/TexturedMesh.h"
+#include "Runtime/Renderer/Core/Scene/Lights/PointLight.h"
+#include "Runtime/Renderer/Core/Scene/Objects/TexturedStaticMesh.h"
 
 namespace krendrr::Runtime::Renderer::Core
 {
-    std::shared_ptr<TexturedMesh> Scene::SpawnTexturedMesh()
+    std::shared_ptr<TexturedStaticMesh> Scene::SpawnTexturedMesh()
     {
-        auto NewMesh = std::make_shared<TexturedMesh>();
+        auto NewMesh = std::make_shared<TexturedStaticMesh>();
 
         TexturedMeshes.push_back(NewMesh);
 
@@ -16,7 +15,7 @@ namespace krendrr::Runtime::Renderer::Core
         return NewMesh;
     }
 
-    bool Scene::InsertTexturedMesh(const std::shared_ptr<TexturedMesh>& NewMesh)
+    bool Scene::InsertTexturedMesh(const std::shared_ptr<TexturedStaticMesh>& NewMesh)
     {
         auto Iter = std::ranges::find(TexturedMeshes, NewMesh);
         if (Iter != TexturedMeshes.end())
@@ -32,7 +31,7 @@ namespace krendrr::Runtime::Renderer::Core
         return true;
     }
 
-    bool Scene::RemoveTexturedMesh(const std::shared_ptr<TexturedMesh>& MeshToRemove)
+    bool Scene::RemoveTexturedMesh(const std::shared_ptr<TexturedStaticMesh>& MeshToRemove)
     {
         auto Iter = std::ranges::find(TexturedMeshes, MeshToRemove);
 
@@ -47,7 +46,7 @@ namespace krendrr::Runtime::Renderer::Core
         return true;
     }
 
-    std::span<const std::shared_ptr<TexturedMesh>> Scene::GetTexturedMeshes() const
+    std::span<const std::shared_ptr<TexturedStaticMesh>> Scene::GetTexturedMeshes() const
     {
         return TexturedMeshes;
     }

@@ -7,11 +7,6 @@
 #include "Runtime/Renderer/Core/Scene/SceneView.h"
 #include "Runtime/Renderer/Deferred/DeferredRenderer.h"
 
-namespace tf
-{
-    class Executor;
-}
-
 namespace krendrr::Runtime::Application::Core
 {
     class Window;
@@ -54,6 +49,8 @@ namespace krendrr::Examples::SimpleDeferredRendering
         Runtime::Camera::Camera Camera {};
 
         bool InitializeSceneViewAndCamera();
+
+        bool FillRenderTaskflow(tf::Taskflow& Taskflow);
 
     };
 }

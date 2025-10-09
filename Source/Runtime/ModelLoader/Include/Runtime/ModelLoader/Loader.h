@@ -3,7 +3,7 @@
 #include <string_view>
 #include <vector>
 #include "Runtime/RenderApi/Core/RenderApi.h"
-#include "Runtime/Renderer/Core/TexturedMesh/TexturedMesh.h"
+#include "Runtime/Renderer/Core/Scene/Objects/TexturedStaticMesh.h"
 #include "taskflow/taskflow.hpp"
 
 namespace krendrr::Runtime::ModelLoader
@@ -33,7 +33,7 @@ namespace krendrr::Runtime::ModelLoader
     struct LoadResult
     {
         bool bSuccess {};
-        std::vector<std::shared_ptr<Renderer::Core::TexturedMesh>> TexturedMeshes {};
+        std::vector<std::shared_ptr<Renderer::Core::TexturedStaticMesh>> TexturedMeshes {};
 
         [[nodiscard]] bool HasLoadedAtLeastOne() const
         {

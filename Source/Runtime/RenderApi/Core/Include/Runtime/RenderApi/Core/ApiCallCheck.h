@@ -13,7 +13,7 @@
         __debugbreak(); \
         return {}; \
     } \
-} \
+}
 
 /**
  * Checks if api call was successful. returns false or default value if false
@@ -25,7 +25,7 @@
         __debugbreak(); \
         return {}; \
     } \
-} \
+}
 
 // TODO: add error log
 /**
@@ -38,7 +38,7 @@
         __debugbreak(); \
         return; \
     } \
-} \
+}
 
 /**
  * Checks if api call was successful. Returns if not
@@ -50,4 +50,4 @@
         __debugbreak(); \
         return; \
     } \
-} \
+}

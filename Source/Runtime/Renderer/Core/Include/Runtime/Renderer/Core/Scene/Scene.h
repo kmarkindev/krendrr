@@ -3,7 +3,6 @@
 #include <memory>
 #include <span>
 #include <vector>
-
 #include "glm/fwd.hpp"
 #include "glm/detail/type_quat.hpp"
 
@@ -14,16 +13,16 @@ namespace krendrr::Runtime::Renderer::Core
 
 namespace krendrr::Runtime::Renderer::Core
 {
-    class TexturedMesh;
+    class TexturedStaticMesh;
 
     class Scene
     {
     public:
 
-        std::shared_ptr<TexturedMesh> SpawnTexturedMesh();
-        bool InsertTexturedMesh(const std::shared_ptr<TexturedMesh>& NewMesh);
-        bool RemoveTexturedMesh(const std::shared_ptr<TexturedMesh>& MeshToRemove);
-        [[nodiscard]] std::span<const std::shared_ptr<TexturedMesh>> GetTexturedMeshes() const;
+        std::shared_ptr<TexturedStaticMesh> SpawnTexturedMesh();
+        bool InsertTexturedMesh(const std::shared_ptr<TexturedStaticMesh>& NewMesh);
+        bool RemoveTexturedMesh(const std::shared_ptr<TexturedStaticMesh>& MeshToRemove);
+        [[nodiscard]] std::span<const std::shared_ptr<TexturedStaticMesh>> GetTexturedMeshes() const;
 
         std::shared_ptr<PointLight> SpawnPointLight();
         bool RemovePointLight(const std::shared_ptr<PointLight>& PointLightToRemove);
@@ -54,7 +53,7 @@ namespace krendrr::Runtime::Renderer::Core
 
     private:
 
-        std::vector<std::shared_ptr<TexturedMesh>> TexturedMeshes {};
+        std::vector<std::shared_ptr<TexturedStaticMesh>> TexturedMeshes {};
 
         std::vector<std::shared_ptr<PointLight>> PointLights {};
 

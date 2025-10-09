@@ -1,21 +1,19 @@
-#include "Runtime/Renderer/Core/TexturedMesh/Texture.h"
-#include <algorithm>
+#include "Runtime/RenderApi/Core/Resources/Texture2D.h"
 #include <cassert>
 #include <stb_image.h>
 #include <stdexcept>
 #include <cmath>
-
 #include "Runtime/RenderApi/Core/ApiCallCheck.h"
 
-namespace krendrr::Runtime::Renderer::Core
+namespace krendrr::Runtime::RenderApi::Core
 {
 
-bool Texture::IsLoaded() const
+bool Texture2D::IsLoaded() const
 {
     return TextureBuffer != nullptr;
 }
 
-Texture::TextureLoadOperation Texture::Load(const RenderApi::Core::RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList,
+Texture2D::TextureLoadOperation Texture2D::Load(const RenderApi& RenderApi, ID3D12GraphicsCommandList& CommandList,
     const std::string_view& TextureFileName, const TextureLoadParams& Params)
 {
     if(IsLoaded())
@@ -155,7 +153,7 @@ Texture::TextureLoadOperation Texture::Load(const RenderApi::Core::RenderApi& Re
     };
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetTextureHandle() const
+D3D12_CPU_DESCRIPTOR_HANDLE Texture2D::GetTextureHandle() const
 {
     if (CpuSrvHeap == nullptr)
         return {};
@@ -163,32 +161,32 @@ D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetTextureHandle() const
     return CpuSrvHeap->GetCPUDescriptorHandleForHeapStart();
 }
 
-D3D12_GPU_VIRTUAL_ADDRESS Texture::GetTextureGpuAddress() const
+D3D12_GPU_VIRTUAL_ADDRESS Texture2D::GetTextureGpuAddress() const
 {
     return TextureBuffer->GetGPUVirtualAddress();
 }
 
-Microsoft::WRL::ComPtr<ID3D12Resource> Texture::GetResource() const
+Microsoft::WRL::ComPtr<ID3D12Resource> Texture2D::GetResource() const
 {
     return TextureBuffer;
 }
 
-DXGI_FORMAT Texture::GetFormat() const
+DXGI_FORMAT Texture2D::GetFormat() const
 {
     return Format;
 }
 
-glm::uvec2 Texture::GetSize() const
+glm::uvec2 Texture2D::GetSize() const
 {
     return Size;
 }
 
-unsigned Texture::GetMipsCount() const
+unsigned Texture2D::GetMipsCount() const
 {
     return MipsCount;
 }
 
-bool Texture::CheckLoaded() const
+bool Texture2D::CheckLoaded() const
 {
     if (!IsLoaded())
     {

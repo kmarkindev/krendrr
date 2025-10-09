@@ -18,7 +18,6 @@ namespace krendrr::Runtime::Renderer::Core
 
         constexpr inline static DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
-
         [[nodiscard]] const glm::vec3& GetPosition() const;
         void SetPosition(const glm::vec3& NewPosition);
 
